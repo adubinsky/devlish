@@ -1,0 +1,20 @@
+# Lesson 3.3 example: records, field access, and collection tests
+
+# Records keep named fields together.
+invoice_one equals record with 1200 as amount and "pending" as status
+invoice_two equals record with 300 as amount and "approved" as status
+
+# Lists can contain records, not only plain text or numbers.
+invoices equals list of invoice_one and invoice_two
+
+# Current runtime helpers can sort and inspect the list.
+sorted_invoices equals sort invoices
+first_invoice equals first of sorted_invoices
+last_invoice equals last of sorted_invoices
+
+# Field access can be combined with first of and last of.
+first_amount equals amount of first_invoice
+last_status equals status of last_invoice
+
+Print first_amount
+Print last_status

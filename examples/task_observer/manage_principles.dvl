@@ -1,0 +1,86 @@
+# Task Observer: Cross-Cutting Principles Manager (DEVL-82)
+#
+# Manages the cross-cutting principles checklist. Supports "add" and "list"
+# actions.
+#
+# Input: JSON with "workspace", "action" (add or list), and for "add":
+#   title, applies_to, requirement, propagation
+# Output: JSON with active principles list or confirmation
+
+Permissions:
+  Read files
+  Write files
+  Filesystem operations
+
+workspace_dir equals workspace
+principles_path equals workspace_dir plus "/cross-cutting-principles.md"
+
+# Ensure file exists
+Check if principles_path exists as file_exists
+
+If file_exists equals false:
+  Create directory workspace_dir
+  Export "# Cross-Cutting Principles\n\nPrinciples that apply to all skills. Read as a mandatory checklist\nduring any skill creation or regeneration.\n\n---\n" to principles_path
+
+If action equals "add":
+  # Find next principle number
+  Read text from principles_path as content
+  lines equals split content by "\n"
+
+  max_num equals 0
+  For each line in lines:
+    If line contains "### ":
+      after_hash equals replace "### " in line with ""
+      parts equals split after_hash by "."
+      num_text equals first of parts
+      num_text equals trim num_text
+      If num_text is greater than max_num:
+        max_num equals num_text times 1
+
+  next_num equals max_num plus 1
+
+  entry equals "\n### " plus next_num plus ". " plus title plus "\n"
+  entry equals entry plus "**Added:** 2026-07-11\n"
+  entry equals entry plus "**Applies to:** " plus applies_to plus "\n"
+  entry equals entry plus "**Requirement:** " plus requirement plus "\n"
+  entry equals entry plus "**Propagation:** " plus propagation plus "\n"
+  entry equals entry plus "**Status:** active\n"
+
+  Append entry to file principles_path
+
+  Respond with record with "added" as status and next_num as principle_id and title as title
+
+If action equals "list":
+  Read text from principles_path as content
+  lines equals split content by "\n"
+
+  principles equals list of "init"
+  current_title equals ""
+  current_status equals ""
+  in_principle equals false
+
+  For each line in lines:
+    If line contains "### ":
+      If in_principle equals true:
+        If current_status contains "active":
+          entry equals record with current_title as title and current_status as status
+          Append entry to principles
+      in_principle equals true
+      current_title equals replace "### " in line with ""
+      current_title equals trim current_title
+      current_status equals "active"
+
+    If line contains "**Status:**":
+      current_status equals replace "**Status:** " in line with ""
+      current_status equals trim current_status
+
+  # Capture the last principle
+  If in_principle equals true:
+    If current_status contains "active":
+      entry equals record with current_title as title and current_status as status
+      Append entry to principles
+
+  active_list equals reject principles where item equals "init"
+  active_count equals count of active_list
+
+  Respond with record with active_list as principles and active_count as count

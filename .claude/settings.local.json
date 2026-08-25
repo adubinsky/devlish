@@ -1,0 +1,32 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git init:*)",
+      "Bash(git remote add:*)",
+      "Bash(git add:*)",
+      "Bash(git commit -m \"$(cat <<''EOF''\nInitial commit: Devlish - English-Based DSL for Ruby\n\n- Core DSL engine for document validation\n- CLI with REPL, run, translate, and validate commands\n- Claude API integration for English-to-Devlish translation\n- Dotenv integration for API key management\n- Example scripts and sample contract\n- Comprehensive documentation\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude <noreply@anthropic.com>\nEOF\n)\")",
+      "Bash(git push:*)",
+      "Bash(./bin/devlish run:*)",
+      "Bash(chmod:*)",
+      "Bash(bundle binstubs:*)",
+      "Bash(DEVLISH_DEBUG=true ./bin/devlish run examples/basic_validation.devlish)",
+      "Bash(./bin/devlish parse:*)",
+      "Bash(for:*)",
+      "Bash(do mv \"$f\" \"$f%.english.dvl\")",
+      "Bash(done)",
+      "Bash(ruby:*)",
+      "Bash(cat:*)",
+      "Bash(DEVLISH_DEBUG=true ./bin/devlish parse examples/accounting/futa_calculator.dvl)",
+      "Bash(DEVLISH_DEBUG=true ./bin/devlish parse examples/accounting/depreciation_calculator.dvl)",
+      "Bash(gem build:*)",
+      "Bash(gem install:*)",
+      "Bash(devlish version:*)",
+      "Bash(devlish help:*)",
+      "Read(//private/tmp/**)",
+      "Bash(tree:*)",
+      "Bash(git config:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

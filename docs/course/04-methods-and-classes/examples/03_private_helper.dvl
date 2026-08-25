@@ -1,0 +1,14 @@
+# Lesson 4.3 example: public method plus private helper
+
+Operations's Invoice Reviewer:
+  review invoice using invoice amount:
+    # Public methods are the entry points callers are expected to use.
+    review_needed equals false
+    review_needed equals true if invoice amount >= 10000
+    respond with review_needed
+
+  privately escalation label using review needed:
+    # Private helpers keep supporting logic near the public method.
+    escalation_label equals "standard"
+    escalation_label equals "priority" if review needed == true
+    respond with escalation_label

@@ -1,0 +1,42 @@
+# IRS Appendix Loader
+# Downloads an IRS Notice appendix XLSX and reads its county/tract data.
+#
+# Input:
+#   appendix_url  - URL to the IRS appendix XLSX file
+#   notice        - IRS notice identifier (e.g., "2026-39")
+#   lookup_fips   - (optional) 5-digit county FIPS to look up after loading
+#
+# Output: record with loaded row data and optional lookup result
+#
+# Usage:
+#   devlish run lib/irs_appendix.dvl --input '{"appendix_url": "https://www.irs.gov/pub/irs-drop/n-26-39-appendix-1.xlsx", "notice": "2026-39"}'
+#   devlish run lib/irs_appendix.dvl --input '{"appendix_url": "https://www.irs.gov/pub/irs-drop/n-26-39-appendix-1.xlsx", "notice": "2026-39", "lookup_fips": "48113"}'
+
+inputs:
+  appendix_url
+  notice
+  lookup_fips
+
+# Download the XLSX file
+Download the url at appendix url to "/tmp/irs_appendix_download.xlsx"
+
+# Read all rows from the first sheet
+Read XLSX rows from "/tmp/irs_appendix_download.xlsx" as all rows
+
+row count equals count of all rows
+
+# If a FIPS lookup was requested, search for it
+If lookup fips is present:
+  found match equals false
+  For each row in all rows:
+    county fips value equals county_fips of row
+    If county fips value is present:
+      If county fips value equals lookup fips:
+        found match equals true
+        Respond with record with true as found and lookup fips as county fips and row as entry and notice as notice
+
+  If found match equals false:
+    Respond with record with false as found and lookup fips as county fips and notice as notice
+
+# No lookup requested, return summary
+Respond with record with "loaded" as status and appendix url as source and notice as notice and row count as row count

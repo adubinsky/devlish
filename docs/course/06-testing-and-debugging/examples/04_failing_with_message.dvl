@@ -1,0 +1,10 @@
+# Lesson 6.4 example: stop with a clear message
+
+contact_email equals ""
+
+# Fail ends the program immediately with the supplied message.
+If contact_email is ""
+  Fail with "Contact email is required"
+
+# This line demonstrates that execution stops after Fail.
+Print "This line will not run"

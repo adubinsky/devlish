@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>CFBundleIdentifier</key>
+  <string>com.dealstar.devlish</string>
+  <key>CFBundleName</key>
+  <string>Devlish</string>
+  <key>CFBundleDisplayName</key>
+  <string>Devlish</string>
+  <key>CFBundleVersion</key>
+  <string>0.1.0</string>
+  <key>CFBundleShortVersionString</key>
+  <string>0.1.0</string>
+  <key>CFBundlePackageType</key>
+  <string>APPL</string>
+  <key>CFBundleExecutable</key>
+  <string>devlish-stub</string>
+  <key>LSMinimumSystemVersion</key>
+  <string>12.0</string>
+  <key>LSBackgroundOnly</key>
+  <true/>
+
+  <key>UTExportedTypeDeclarations</key>
+  <array>
+    <dict>
+      <key>UTTypeIdentifier</key>
+      <string>com.dealstar.devlish-source</string>
+      <key>UTTypeDescription</key>
+      <string>Devlish Source File</string>
+      <key>UTTypeIconFile</key>
+      <string>dvl</string>
+      <key>UTTypeConformsTo</key>
+      <array>
+        <string>public.plain-text</string>
+        <string>public.source-code</string>
+      </array>
+      <key>UTTypeTagSpecification</key>
+      <dict>
+        <key>public.filename-extension</key>
+        <array>
+          <string>dvl</string>
+        </array>
+        <key>public.mime-type</key>
+        <string>text/x-devlish</string>
+      </dict>
+    </dict>
+  </array>
+
+  <key>CFBundleDocumentTypes</key>
+  <array>
+    <dict>
+      <key>CFBundleTypeName</key>
+      <string>Devlish Source File</string>
+      <key>CFBundleTypeRole</key>
+      <string>Editor</string>
+      <key>LSItemContentTypes</key>
+      <array>
+        <string>com.dealstar.devlish-source</string>
+      </array>
+      <key>LSHandlerRank</key>
+      <string>Owner</string>
+    </dict>
+  </array>
+</dict>
+</plist>

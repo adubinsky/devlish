@@ -1,0 +1,18 @@
+# Lesson 5.1 example: combine extraction and decisions in one workflow
+
+# Load the packet, then extract the fields used by the business rule.
+Load docs/course/05-real-programs/examples/01_document_review_packet.txt as Document
+
+Find review status and save as review_status
+Find invoice amount and save as invoice_amount
+
+# Build the review decision from multiple facts.
+manual_review equals false
+manual_review equals true if review_status == "pending"
+manual_review equals true if invoice_amount >= 10000
+
+# Route the invoice based on the final decision.
+If manual_review == true
+  Route invoice to finance_review_queue
+Otherwise
+  Route invoice to finance_ready_queue

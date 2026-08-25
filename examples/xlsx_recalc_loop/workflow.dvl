@@ -1,0 +1,54 @@
+# XLSX Recalc Verification Loop
+# Inspects a workbook, verifies formula health, and returns a checkpoint
+# when the LLM must repair formula errors before the workflow can continue.
+#
+# Usage:
+#   devlish run workflow.dvl --input '{"xlsx_path": "workbook.xlsx", "max_attempts": 3}'
+
+# Load configuration from input
+Ask "XLSX file path?" as xlsx_path
+Ask "Maximum repair attempts?" as max_attempts
+
+# Initialize state
+attempt equals 0
+all_clear equals 0
+
+# Verification loop: check formulas, checkpoint if errors found
+While all_clear equals 0:
+  attempt equals attempt plus 1
+
+  # Read key cells that should contain calculated values
+  Read XLSX cell "Summary!B2" as site_name
+  Read XLSX cell "Summary!B4" as credit_value
+  Read XLSX cell "Calculations!D10" as calculated_total
+  Read XLSX cell "Calculations!D12" as formula_check
+
+  # Verify no spreadsheet errors in formula outputs
+  Expect site_name is present as "site-name-present"
+  Expect credit_value is present as "credit-value-present"
+  Expect calculated_total is present as "calculated-total-present"
+  Expect formula_check is not spreadsheet error as "no-formula-errors"
+
+  # Check if we exceeded max attempts
+  If attempt is greater than max_attempts:
+    Fail with "Maximum repair attempts exceeded. Manual intervention required."
+
+  # If formula_check has errors, checkpoint for LLM repair
+  If formula_check equals "ERROR":
+    Checkpoint "Formula errors detected in Calculations!D12. Please repair the workbook formulas and re-run." saving context as repair_state
+
+  # If we reach here without checkpointing, formulas are clean
+  all_clear equals 1
+
+# Final validation pass
+Expect site_name is present as "final-site-name"
+Expect credit_value is present as "final-credit-value"
+Expect calculated_total is present as "final-calculated-total"
+Expect formula_check is not spreadsheet error as "final-no-errors"
+
+Print "Workbook verification complete"
+Print site_name
+Print credit_value
+Print calculated_total
+
+Export assertions to "recalc_results.json"

@@ -1,0 +1,11 @@
+# Lesson 5.2 example: communicate a result with service outputs
+
+# The packet contains destinations for the outbound service calls.
+Load docs/course/05-real-programs/examples/02_notification_packet.txt as Document
+
+Find review mailbox and save as review_mailbox
+Find claims queue and save as claims_queue
+
+# Service calls are effects supplied by the host runtime.
+Send Email via NotificationService to review_mailbox with template "review_complete"
+Send Message via MessagingService to claims_queue with template "review_complete"

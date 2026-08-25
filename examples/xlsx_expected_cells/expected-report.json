@@ -1,0 +1,65 @@
+{
+  "assertions": [
+    {
+      "actual": {
+        "formatted": "Solar Site Alpha",
+        "kind": "string",
+        "value": "Solar Site Alpha"
+      },
+      "expected": {
+        "kind": "string",
+        "value": "Solar Site Alpha"
+      },
+      "id": "site-name",
+      "message": "Assertion site-name passed",
+      "operator": "equals",
+      "passed": true,
+      "target": "site_name"
+    },
+    {
+      "actual": {
+        "formatted": "250000",
+        "kind": "number",
+        "value": 250000
+      },
+      "expected": {
+        "kind": "number",
+        "value": 250000
+      },
+      "id": "credit-value",
+      "message": "Assertion credit-value passed",
+      "operator": "equals",
+      "passed": true,
+      "target": "credit_value"
+    },
+    {
+      "actual": {
+        "formatted": "Domestic content documentation received",
+        "kind": "string",
+        "value": "Domestic content documentation received"
+      },
+      "expected": null,
+      "id": "domestic-content-present",
+      "message": "Assertion domestic-content-present passed",
+      "operator": "present",
+      "passed": true,
+      "target": "domestic_content_value"
+    },
+    {
+      "actual": {
+        "formatted": "OK",
+        "kind": "string",
+        "value": "OK"
+      },
+      "expected": null,
+      "id": "no-error-value",
+      "message": "Assertion no-error-value passed",
+      "operator": "not_spreadsheet_error",
+      "passed": true,
+      "target": "error_check"
+    }
+  ],
+  "benchmark": "xlsx_expected_cells",
+  "schema_version": "devlish-xlsx-report-v0",
+  "success": true
+}

@@ -1,0 +1,108 @@
+# Receipt Processing Workflow (DEVL-74)
+#
+# Scans an inbox directory for receipt files, classifies them by type,
+# organizes them into dated subdirectories, and produces a structured
+# summary for the calling LLM.
+#
+# Exercises the full DEVL-65 tool surface:
+#   - Filesystem keywords (DEVL-71): list, stat, copy, mkdir, exists
+#   - Credential management (DEVL-70): paths via .env or --env
+#   - Program manifest (DEVL-68): declared permissions
+#   - Structured output (DEVL-76): Respond with JSON summary
+#   - MCP tool discovery (DEVL-73): callable via devlish mcp
+#
+# Input: JSON with "inbox_dir" and "output_dir"
+# Output: structured JSON report of processed files
+
+Permissions:
+  Read files
+  Write files
+  Filesystem operations
+
+inputs:
+  inbox_dir
+  output_dir
+
+# --- Configuration ---
+
+inbox_directory equals inbox_dir
+output_directory equals output_dir
+
+# --- Scan Inbox ---
+
+Check if inbox_directory exists as inbox_exists
+
+If inbox_exists equals false:
+  Fail with record with "failed" as status and "Inbox directory does not exist" as message
+
+List files in inbox_directory as inbox_entries
+file_count equals count of inbox_entries
+
+If file_count equals 0:
+  Respond with record with "completed" as status and 0 as files_processed and "No files found in inbox" as message
+
+# --- Process Each File ---
+
+processed_count equals 0
+failed_count equals 0
+receipt_count equals 0
+invoice_count equals 0
+statement_count equals 0
+unknown_count equals 0
+
+For each file_name in inbox_entries:
+
+  # Build full path
+  file_path equals inbox_directory plus "/" plus file_name
+
+  # Get file metadata
+  Get file info for file_path as file_info
+
+  # Classify based on filename patterns
+  classification equals "unknown"
+
+  If file_name contains "receipt":
+    classification equals "receipt"
+  If file_name contains "invoice":
+    classification equals "invoice"
+  If file_name contains "inv-":
+    classification equals "invoice"
+  If file_name contains "statement":
+    classification equals "statement"
+  If file_name contains "stmt":
+    classification equals "statement"
+
+  # Build destination path: output_dir/2026-07/type/
+  month_folder equals output_directory plus "/2026-07"
+  type_folder equals month_folder plus "/" plus classification
+
+  # Create the destination directory and copy
+  Try:
+    Create directory type_folder
+    destination equals type_folder plus "/" plus file_name
+    Copy file from file_path to destination
+    processed_count equals processed_count plus 1
+
+    If classification equals "receipt":
+      receipt_count equals receipt_count plus 1
+    If classification equals "invoice":
+      invoice_count equals invoice_count plus 1
+    If classification equals "statement":
+      statement_count equals statement_count plus 1
+    If classification equals "unknown":
+      unknown_count equals unknown_count plus 1
+  Otherwise:
+    failed_count equals failed_count plus 1
+
+# --- Verify output ---
+
+Check if output_directory exists as output_created
+List files in output_directory as output_folders
+
+# --- Build Summary ---
+
+counts equals record with receipt_count as receipts and invoice_count as invoices and statement_count as statements and unknown_count as unknown
+
+summary equals record with "completed" as status and processed_count as files_processed and failed_count as files_failed and output_created as output_exists and counts as classifications
+
+Respond with summary

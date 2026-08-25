@@ -1,0 +1,5 @@
+# Lesson 6: Bind a second name onto an existing value
+
+Load examples/archived_samples/tutorial/data/contract_notice.txt as Document
+
+Alias Document as Working Copy

@@ -1,0 +1,9 @@
+# Lesson 1.2 example: store values under names and reuse them
+
+# These names make the threshold decision easier to read.
+invoice_amount equals 1200
+review_limit equals 1000
+manual_review equals false
+
+# Conditional assignment changes the saved value only when the condition is true.
+manual_review equals true if invoice_amount >= review_limit

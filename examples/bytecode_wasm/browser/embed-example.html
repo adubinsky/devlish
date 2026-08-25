@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Devlish Runtime Embed Example</title>
+    <style>
+      body {
+        font-family: system-ui, sans-serif;
+        margin: 2rem;
+        max-width: 48rem;
+      }
+      pre {
+        background: #111;
+        color: #f5f5f5;
+        padding: 1rem;
+        overflow: auto;
+        border-radius: 4px;
+      }
+      button {
+        padding: 0.5rem 1rem;
+        font-size: 1rem;
+        cursor: pointer;
+      }
+      .field {
+        margin: 0.5rem 0;
+      }
+      label {
+        display: inline-block;
+        width: 120px;
+        font-weight: 600;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Devlish Runtime: Embed Example</h1>
+    <p>
+      This demonstrates running compiled Devlish business rules directly in the
+      browser using the <code>devlish-runtime</code> npm package.
+    </p>
+
+    <h2>Pricing Rule</h2>
+    <div class="field">
+      <label for="tier">Customer tier:</label>
+      <select id="tier">
+        <option value="standard">Standard</option>
+        <option value="premium">Premium</option>
+        <option value="enterprise">Enterprise</option>
+      </select>
+    </div>
+    <div class="field">
+      <label for="amount">Deal amount:</label>
+      <input id="amount" type="number" value="100000" step="10000">
+    </div>
+    <button id="run">Calculate Discount</button>
+    <pre id="output">Click "Calculate Discount" to run the rule.</pre>
+
+    <script type="module">
+      // In production, import from the npm package:
+      //   import { loadTool } from "devlish-runtime";
+      // For this example, we use a relative path to the built package:
+      import { loadTool } from "../../../packages/devlish-runtime/dist/index.js";
+
+      // Compiled bytecode for a discount pricing rule.
+      // In production this comes from `devlish compile pricing.dvl`
+      const bytecode = {
+        format: "devlish-bytecode",
+        format_version: 0,
+        constant_pool: [
+          0.05,   // 0: standard discount
+          0.10,   // 1: premium discount
+          0.15,   // 2: enterprise discount
+          "standard",
+          "premium",
+          "enterprise"
+        ],
+        instructions: [
+          // Load tier from input context
+          { op: "CTX_GET", dest: "tier", key: "tier" },
+          { op: "CTX_GET", dest: "amount", key: "amount" },
+          // Default discount
+          { op: "CONST", dest: "discount", const: 0 },
+          // Check premium
+          { op: "CONST", dest: "_premium", const: 4 },
+          { op: "EQ", dest: "_is_premium", left: "tier", right: "_premium" },
+          { op: "JUMP_IF_FALSE", test: "_is_premium", target: 7 },
+          { op: "CONST", dest: "discount", const: 1 },
+          // Check enterprise
+          { op: "CONST", dest: "_enterprise", const: 5 },
+          { op: "EQ", dest: "_is_enterprise", left: "tier", right: "_enterprise" },
+          { op: "JUMP_IF_FALSE", test: "_is_enterprise", target: 11 },
+          { op: "CONST", dest: "discount", const: 2 },
+          // Calculate savings
+          { op: "MUL", dest: "savings", left: "amount", right: "discount" },
+          { op: "RESPOND", value: "savings" }
+        ],
+        source_map: []
+      };
+
+      const output = document.getElementById("output");
+      const tool = await loadTool({ bytecode, mainThread: true });
+
+      document.getElementById("run").addEventListener("click", async () => {
+        const tier = document.getElementById("tier").value;
+        const amount = Number(document.getElementById("amount").value);
+
+        output.textContent = "Running...";
+        const result = await tool.run({ tier, amount });
+
+        if (result.success) {
+          output.textContent = [
+            `Tier:     ${tier}`,
+            `Amount:   $${amount.toLocaleString()}`,
+            `Discount: $${Number(result.response).toLocaleString()}`,
+            "",
+            JSON.stringify(result, null, 2)
+          ].join("\n");
+        } else {
+          output.textContent = `Error: ${result.error}`;
+        }
+      });
+    </script>
+  </body>
+</html>

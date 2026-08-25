@@ -1,0 +1,33 @@
+{
+  "name": "@devlish/runner",
+  "version": "0.1.0",
+  "description": "Node and WASM runner for precompiled Devlish bytecode workflows",
+  "type": "module",
+  "bin": {
+    "devlish-runner": "./bin/devlish-runner.mjs"
+  },
+  "exports": {
+    ".": "./js/index.mjs",
+    "./benchmark": "./js/benchmark.mjs"
+  },
+  "scripts": {
+    "test": "node --test test/*.test.mjs"
+  },
+  "files": [
+    "bin/",
+    "js/",
+    "devlish_runner.wasm"
+  ],
+  "dependencies": {
+    "exceljs": "4.4.0",
+    "mammoth": "1.12.0",
+    "pdf-parse": "2.4.5"
+  },
+  "overrides": {
+    "uuid": "11.1.1"
+  },
+  "engines": {
+    "node": ">=20.16.0 <21 || >=22.3.0"
+  },
+  "license": "MIT"
+}

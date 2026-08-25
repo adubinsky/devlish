@@ -1,0 +1,14 @@
+Read DOCX text "nda-review.docx" as contract text
+
+Expect contract_text contains "Mutual Confidentiality Agreement" as "agreement-title-present"
+Expect contract_text contains "Disclosing Party: Acme Robotics Inc." as "disclosing-party-present"
+Expect contract_text contains "Receiving Party: Northwind Manufacturing Inc." as "receiving-party-present"
+Expect contract_text contains "Effective date: 2026-01-15" as "effective-date-present"
+Expect contract_text contains "Confidential information includes technical designs" as "confidential-information-scope"
+Expect contract_text contains "Purpose: evaluate strategic manufacturing partnership" as "purpose-present"
+Expect contract_text contains "Term: 3 years" as "term-present"
+Expect contract_text contains "Return or destroy materials within 10 business days" as "return-destroy-present"
+Expect contract_text contains "Governing law: Delaware" as "governing-law-present"
+Expect contract_text contains "Injunctive relief available" as "injunctive-relief-present"
+
+Export assertions to assertion report path

@@ -1,0 +1,223 @@
+{
+  "schema_version": "devlish-baseline-transcript-v0",
+  "kind": "captured_transcript",
+  "source_host": "claude_code",
+  "captured_at": "2026-06-16T21:04:00Z",
+  "determinism": {
+    "captured_once": true,
+    "fixture_sha256": "...",
+    "notes": "Representative skill-style XLSX review where the agent discovers workbook shape, inspects ranges, reconciles sheet values, checks required evidence, and writes a report."
+  },
+  "prompts": [
+    {
+      "id": "skill-instructions",
+      "role": "system",
+      "included_in_prompt_bytes": true,
+      "utf8_bytes": 9200,
+      "sha256": "..."
+    },
+    {
+      "id": "user-task",
+      "role": "user",
+      "included_in_prompt_bytes": true,
+      "utf8_bytes": 6300,
+      "sha256": "..."
+    },
+    {
+      "id": "prior-review-context",
+      "role": "assistant",
+      "included_in_prompt_bytes": true,
+      "utf8_bytes": 4800,
+      "sha256": "..."
+    }
+  ],
+  "tool_calls": [
+    {
+      "id": "tool-1",
+      "phase": "discover",
+      "name": "xlsx.inspect_workbook",
+      "request_utf8_bytes": 420,
+      "response_utf8_bytes": 14800,
+      "model_visible_response": true,
+      "reason": "List worksheets and dimensions before deciding where to inspect."
+    },
+    {
+      "id": "tool-2",
+      "phase": "discover",
+      "name": "xlsx.inspect_sheet",
+      "request_utf8_bytes": 420,
+      "response_utf8_bytes": 12200,
+      "model_visible_response": true,
+      "reason": "Inspect Summary labels and likely key fields."
+    },
+    {
+      "id": "tool-3",
+      "phase": "read",
+      "name": "xlsx.read_range",
+      "request_utf8_bytes": 420,
+      "response_utf8_bytes": 11200,
+      "model_visible_response": true,
+      "reason": "Read Summary key-value range."
+    },
+    {
+      "id": "tool-4",
+      "phase": "read",
+      "name": "xlsx.inspect_sheet",
+      "request_utf8_bytes": 420,
+      "response_utf8_bytes": 9400,
+      "model_visible_response": true,
+      "reason": "Inspect Legal worksheet before matching names and addresses."
+    },
+    {
+      "id": "tool-5",
+      "phase": "reconcile",
+      "name": "xlsx.read_range",
+      "request_utf8_bytes": 420,
+      "response_utf8_bytes": 8200,
+      "model_visible_response": true,
+      "reason": "Read Legal site and address fields."
+    },
+    {
+      "id": "tool-6",
+      "phase": "read",
+      "name": "xlsx.inspect_sheet",
+      "request_utf8_bytes": 420,
+      "response_utf8_bytes": 7600,
+      "model_visible_response": true,
+      "reason": "Inspect PPA worksheet before matching counterpart fields."
+    },
+    {
+      "id": "tool-7",
+      "phase": "reconcile",
+      "name": "xlsx.read_range",
+      "request_utf8_bytes": 420,
+      "response_utf8_bytes": 7000,
+      "model_visible_response": true,
+      "reason": "Read PPA site and address fields."
+    },
+    {
+      "id": "tool-8",
+      "phase": "read",
+      "name": "xlsx.inspect_sheet",
+      "request_utf8_bytes": 420,
+      "response_utf8_bytes": 9300,
+      "model_visible_response": true,
+      "reason": "Inspect cost segregation worksheet layout."
+    },
+    {
+      "id": "tool-9",
+      "phase": "recalculate",
+      "name": "xlsx.read_range",
+      "request_utf8_bytes": 420,
+      "response_utf8_bytes": 7900,
+      "model_visible_response": true,
+      "reason": "Read asset total, eligible basis, and calculated credit."
+    },
+    {
+      "id": "tool-10",
+      "phase": "evidence",
+      "name": "xlsx.inspect_sheet",
+      "request_utf8_bytes": 420,
+      "response_utf8_bytes": 8800,
+      "model_visible_response": true,
+      "reason": "Inspect domestic content support."
+    },
+    {
+      "id": "tool-11",
+      "phase": "evidence",
+      "name": "xlsx.inspect_sheet",
+      "request_utf8_bytes": 420,
+      "response_utf8_bytes": 7200,
+      "model_visible_response": true,
+      "reason": "Inspect payroll support."
+    },
+    {
+      "id": "tool-12",
+      "phase": "evidence",
+      "name": "xlsx.inspect_sheet",
+      "request_utf8_bytes": 420,
+      "response_utf8_bytes": 7300,
+      "model_visible_response": true,
+      "reason": "Inspect equipment origin counts."
+    },
+    {
+      "id": "tool-13",
+      "phase": "evidence",
+      "name": "xlsx.inspect_sheet",
+      "request_utf8_bytes": 420,
+      "response_utf8_bytes": 8200,
+      "model_visible_response": true,
+      "reason": "Inspect required document checklist."
+    },
+    {
+      "id": "tool-14",
+      "phase": "verify",
+      "name": "xlsx.read_cell",
+      "request_utf8_bytes": 420,
+      "response_utf8_bytes": 6400,
+      "model_visible_response": true,
+      "reason": "Check formula health after reading workbook evidence."
+    },
+    {
+      "id": "tool-15",
+      "phase": "write",
+      "name": "filesystem.write_json",
+      "request_utf8_bytes": 420,
+      "response_utf8_bytes": 5200,
+      "model_visible_response": true,
+      "reason": "Write the assertion report."
+    },
+    {
+      "id": "tool-16",
+      "phase": "verify",
+      "name": "filesystem.read_json",
+      "request_utf8_bytes": 420,
+      "response_utf8_bytes": 4300,
+      "model_visible_response": true,
+      "reason": "Read back the report before summarizing."
+    }
+  ],
+  "model_checkpoints": [
+    {
+      "id": "checkpoint-1",
+      "reason": "Plan workbook discovery from skill instructions."
+    },
+    {
+      "id": "checkpoint-2",
+      "reason": "Choose Summary cells after seeing workbook shape."
+    },
+    {
+      "id": "checkpoint-3",
+      "reason": "Compare Legal fields against Summary fields."
+    },
+    {
+      "id": "checkpoint-4",
+      "reason": "Compare PPA fields against Summary fields."
+    },
+    {
+      "id": "checkpoint-5",
+      "reason": "Interpret cost segregation totals."
+    },
+    {
+      "id": "checkpoint-6",
+      "reason": "Check domestic content and payroll evidence."
+    },
+    {
+      "id": "checkpoint-7",
+      "reason": "Check equipment origin and required documents."
+    },
+    {
+      "id": "checkpoint-8",
+      "reason": "Write report after collecting assertions."
+    },
+    {
+      "id": "checkpoint-9",
+      "reason": "Verify report contents before final response."
+    }
+  ],
+  "prompt_bytes": 27020,
+  "tool_output_bytes": 135000,
+  "agent_observed_tool_calls": 16,
+  "model_checkpoint_count": 9,
+  "provider_usage": null
+}

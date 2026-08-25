@@ -1,0 +1,19 @@
+# Devlish-native curriculum checks for class-style lessons
+
+Scenario "lesson 1 calculates wages"
+When I run "../01_payroll_calculator.dvl" method "calculate_wages" with [40, 25]
+Then run should succeed
+Then return value should equal 1000
+Then wages should equal 1000
+
+Scenario "lesson 2 classifies catch up participants"
+When I run "../02_participant_classifier.dvl" method "classify_participant" with [52]
+Then run should succeed
+Then return value should equal "catch_up"
+Then participant_status should equal "catch_up"
+
+Scenario "lesson 3 reviews large invoices"
+When I run "../03_private_helper.dvl" method "review_invoice" with [12000]
+Then run should succeed
+Then return value should equal true
+Then review_needed should equal true

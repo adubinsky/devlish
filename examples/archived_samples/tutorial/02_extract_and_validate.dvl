@@ -1,0 +1,9 @@
+# Lesson 2: Extract values and validate thresholds
+
+Load examples/archived_samples/tutorial/data/contract_notice.txt
+
+Find liability cap and save as liability_cap
+Find payment terms and save as payment_terms
+
+liability_cap must be at least 1000000
+payment_terms must be at least 30

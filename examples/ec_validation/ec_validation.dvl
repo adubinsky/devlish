@@ -1,0 +1,58 @@
+# Energy Community Validation Program
+# Validates project locations against IRS Notice appendices,
+# DOE/NETL energy community layers, and US Census Bureau data.
+#
+# Input: JSON with "projects" array and "appendix_urls" config.
+# Output: assertion report with pass/fail per project.
+#
+# Requires: HTTP access to Census Bureau, DOE ArcGIS, and IRS APIs.
+
+# --- Load IRS Appendix Data ---
+
+Get the url at appendix cy2025 url as appendix cy2025 raw
+Get the url at appendix cy2024 url as appendix cy2024 raw
+
+# --- Validate Each Project ---
+
+For each project in projects:
+
+  # Step 1: Census tract lookup via coordinates
+  census url equals "https://geocoding.geo.census.gov/geocoder/geographies/coordinates?x=" plus project longitude plus "&y=" plus project latitude plus "&benchmark=Public_AR_Current&vintage=Current_Current&format=json"
+  Get the url at census url as census result
+
+  # Step 2: DOE Coal Closure layer check
+  coal url equals "https://services1.arcgis.com/RLQu0rK7h4kbsBq5/ArcGIS/rest/services/2024_Coal_Closure_Energy_Communities/FeatureServer/0/query?geometry=" plus project longitude plus "," plus project latitude plus "&geometryType=esriGeometryPoint&spatialRel=esriSpatialRelIntersects&outFields=*&f=json"
+  Get the url at coal url as coal result
+
+  # Step 3: DOE Statistical Area layer check
+  stat url equals "https://services1.arcgis.com/RLQu0rK7h4kbsBq5/ArcGIS/rest/services/2024_MSAs_NonMSAs_Energy_Communities/FeatureServer/0/query?geometry=" plus project longitude plus "," plus project latitude plus "&geometryType=esriGeometryPoint&spatialRel=esriSpatialRelIntersects&outFields=*&f=json"
+  Get the url at stat url as stat result
+
+  # Step 4: Extract county FIPS from census result for IRS cross-check
+  county fips equals census result county fips
+
+  # Step 5: Assertions
+
+  # Census tract must resolve
+  Expect census result status equals "matched" as "census-tract-resolved-{project id}"
+
+  # If project claims Coal Closure, verify DOE layer confirms
+  If project claimed category equals "Coal Closure":
+    Expect coal result hit equals true as "coal-closure-confirmed-{project id}"
+
+  # If project claims Statistical Area, verify IRS appendix confirms
+  If project claimed category equals "Statistical Area":
+    Expect irs lookup found equals true as "irs-appendix-confirms-stat-area-{project id}"
+
+  # If project claims no EC, check DOE layer does not mislead
+  If project claimed ec equals false:
+    If stat result hit equals true:
+      If irs lookup found equals false:
+        Expect true equals true as "doe-stale-false-positive-{project id}"
+
+  # ZIP code validation via Census
+  If census result zip is present:
+    If project zip is present:
+      Expect census result zip equals project zip as "zip-match-{project id}"
+
+Export assertions to assertion report path

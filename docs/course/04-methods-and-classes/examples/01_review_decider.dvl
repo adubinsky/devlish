@@ -1,0 +1,9 @@
+# Lesson 4.1 example: a reusable decision method
+
+# Class-style Devlish groups related methods under a module and class name.
+Operations's Review Decider:
+  decide review using invoice amount:
+    # The parameter invoice amount is available inside this method.
+    review_needed equals false
+    review_needed equals true if invoice amount >= 10000
+    respond with review_needed

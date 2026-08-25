@@ -1,0 +1,7 @@
+# Lesson 6.3 example: corrected threshold
+
+# The corrected limit makes a 900 invoice stay below manual review.
+invoice_amount equals 900
+review_limit equals 1000
+needs_review equals false
+needs_review equals true if invoice_amount >= review_limit

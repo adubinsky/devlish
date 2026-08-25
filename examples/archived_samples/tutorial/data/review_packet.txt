@@ -1,0 +1,5 @@
+review status: approved.
+review mailbox: approvals_team.
+claims queue: claims_review_queue.
+invoice id: INV-100.
+contract name: vendor renewal.

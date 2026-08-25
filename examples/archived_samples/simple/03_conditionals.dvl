@@ -1,0 +1,13 @@
+# Simple Example 3: Conditional flow with If/Otherwise
+
+Load examples/sample_contract.txt
+
+Find liability cap and save as liability_cap
+review_needed equals false
+
+If liability_cap is missing
+  review_needed equals true
+Otherwise
+  review_needed equals false
+
+Route review_needed to legal_review_queue

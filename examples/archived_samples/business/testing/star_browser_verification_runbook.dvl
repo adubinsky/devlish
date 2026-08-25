@@ -1,0 +1,44 @@
+  # Testing: Star browser verification runbook
+#
+# Shared unattended suite:
+#   /Users/admin/code/bin/star-app-verify dealstar
+#
+# Codex Playwright MCP is useful when you need:
+# - exploratory clicking through a new flow
+# - live DOM snapshots for selector design
+# - screenshots, console logs, and network inspection
+# - reproduction of a flaky or partially failing browser step
+
+Load examples/business/data/star_browser_verification_request.txt as Verification Request
+Alias Verification Request as Request
+
+target app is the star application that needs browser verification
+verification mode is the requested style of browser testing
+requested surface is the page or workflow to inspect
+production blocker is whether the issue blocks release
+
+Find target app and save as target_app
+Find verification mode and save as verification_mode
+Find requested surface and save as requested_surface
+Find production blocker and save as production_blocker
+
+runbook equals "shared_playwright_suite"
+
+If target_app is missing
+  runbook equals "triage_request"
+
+If requested_surface is missing
+  runbook equals "triage_request"
+
+If verification_mode is exploratory
+  runbook equals "codex_playwright_mcp"
+
+If production_blocker is yes
+  runbook equals "codex_playwright_mcp"
+
+If target_app is dealstar
+  Route runbook to star_browser_verification_queue
+Otherwise
+  Route runbook to star_app_onboarding_queue
+
+Notify qa team if runbook equals "codex_playwright_mcp"

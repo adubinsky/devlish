@@ -1,0 +1,13 @@
+# Lesson 3.2 example: name a list and ask helper questions about it
+
+# A list keeps several values together under one name.
+statuses equals list of " approved ", "pending", and "rejected"
+
+# These helpers read from the list without changing it.
+Print count of statuses
+Print first of statuses
+Print trim first of statuses
+
+# Join turns a list into text; split turns text back into a list.
+Print join statuses with ", "
+Print split "A|B|C" by "|"

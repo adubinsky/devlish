@@ -1,0 +1,73 @@
+# Task Observer: Log Observation (DEVL-80)
+#
+# Appends a new observation to the observation log with auto-incrementing IDs.
+# Creates the log file with a header if it doesn't exist.
+#
+# Input: JSON with observation fields
+# Output: JSON with the new observation ID
+
+Permissions:
+  Read files
+  Write files
+  Filesystem operations
+
+inputs:
+  workspace
+  title
+  obs_type
+  phase
+  skill
+  principle
+  issue
+  suggested_improvement
+  session_context
+
+# --- Configuration ---
+
+workspace_dir equals workspace
+log_path equals workspace_dir plus "/log.md"
+
+# --- Ensure log file exists ---
+
+Check if log_path exists as log_exists
+
+If log_exists equals false:
+  Create directory workspace_dir
+  Export "# Task Observer - Observation Log\n\nStatus key: OPEN | ACTIONED | DECLINED\n\n---\n" to log_path
+
+# --- Find the next observation number ---
+
+Read text from log_path as log_content
+log_lines equals split log_content by "\n"
+
+max_id equals 0
+
+For each line in log_lines:
+  If line contains "### Observation ":
+    after_prefix equals replace "### Observation " in line with ""
+    parts equals split after_prefix by ":"
+    id_text equals first of parts
+    id_text equals trim id_text
+    If id_text is greater than max_id:
+      max_id equals id_text times 1
+
+next_id equals max_id plus 1
+
+# --- Build and append the observation entry ---
+
+entry equals "\n### Observation " plus next_id plus ": " plus title plus "\n\n"
+entry equals entry plus "**Status:** OPEN\n"
+entry equals entry plus "**Date:** 2026-07-11\n"
+entry equals entry plus "**Session context:** " plus session_context plus "\n"
+entry equals entry plus "**Skill:** " plus skill plus "\n"
+entry equals entry plus "**Type:** " plus obs_type plus "\n"
+entry equals entry plus "**Phase/Area:** " plus phase plus "\n\n"
+entry equals entry plus "**Issue:** " plus issue plus "\n\n"
+entry equals entry plus "**Suggested improvement:** " plus suggested_improvement plus "\n\n"
+entry equals entry plus "**Principle:** " plus principle plus "\n\n---\n"
+
+Append entry to file log_path
+
+# --- Return the new observation ID ---
+
+Respond with record with next_id as observation_id and "logged" as status and log_path as log_file

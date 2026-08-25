@@ -1,0 +1,20 @@
+# Accounting: Depreciation calculator (simplified)
+
+Load examples/accounting/data/asset_record.txt as Asset Record
+
+Find cost basis and save as cost_basis
+Find land value and save as land_value
+Find months in service and save as months_in_service
+
+cost_basis equals 0 if cost_basis == nil
+land_value equals 0 if land_value == nil
+months_in_service equals 12 if months_in_service == nil
+
+depreciable_basis equals cost_basis minus land_value
+recovery_period equals 27.5
+annual_depreciation equals depreciable_basis / recovery_period
+partial_year_depreciation equals annual_depreciation * months_in_service / 12
+
+land_value must be at least 1
+
+Route partial_year_depreciation to accounting_depreciation_queue

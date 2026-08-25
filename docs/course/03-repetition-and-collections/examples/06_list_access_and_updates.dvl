@@ -1,0 +1,15 @@
+# Lesson 3.6 example: access and change list contents
+
+# The list starts with three statuses.
+statuses equals list of approved, pending, and rejected
+
+# Item positions are one-based for beginner-friendly reading.
+second_status equals item 2 of statuses
+middle_statuses equals slice statuses from 2 to 3
+
+# Append changes the list, and Pop removes the last value into a name.
+Append needs_review to statuses
+Pop from statuses and save as removed_status
+
+Print second_status
+Print removed_status

@@ -1,0 +1,14 @@
+# Simple Example 6: nickname collision is allowed
+
+Load examples/sample_contract.txt as Document
+Nickname Document as Working Copy
+
+Load examples/sample_contract.txt as Replacement Document
+Nickname Replacement Document as Working Copy
+
+If Working Copy is missing
+  decision equals "missing"
+Otherwise
+  decision equals "resolved"
+
+Route decision to naming_audit

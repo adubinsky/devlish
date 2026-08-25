@@ -1,0 +1,13 @@
+# Simple Example 5: strict bindings (alias/symbol/handle)
+
+Load examples/sample_contract.txt as Document
+Alias Document as Contract
+Symbol Contract as Contract Symbol
+Handle Contract as Contract Handle
+
+If Contract is missing
+  decision equals "missing"
+Otherwise
+  decision equals "ready"
+
+Route decision to compliance_review

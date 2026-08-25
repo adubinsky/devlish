@@ -1,0 +1,5 @@
+order id: O-5501
+sku: SNEAKER-123
+return reason: damaged
+purchase amount: 120
+photos attached: yes

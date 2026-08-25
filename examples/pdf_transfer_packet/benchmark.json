@@ -1,0 +1,30 @@
+{
+  "schema_version": "devlish-benchmark-v0",
+  "benchmark": "pdf_transfer_packet",
+  "description": "A representative PDF skill conversion benchmark that replaces a multi-turn PDF extraction and checklist loop with precompiled Devlish bytecode.",
+  "wasm_path": "../../pkg/devlish_wasm_runner/devlish_runner.wasm",
+  "baseline": {
+    "path": "baseline.skill-transcript.json",
+    "sha256": "2708d1c5386f36a47cdb0f046044ed6ba1e82a84c9b55f977ec9a1ae96a38dc9"
+  },
+  "workflow": {
+    "source_path": "workflow.dvl",
+    "bytecode_path": "workflow.dvlc.json",
+    "bytecode_sha256": "8fbbcb9cb6bca7708cfed16699b6a8940a3e380035de396183f404b6ebc39661"
+  },
+  "input": {
+    "path": "input.json",
+    "sha256": "707c8dfbd179aeea08e6f6bf97daf1d5be91ae285a402a026776779d6de41bd8"
+  },
+  "outputs": {
+    "assertion_report_path": "../../tmp/pdf_transfer_packet/report.json",
+    "benchmark_report_path": "../../tmp/pdf_transfer_packet/benchmark-report.json"
+  },
+  "expected_assertion_report": {
+    "path": "expected-report.json"
+  },
+  "thresholds": {
+    "minimum_model_visible_byte_reduction_ratio": 0.8,
+    "minimum_estimated_avoided_tokens": 1000
+  }
+}

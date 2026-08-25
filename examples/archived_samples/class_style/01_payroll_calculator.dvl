@@ -1,0 +1,6 @@
+# Lesson 1: Define a calculator class
+
+HR's Payroll Calculator:
+  calculate wages using hours worked and hourly rate:
+    wages equals hours worked times hourly rate
+    respond with wages

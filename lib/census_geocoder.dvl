@@ -1,0 +1,25 @@
+# Census Geocoder
+# Geocodes coordinates via the US Census Bureau geocoding API.
+#
+# Input: latitude, longitude
+# Output: record with status, tract_geoid, county_name, county_fips, state_name, state_fips
+#
+# Usage:
+#   devlish run lib/census_geocoder.dvl --input '{"latitude": 32.7767, "longitude": -96.7970}'
+
+inputs:
+  latitude
+  longitude
+
+census url equals "https://geocoding.geo.census.gov/geocoder/geographies/coordinates?x=" plus longitude plus "&y=" plus latitude plus "&benchmark=Public_AR_Current&vintage=Census2020_Current&format=json"
+
+Get the url at census url as api response
+
+response body equals body of api response
+api result equals result of response body
+geo equals geographies of api result
+
+If geo is missing:
+  Fail with record with "no_geographies" as status and latitude as latitude and longitude as longitude
+
+Respond with record with "matched" as status and latitude as latitude and longitude as longitude and geo as geographies

@@ -1,0 +1,25 @@
+# HR: Payroll calculator (simplified)
+
+Load examples/hr/data/payroll_input.txt as Payroll Input
+
+Find hourly rate and save as hourly_rate
+Find hours worked and save as hours_worked
+Find tax rate and save as tax_rate
+
+hourly_rate equals 0 if hourly_rate == nil
+hours_worked equals 0 if hours_worked == nil
+tax_rate equals 0 if tax_rate == nil
+
+gross_pay equals hourly_rate times hours_worked
+overtime_hours equals hours_worked minus 40
+overtime_eligible equals false
+
+If hours_worked is greater than 40
+  overtime_eligible equals true
+
+tax_amount equals gross_pay times tax_rate
+net_pay equals gross_pay minus tax_amount
+
+gross_pay must be at least 1
+
+Route net_pay to hr_payroll_queue

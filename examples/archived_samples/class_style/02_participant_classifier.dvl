@@ -1,0 +1,7 @@
+# Lesson 2: Use guarded assignments in a class method
+
+Retirement's Participant Classifier:
+  classify participant using participant age:
+    participant_status equals "standard"
+    participant_status equals "catch_up" if participant age >= 50
+    respond with participant_status

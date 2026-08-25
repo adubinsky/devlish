@@ -1,0 +1,381 @@
+{
+  "format": "devlish-bytecode",
+  "format_version": 0,
+  "compiler_version": "0.1.0",
+  "source_path": "examples/docx_contract_review/workflow.dvl",
+  "source_hash": "97803c1ba0615750e68aeb676a72862b5956f43fb4ffb4039b4e2bbbd0e42ba1",
+  "constant_pool": [
+    "Mutual Confidentiality Agreement",
+    "Disclosing Party: Acme Robotics Inc.",
+    "Receiving Party: Northwind Manufacturing Inc.",
+    "Effective date: 2026-01-15",
+    "Confidential information includes technical designs",
+    "Purpose: evaluate strategic manufacturing partnership",
+    "Term: 3 years",
+    "Return or destroy materials within 10 business days",
+    "Governing law: Delaware",
+    "Injunctive relief available"
+  ],
+  "symbol_table": [
+    "contract_text",
+    "assertion_report_path"
+  ],
+  "instructions": [
+    {
+      "op": "DOCX_READ_TEXT",
+      "target": "contract_text",
+      "path": "nda-review.docx"
+    },
+    {
+      "op": "CONST",
+      "dest": "r0",
+      "const": 0
+    },
+    {
+      "op": "ASSERT",
+      "assertion_id": "agreement-title-present",
+      "target": "contract_text",
+      "operator": "contains",
+      "expected": "r0"
+    },
+    {
+      "op": "CONST",
+      "dest": "r1",
+      "const": 1
+    },
+    {
+      "op": "ASSERT",
+      "assertion_id": "disclosing-party-present",
+      "target": "contract_text",
+      "operator": "contains",
+      "expected": "r1"
+    },
+    {
+      "op": "CONST",
+      "dest": "r2",
+      "const": 2
+    },
+    {
+      "op": "ASSERT",
+      "assertion_id": "receiving-party-present",
+      "target": "contract_text",
+      "operator": "contains",
+      "expected": "r2"
+    },
+    {
+      "op": "CONST",
+      "dest": "r3",
+      "const": 3
+    },
+    {
+      "op": "ASSERT",
+      "assertion_id": "effective-date-present",
+      "target": "contract_text",
+      "operator": "contains",
+      "expected": "r3"
+    },
+    {
+      "op": "CONST",
+      "dest": "r4",
+      "const": 4
+    },
+    {
+      "op": "ASSERT",
+      "assertion_id": "confidential-information-scope",
+      "target": "contract_text",
+      "operator": "contains",
+      "expected": "r4"
+    },
+    {
+      "op": "CONST",
+      "dest": "r5",
+      "const": 5
+    },
+    {
+      "op": "ASSERT",
+      "assertion_id": "purpose-present",
+      "target": "contract_text",
+      "operator": "contains",
+      "expected": "r5"
+    },
+    {
+      "op": "CONST",
+      "dest": "r6",
+      "const": 6
+    },
+    {
+      "op": "ASSERT",
+      "assertion_id": "term-present",
+      "target": "contract_text",
+      "operator": "contains",
+      "expected": "r6"
+    },
+    {
+      "op": "CONST",
+      "dest": "r7",
+      "const": 7
+    },
+    {
+      "op": "ASSERT",
+      "assertion_id": "return-destroy-present",
+      "target": "contract_text",
+      "operator": "contains",
+      "expected": "r7"
+    },
+    {
+      "op": "CONST",
+      "dest": "r8",
+      "const": 8
+    },
+    {
+      "op": "ASSERT",
+      "assertion_id": "governing-law-present",
+      "target": "contract_text",
+      "operator": "contains",
+      "expected": "r8"
+    },
+    {
+      "op": "CONST",
+      "dest": "r9",
+      "const": 9
+    },
+    {
+      "op": "ASSERT",
+      "assertion_id": "injunctive-relief-present",
+      "target": "contract_text",
+      "operator": "contains",
+      "expected": "r9"
+    },
+    {
+      "op": "LOAD",
+      "dest": "r10",
+      "symbol": "assertion_report_path"
+    },
+    {
+      "op": "EXPORT_ASSERTIONS",
+      "path": "r10"
+    },
+    {
+      "op": "RETURN"
+    }
+  ],
+  "source_map": [
+    {
+      "address": 0,
+      "line": 1,
+      "source_text": "Read DOCX text \"nda-review.docx\" as contract text"
+    },
+    {
+      "address": 1,
+      "line": 3,
+      "source_text": "Expect contract_text contains \"Mutual Confidentiality Agreement\" as \"agreement-title-present\""
+    },
+    {
+      "address": 2,
+      "line": 3,
+      "source_text": "Expect contract_text contains \"Mutual Confidentiality Agreement\" as \"agreement-title-present\""
+    },
+    {
+      "address": 3,
+      "line": 4,
+      "source_text": "Expect contract_text contains \"Disclosing Party: Acme Robotics Inc.\" as \"disclosing-party-present\""
+    },
+    {
+      "address": 4,
+      "line": 4,
+      "source_text": "Expect contract_text contains \"Disclosing Party: Acme Robotics Inc.\" as \"disclosing-party-present\""
+    },
+    {
+      "address": 5,
+      "line": 5,
+      "source_text": "Expect contract_text contains \"Receiving Party: Northwind Manufacturing Inc.\" as \"receiving-party-present\""
+    },
+    {
+      "address": 6,
+      "line": 5,
+      "source_text": "Expect contract_text contains \"Receiving Party: Northwind Manufacturing Inc.\" as \"receiving-party-present\""
+    },
+    {
+      "address": 7,
+      "line": 6,
+      "source_text": "Expect contract_text contains \"Effective date: 2026-01-15\" as \"effective-date-present\""
+    },
+    {
+      "address": 8,
+      "line": 6,
+      "source_text": "Expect contract_text contains \"Effective date: 2026-01-15\" as \"effective-date-present\""
+    },
+    {
+      "address": 9,
+      "line": 7,
+      "source_text": "Expect contract_text contains \"Confidential information includes technical designs\" as \"confidential-information-scope\""
+    },
+    {
+      "address": 10,
+      "line": 7,
+      "source_text": "Expect contract_text contains \"Confidential information includes technical designs\" as \"confidential-information-scope\""
+    },
+    {
+      "address": 11,
+      "line": 8,
+      "source_text": "Expect contract_text contains \"Purpose: evaluate strategic manufacturing partnership\" as \"purpose-present\""
+    },
+    {
+      "address": 12,
+      "line": 8,
+      "source_text": "Expect contract_text contains \"Purpose: evaluate strategic manufacturing partnership\" as \"purpose-present\""
+    },
+    {
+      "address": 13,
+      "line": 9,
+      "source_text": "Expect contract_text contains \"Term: 3 years\" as \"term-present\""
+    },
+    {
+      "address": 14,
+      "line": 9,
+      "source_text": "Expect contract_text contains \"Term: 3 years\" as \"term-present\""
+    },
+    {
+      "address": 15,
+      "line": 10,
+      "source_text": "Expect contract_text contains \"Return or destroy materials within 10 business days\" as \"return-destroy-present\""
+    },
+    {
+      "address": 16,
+      "line": 10,
+      "source_text": "Expect contract_text contains \"Return or destroy materials within 10 business days\" as \"return-destroy-present\""
+    },
+    {
+      "address": 17,
+      "line": 11,
+      "source_text": "Expect contract_text contains \"Governing law: Delaware\" as \"governing-law-present\""
+    },
+    {
+      "address": 18,
+      "line": 11,
+      "source_text": "Expect contract_text contains \"Governing law: Delaware\" as \"governing-law-present\""
+    },
+    {
+      "address": 19,
+      "line": 12,
+      "source_text": "Expect contract_text contains \"Injunctive relief available\" as \"injunctive-relief-present\""
+    },
+    {
+      "address": 20,
+      "line": 12,
+      "source_text": "Expect contract_text contains \"Injunctive relief available\" as \"injunctive-relief-present\""
+    },
+    {
+      "address": 21,
+      "line": 14,
+      "source_text": "Export assertions to assertion report path"
+    },
+    {
+      "address": 22,
+      "line": 14,
+      "source_text": "Export assertions to assertion report path"
+    },
+    {
+      "address": 23
+    }
+  ],
+  "effect_table": [
+    {
+      "kind": "docx_read_text",
+      "line": 1,
+      "source_text": "Read DOCX text \"nda-review.docx\" as contract text",
+      "target": "contract_text",
+      "path": "nda-review.docx"
+    },
+    {
+      "kind": "assertion",
+      "line": 3,
+      "source_text": "Expect contract_text contains \"Mutual Confidentiality Agreement\" as \"agreement-title-present\"",
+      "assertion_id": "agreement-title-present",
+      "target": "contract_text",
+      "operator": "contains"
+    },
+    {
+      "kind": "assertion",
+      "line": 4,
+      "source_text": "Expect contract_text contains \"Disclosing Party: Acme Robotics Inc.\" as \"disclosing-party-present\"",
+      "assertion_id": "disclosing-party-present",
+      "target": "contract_text",
+      "operator": "contains"
+    },
+    {
+      "kind": "assertion",
+      "line": 5,
+      "source_text": "Expect contract_text contains \"Receiving Party: Northwind Manufacturing Inc.\" as \"receiving-party-present\"",
+      "assertion_id": "receiving-party-present",
+      "target": "contract_text",
+      "operator": "contains"
+    },
+    {
+      "kind": "assertion",
+      "line": 6,
+      "source_text": "Expect contract_text contains \"Effective date: 2026-01-15\" as \"effective-date-present\"",
+      "assertion_id": "effective-date-present",
+      "target": "contract_text",
+      "operator": "contains"
+    },
+    {
+      "kind": "assertion",
+      "line": 7,
+      "source_text": "Expect contract_text contains \"Confidential information includes technical designs\" as \"confidential-information-scope\"",
+      "assertion_id": "confidential-information-scope",
+      "target": "contract_text",
+      "operator": "contains"
+    },
+    {
+      "kind": "assertion",
+      "line": 8,
+      "source_text": "Expect contract_text contains \"Purpose: evaluate strategic manufacturing partnership\" as \"purpose-present\"",
+      "assertion_id": "purpose-present",
+      "target": "contract_text",
+      "operator": "contains"
+    },
+    {
+      "kind": "assertion",
+      "line": 9,
+      "source_text": "Expect contract_text contains \"Term: 3 years\" as \"term-present\"",
+      "assertion_id": "term-present",
+      "target": "contract_text",
+      "operator": "contains"
+    },
+    {
+      "kind": "assertion",
+      "line": 10,
+      "source_text": "Expect contract_text contains \"Return or destroy materials within 10 business days\" as \"return-destroy-present\"",
+      "assertion_id": "return-destroy-present",
+      "target": "contract_text",
+      "operator": "contains"
+    },
+    {
+      "kind": "assertion",
+      "line": 11,
+      "source_text": "Expect contract_text contains \"Governing law: Delaware\" as \"governing-law-present\"",
+      "assertion_id": "governing-law-present",
+      "target": "contract_text",
+      "operator": "contains"
+    },
+    {
+      "kind": "assertion",
+      "line": 12,
+      "source_text": "Expect contract_text contains \"Injunctive relief available\" as \"injunctive-relief-present\"",
+      "assertion_id": "injunctive-relief-present",
+      "target": "contract_text",
+      "operator": "contains"
+    },
+    {
+      "kind": "file_write",
+      "line": 14,
+      "source_text": "Export assertions to assertion report path",
+      "mode": "assertions"
+    }
+  ],
+  "imports": [
+    "emit_event",
+    "write_file"
+  ]
+}

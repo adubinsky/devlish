@@ -1,0 +1,18 @@
+# Lesson 1.5 example: use built-in helpers for text and numbers
+
+# Keep the original text messy so the helper output is visible.
+status_text equals " Pending Review "
+
+# Helper calls can be nested: trim runs before uppercase here.
+loud_status equals uppercase trim status_text
+quiet_status equals lowercase loud_status
+cleaned_status equals replace " " in quiet_status with "_"
+
+# Number helpers normalize a negative decimal into a rounded positive value.
+distance equals absolute value of -4.8
+rounded_distance equals round distance
+
+# Print emits values so a beginner can see what each helper produced.
+Print loud_status
+Print cleaned_status
+Print rounded_distance

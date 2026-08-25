@@ -1,0 +1,6 @@
+# Lesson 5.3 example: the same pattern in operations
+
+# A conditional assignment can classify an operations incident.
+incident_priority equals "normal"
+incident_priority equals "urgent" if 5 >= 3
+Route incident_priority to operations_incident_queue

@@ -1,0 +1,25 @@
+{
+  "schema_version": "devlish-benchmark-v0",
+  "benchmark": "xlsx_expected_cells",
+  "baseline": {
+    "kind": "captured_transcript",
+    "path": "baseline.skill-transcript.json",
+    "sha256": "..."
+  },
+  "workflow": {
+    "source_path": "workflow.dvl",
+    "bytecode_path": "workflow.dvlc.json",
+    "bytecode_sha256": "..."
+  },
+  "input": {
+    "path": "input.json",
+    "sha256": "..."
+  },
+  "outputs": {
+    "assertion_report_path": "../../tmp/xlsx_expected_cells/report.json",
+    "benchmark_report_path": "../../tmp/xlsx_expected_cells/benchmark-report.json"
+  },
+  "expected_assertion_report": {
+    "path": "expected-report.json"
+  }
+}

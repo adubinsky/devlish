@@ -1,0 +1,21 @@
+# Healthcare: Claim intake triage
+
+Load examples/business/data/claim_submission.txt as Claim Submission
+Alias Claim Submission as Claim
+
+Find patient id and save as patient_id
+Find claim id and save as claim_id
+Find ndc code and save as ndc_code
+Find quantity and save as quantity
+
+triage_status equals "ready"
+
+If patient_id is missing
+  triage_status equals "needs review"
+
+If ndc_code is missing
+  triage_status equals "needs review"
+
+quantity must be at most 90
+
+Route triage_status to claim_intake_queue

@@ -1,0 +1,30 @@
+# Example: Defined Terms and Article Semantics
+
+# Define terms with explanations (dash syntax)
+liability_cap - the highest amount the liability settlement can go
+termination_notice - the number of days required before contract termination
+Indemnification Clause - the contract section describing protection from claims
+
+# Load the document
+Load document
+
+# Article usage examples:
+
+# "a/an" - introducing a new term (existential quantifier)
+Document must contain a Liability Clause
+Document must contain an Indemnification Clause
+
+# "the" - referencing a specific/previously mentioned term (definite)
+the Document must contain the Termination Clause
+
+# "All" - universal quantifier (every document in scope)
+All Documents must contain a Confidentiality Clause
+
+# Extract using defined terms
+# The parser will expand liability_cap to its definition for better matching
+Find a liability_cap and save as liability_cap
+Find a termination_notice and save as termination_notice
+
+# Validate
+the liability_cap must be at least 1000000
+The termination_notice must be at least 30 days

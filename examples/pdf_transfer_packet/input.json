@@ -1,0 +1,10 @@
+{
+  "schema_version": "devlish-benchmark-input-v0",
+  "benchmark": "pdf_transfer_packet",
+  "assertion_report_schema_version": "devlish-assertion-report-v0",
+  "pdfs": {
+    "transfer-request.pdf": "transfer-request.pdf"
+  },
+  "assertion_report_path": "../../tmp/pdf_transfer_packet/report.json",
+  "benchmark_report_path": "../../tmp/pdf_transfer_packet/benchmark-report.json"
+}

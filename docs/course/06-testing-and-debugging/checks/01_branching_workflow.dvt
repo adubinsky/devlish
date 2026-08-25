@@ -1,0 +1,5 @@
+Scenario "routes approved reviews"
+When I run "../examples/01_branching_workflow.dvl"
+Then run should succeed
+Then review_status should equal "approved"
+Then the route should be "approved_queue"

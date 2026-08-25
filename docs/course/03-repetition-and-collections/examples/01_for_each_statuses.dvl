@@ -1,0 +1,6 @@
+# Lesson 3.1 example: repeat the same step for each item
+
+# Devlish treats the words after "in" as the collection to visit.
+For each status in approved and pending and rejected:
+  # The loop gives each value the temporary name status.
+  Print status

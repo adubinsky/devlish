@@ -1,0 +1,4 @@
+Notification Packet
+
+review mailbox: approvals_team
+claims queue: claims_review_queue

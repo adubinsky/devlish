@@ -1,0 +1,352 @@
+{
+  "assertions": [
+    {
+      "actual": {
+        "formatted": "Solar Site Alpha",
+        "kind": "string",
+        "value": "Solar Site Alpha"
+      },
+      "expected": null,
+      "id": "summary-site-name-present",
+      "message": "Assertion summary-site-name-present passed",
+      "operator": "present",
+      "passed": true,
+      "target": "site_name"
+    },
+    {
+      "actual": {
+        "formatted": "1120 County Road 18, Mesa County, CO",
+        "kind": "string",
+        "value": "1120 County Road 18, Mesa County, CO"
+      },
+      "expected": null,
+      "id": "summary-site-address-present",
+      "message": "Assertion summary-site-address-present passed",
+      "operator": "present",
+      "passed": true,
+      "target": "site_address"
+    },
+    {
+      "actual": {
+        "formatted": "Solar Site Alpha",
+        "kind": "string",
+        "value": "Solar Site Alpha"
+      },
+      "expected": {
+        "formatted": "Solar Site Alpha",
+        "kind": "string",
+        "value": "Solar Site Alpha"
+      },
+      "id": "legal-site-name-matches-summary",
+      "message": "Assertion legal-site-name-matches-summary passed",
+      "operator": "equals",
+      "passed": true,
+      "target": "legal_site_name"
+    },
+    {
+      "actual": {
+        "formatted": "Solar Site Alpha",
+        "kind": "string",
+        "value": "Solar Site Alpha"
+      },
+      "expected": {
+        "formatted": "Solar Site Alpha",
+        "kind": "string",
+        "value": "Solar Site Alpha"
+      },
+      "id": "ppa-site-name-matches-summary",
+      "message": "Assertion ppa-site-name-matches-summary passed",
+      "operator": "equals",
+      "passed": true,
+      "target": "ppa_site_name"
+    },
+    {
+      "actual": {
+        "formatted": "1120 County Road 18, Mesa County, CO",
+        "kind": "string",
+        "value": "1120 County Road 18, Mesa County, CO"
+      },
+      "expected": {
+        "formatted": "1120 County Road 18, Mesa County, CO",
+        "kind": "string",
+        "value": "1120 County Road 18, Mesa County, CO"
+      },
+      "id": "legal-address-matches-summary",
+      "message": "Assertion legal-address-matches-summary passed",
+      "operator": "equals",
+      "passed": true,
+      "target": "legal_address"
+    },
+    {
+      "actual": {
+        "formatted": "1120 County Road 18, Mesa County, CO",
+        "kind": "string",
+        "value": "1120 County Road 18, Mesa County, CO"
+      },
+      "expected": {
+        "formatted": "1120 County Road 18, Mesa County, CO",
+        "kind": "string",
+        "value": "1120 County Road 18, Mesa County, CO"
+      },
+      "id": "ppa-address-matches-summary",
+      "message": "Assertion ppa-address-matches-summary passed",
+      "operator": "equals",
+      "passed": true,
+      "target": "ppa_address"
+    },
+    {
+      "actual": {
+        "formatted": "250000",
+        "kind": "number",
+        "value": 250000
+      },
+      "expected": {
+        "kind": "number",
+        "value": 250000
+      },
+      "id": "credit-value-expected",
+      "message": "Assertion credit-value-expected passed",
+      "operator": "equals",
+      "passed": true,
+      "target": "credit_value"
+    },
+    {
+      "actual": {
+        "formatted": "337500",
+        "kind": "number",
+        "value": 337500
+      },
+      "expected": {
+        "kind": "number",
+        "value": 337500
+      },
+      "id": "cost-seg-total-expected",
+      "message": "Assertion cost-seg-total-expected passed",
+      "operator": "equals",
+      "passed": true,
+      "target": "cost_seg_asset_total"
+    },
+    {
+      "actual": {
+        "formatted": "250000",
+        "formula": "ROUND(B8*0.3,0)",
+        "kind": "number",
+        "value": 250000
+      },
+      "expected": {
+        "formatted": "250000",
+        "kind": "number",
+        "value": 250000
+      },
+      "id": "calculated-credit-matches-summary",
+      "message": "Assertion calculated-credit-matches-summary passed",
+      "operator": "equals",
+      "passed": true,
+      "target": "calculated_credit_value"
+    },
+    {
+      "actual": {
+        "formatted": "2025-12-15",
+        "kind": "string",
+        "value": "2025-12-15"
+      },
+      "expected": null,
+      "id": "placed-in-service-date-present",
+      "message": "Assertion placed-in-service-date-present passed",
+      "operator": "present",
+      "passed": true,
+      "target": "placed_in_service_date"
+    },
+    {
+      "actual": {
+        "formatted": "Signed domestic content affidavit received",
+        "kind": "string",
+        "value": "Signed domestic content affidavit received"
+      },
+      "expected": null,
+      "id": "domestic-content-affidavit-present",
+      "message": "Assertion domestic-content-affidavit-present passed",
+      "operator": "present",
+      "passed": true,
+      "target": "domestic_content_affidavit"
+    },
+    {
+      "actual": {
+        "formatted": "US-sourced steel documented",
+        "kind": "string",
+        "value": "US-sourced steel documented"
+      },
+      "expected": {
+        "kind": "string",
+        "value": "US-sourced steel documented"
+      },
+      "id": "steel-origin-status",
+      "message": "Assertion steel-origin-status passed",
+      "operator": "equals",
+      "passed": true,
+      "target": "steel_origin_status"
+    },
+    {
+      "actual": {
+        "formatted": "Certified payroll package complete",
+        "kind": "string",
+        "value": "Certified payroll package complete"
+      },
+      "expected": {
+        "kind": "string",
+        "value": "Certified payroll package complete"
+      },
+      "id": "prevailing-wage-certified",
+      "message": "Assertion prevailing-wage-certified passed",
+      "operator": "equals",
+      "passed": true,
+      "target": "prevailing_wage_status"
+    },
+    {
+      "actual": {
+        "formatted": "18",
+        "kind": "number",
+        "value": 18
+      },
+      "expected": {
+        "kind": "number",
+        "value": 18
+      },
+      "id": "usa-equipment-count",
+      "message": "Assertion usa-equipment-count passed",
+      "operator": "equals",
+      "passed": true,
+      "target": "usa_equipment_count"
+    },
+    {
+      "actual": {
+        "formatted": "18",
+        "kind": "number",
+        "value": 18
+      },
+      "expected": {
+        "formatted": "18",
+        "kind": "number",
+        "value": 18
+      },
+      "id": "all-equipment-made-in-usa",
+      "message": "Assertion all-equipment-made-in-usa passed",
+      "operator": "equals",
+      "passed": true,
+      "target": "total_equipment_count"
+    },
+    {
+      "actual": {
+        "formatted": "OK",
+        "formula": "IF(Summary!B4=250000,\"OK\",\"#VALUE!\")",
+        "kind": "string",
+        "value": "OK"
+      },
+      "expected": null,
+      "id": "formula-health-no-error",
+      "message": "Assertion formula-health-no-error passed",
+      "operator": "not_spreadsheet_error",
+      "passed": true,
+      "target": "formula_health_check"
+    },
+    {
+      "actual": {
+        "formatted": "Present",
+        "kind": "string",
+        "value": "Present"
+      },
+      "expected": {
+        "kind": "string",
+        "value": "Present"
+      },
+      "id": "irs-form-present",
+      "message": "Assertion irs-form-present passed",
+      "operator": "equals",
+      "passed": true,
+      "target": "form_status"
+    },
+    {
+      "actual": {
+        "formatted": "Present",
+        "kind": "string",
+        "value": "Present"
+      },
+      "expected": {
+        "kind": "string",
+        "value": "Present"
+      },
+      "id": "ppa-present",
+      "message": "Assertion ppa-present passed",
+      "operator": "equals",
+      "passed": true,
+      "target": "ppa_status"
+    },
+    {
+      "actual": {
+        "formatted": "Present",
+        "kind": "string",
+        "value": "Present"
+      },
+      "expected": {
+        "kind": "string",
+        "value": "Present"
+      },
+      "id": "land-lease-present",
+      "message": "Assertion land-lease-present passed",
+      "operator": "equals",
+      "passed": true,
+      "target": "land_lease_status"
+    },
+    {
+      "actual": {
+        "formatted": "Present",
+        "kind": "string",
+        "value": "Present"
+      },
+      "expected": {
+        "kind": "string",
+        "value": "Present"
+      },
+      "id": "cost-seg-report-present",
+      "message": "Assertion cost-seg-report-present passed",
+      "operator": "equals",
+      "passed": true,
+      "target": "cost_seg_report_status"
+    },
+    {
+      "actual": {
+        "formatted": "Present",
+        "kind": "string",
+        "value": "Present"
+      },
+      "expected": {
+        "kind": "string",
+        "value": "Present"
+      },
+      "id": "domestic-content-package-present",
+      "message": "Assertion domestic-content-package-present passed",
+      "operator": "equals",
+      "passed": true,
+      "target": "domestic_content_status"
+    },
+    {
+      "actual": {
+        "formatted": "Present",
+        "kind": "string",
+        "value": "Present"
+      },
+      "expected": {
+        "kind": "string",
+        "value": "Present"
+      },
+      "id": "payroll-package-present",
+      "message": "Assertion payroll-package-present passed",
+      "operator": "equals",
+      "passed": true,
+      "target": "payroll_status"
+    }
+  ],
+  "benchmark": "xlsx_due_diligence_packet",
+  "schema_version": "devlish-xlsx-report-v0",
+  "success": true
+}

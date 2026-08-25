@@ -1,0 +1,7 @@
+{
+  "schema_version": "devlish-benchmark-input-v0",
+  "benchmark": "xlsx_due_diligence_packet",
+  "workbook": "fixture.xlsx",
+  "assertion_report_path": "../../tmp/xlsx_due_diligence_packet/report.json",
+  "benchmark_report_path": "../../tmp/xlsx_due_diligence_packet/benchmark-report.json"
+}

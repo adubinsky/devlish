@@ -1,0 +1,73 @@
+# Process: verify_medication_invoice_full_prd
+#
+# Objective:
+# Full PRD-style flow including guard clauses, looping, and service actions.
+# This file represents target language richness; some statements may need parser expansion.
+
+When a medication invoice is submitted:
+  # 1) Extract invoice fields
+  Find invoice patient_id and save as patient_id
+  Find invoice medication_name and save as medication_name
+  Find invoice ndc_code and save as ndc_code
+  Find invoice quantity and save as invoice_quantity
+  Find invoice refill_count and save as invoice_refill_count
+  Find invoice service_date and save as invoice_service_date
+  Find invoice prescriber_id and save as prescriber_id
+
+  # 2) Fetch supporting records
+  Search the PatientService for patient_id
+  Search the AuthorizationService for patient_id at invoice_service_date
+  Search the MedicationService for medication_name and ndc_code
+
+  # 3) Build comparison set
+  Find approved medications for patient_id at invoice_service_date and save as approved_list
+  Find normalized medication for medication_name and ndc_code and save as normalized_medication
+
+  # 4) Guard clauses
+  If patient_id is missing
+    decision_status equals needs_review
+    review_reason equals missing patient id
+
+  If normalized_medication is missing
+    decision_status equals needs_review
+    review_reason equals unable to normalize medication
+
+  If approved_list is missing
+    decision_status equals needs_review
+    review_reason equals missing approved list
+
+  # 5) Eligibility decision
+  If normalized_medication is in approved_list
+    decision_status equals approved
+  Otherwise
+    decision_status equals denied
+    deny_reason equals medication not approved for patient
+
+  # 6) Iterate approved list for near-match fallback
+  If decision_status is denied
+    For each approved_medication in approved_list:
+      Find similarity score between normalized_medication and approved_medication and save as similarity_score
+      If similarity_score is at least 90
+        decision_status equals needs_review
+        review_reason equals possible equivalent medication
+
+  # 7) Enforce limits
+  If decision_status is approved
+    Find quantity limit for normalized_medication and patient_id and save as quantity_limit
+    Find refill limit for normalized_medication and patient_id and save as refill_limit
+
+    If invoice_quantity is greater than quantity_limit
+      decision_status equals denied
+      deny_reason equals quantity limit exceeded
+
+    If invoice_refill_count is greater than refill_limit
+      decision_status equals denied
+      deny_reason equals refill limit exceeded
+
+  # 8) Persist and route
+  Create DecisionLog entry with patient_id, medication_name, ndc_code, decision_status, deny_reason, review_reason
+
+  If decision_status is approved
+    Send Email via NotificationService to "billing_team" with template invoice_approved
+  Otherwise
+    Route invoice to payment_integrity_review_queue

@@ -1,0 +1,25 @@
+# Finance: Expense report review
+
+Load examples/business/data/expense_report.txt as Expense Report
+Alias Expense Report as Report
+
+Find total amount and save as total_amount
+Find receipt count and save as receipt_count
+
+manual_review equals false
+
+If total_amount is missing
+  manual_review equals true
+
+If receipt_count is missing
+  manual_review equals true
+
+total_amount must be at most 2000
+receipt_count must be at least 1
+
+If manual_review is true
+  decision equals "needs review"
+Otherwise
+  decision equals "approved"
+
+Route decision to finance_expense_queue

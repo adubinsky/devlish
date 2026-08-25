@@ -1,0 +1,6 @@
+# Lesson 1.1 example: three common value types
+
+# Numbers, booleans, and quoted text can all be saved under names.
+invoice_amount equals 1200
+review_needed equals false
+decision_label equals "approved"

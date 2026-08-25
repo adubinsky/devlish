@@ -1,0 +1,177 @@
+{
+  "assertions": [
+    {
+      "actual": {
+        "kind": "text",
+        "messages": [],
+        "source": "nda-review.docx",
+        "value": "Mutual Confidentiality Agreement\n\nDisclosing Party: Acme Robotics Inc.\n\nReceiving Party: Northwind Manufacturing Inc.\n\nEffective date: 2026-01-15\n\nPurpose and Scope\n\nPurpose: evaluate strategic manufacturing partnership\n\nConfidential information includes technical designs, manufacturing plans, pricing, and partner diligence materials.\n\nObligations\n\nTerm: 3 years\n\nReturn or destroy materials within 10 business days after written request.\n\nLegal Terms\n\nGoverning law: Delaware\n\nInjunctive relief available for unauthorized disclosure or misuse of confidential information.\n\n"
+      },
+      "expected": {
+        "kind": "string",
+        "value": "Mutual Confidentiality Agreement"
+      },
+      "id": "agreement-title-present",
+      "message": "Assertion agreement-title-present passed",
+      "operator": "contains",
+      "passed": true,
+      "target": "contract_text"
+    },
+    {
+      "actual": {
+        "kind": "text",
+        "messages": [],
+        "source": "nda-review.docx",
+        "value": "Mutual Confidentiality Agreement\n\nDisclosing Party: Acme Robotics Inc.\n\nReceiving Party: Northwind Manufacturing Inc.\n\nEffective date: 2026-01-15\n\nPurpose and Scope\n\nPurpose: evaluate strategic manufacturing partnership\n\nConfidential information includes technical designs, manufacturing plans, pricing, and partner diligence materials.\n\nObligations\n\nTerm: 3 years\n\nReturn or destroy materials within 10 business days after written request.\n\nLegal Terms\n\nGoverning law: Delaware\n\nInjunctive relief available for unauthorized disclosure or misuse of confidential information.\n\n"
+      },
+      "expected": {
+        "kind": "string",
+        "value": "Disclosing Party: Acme Robotics Inc."
+      },
+      "id": "disclosing-party-present",
+      "message": "Assertion disclosing-party-present passed",
+      "operator": "contains",
+      "passed": true,
+      "target": "contract_text"
+    },
+    {
+      "actual": {
+        "kind": "text",
+        "messages": [],
+        "source": "nda-review.docx",
+        "value": "Mutual Confidentiality Agreement\n\nDisclosing Party: Acme Robotics Inc.\n\nReceiving Party: Northwind Manufacturing Inc.\n\nEffective date: 2026-01-15\n\nPurpose and Scope\n\nPurpose: evaluate strategic manufacturing partnership\n\nConfidential information includes technical designs, manufacturing plans, pricing, and partner diligence materials.\n\nObligations\n\nTerm: 3 years\n\nReturn or destroy materials within 10 business days after written request.\n\nLegal Terms\n\nGoverning law: Delaware\n\nInjunctive relief available for unauthorized disclosure or misuse of confidential information.\n\n"
+      },
+      "expected": {
+        "kind": "string",
+        "value": "Receiving Party: Northwind Manufacturing Inc."
+      },
+      "id": "receiving-party-present",
+      "message": "Assertion receiving-party-present passed",
+      "operator": "contains",
+      "passed": true,
+      "target": "contract_text"
+    },
+    {
+      "actual": {
+        "kind": "text",
+        "messages": [],
+        "source": "nda-review.docx",
+        "value": "Mutual Confidentiality Agreement\n\nDisclosing Party: Acme Robotics Inc.\n\nReceiving Party: Northwind Manufacturing Inc.\n\nEffective date: 2026-01-15\n\nPurpose and Scope\n\nPurpose: evaluate strategic manufacturing partnership\n\nConfidential information includes technical designs, manufacturing plans, pricing, and partner diligence materials.\n\nObligations\n\nTerm: 3 years\n\nReturn or destroy materials within 10 business days after written request.\n\nLegal Terms\n\nGoverning law: Delaware\n\nInjunctive relief available for unauthorized disclosure or misuse of confidential information.\n\n"
+      },
+      "expected": {
+        "kind": "string",
+        "value": "Effective date: 2026-01-15"
+      },
+      "id": "effective-date-present",
+      "message": "Assertion effective-date-present passed",
+      "operator": "contains",
+      "passed": true,
+      "target": "contract_text"
+    },
+    {
+      "actual": {
+        "kind": "text",
+        "messages": [],
+        "source": "nda-review.docx",
+        "value": "Mutual Confidentiality Agreement\n\nDisclosing Party: Acme Robotics Inc.\n\nReceiving Party: Northwind Manufacturing Inc.\n\nEffective date: 2026-01-15\n\nPurpose and Scope\n\nPurpose: evaluate strategic manufacturing partnership\n\nConfidential information includes technical designs, manufacturing plans, pricing, and partner diligence materials.\n\nObligations\n\nTerm: 3 years\n\nReturn or destroy materials within 10 business days after written request.\n\nLegal Terms\n\nGoverning law: Delaware\n\nInjunctive relief available for unauthorized disclosure or misuse of confidential information.\n\n"
+      },
+      "expected": {
+        "kind": "string",
+        "value": "Confidential information includes technical designs"
+      },
+      "id": "confidential-information-scope",
+      "message": "Assertion confidential-information-scope passed",
+      "operator": "contains",
+      "passed": true,
+      "target": "contract_text"
+    },
+    {
+      "actual": {
+        "kind": "text",
+        "messages": [],
+        "source": "nda-review.docx",
+        "value": "Mutual Confidentiality Agreement\n\nDisclosing Party: Acme Robotics Inc.\n\nReceiving Party: Northwind Manufacturing Inc.\n\nEffective date: 2026-01-15\n\nPurpose and Scope\n\nPurpose: evaluate strategic manufacturing partnership\n\nConfidential information includes technical designs, manufacturing plans, pricing, and partner diligence materials.\n\nObligations\n\nTerm: 3 years\n\nReturn or destroy materials within 10 business days after written request.\n\nLegal Terms\n\nGoverning law: Delaware\n\nInjunctive relief available for unauthorized disclosure or misuse of confidential information.\n\n"
+      },
+      "expected": {
+        "kind": "string",
+        "value": "Purpose: evaluate strategic manufacturing partnership"
+      },
+      "id": "purpose-present",
+      "message": "Assertion purpose-present passed",
+      "operator": "contains",
+      "passed": true,
+      "target": "contract_text"
+    },
+    {
+      "actual": {
+        "kind": "text",
+        "messages": [],
+        "source": "nda-review.docx",
+        "value": "Mutual Confidentiality Agreement\n\nDisclosing Party: Acme Robotics Inc.\n\nReceiving Party: Northwind Manufacturing Inc.\n\nEffective date: 2026-01-15\n\nPurpose and Scope\n\nPurpose: evaluate strategic manufacturing partnership\n\nConfidential information includes technical designs, manufacturing plans, pricing, and partner diligence materials.\n\nObligations\n\nTerm: 3 years\n\nReturn or destroy materials within 10 business days after written request.\n\nLegal Terms\n\nGoverning law: Delaware\n\nInjunctive relief available for unauthorized disclosure or misuse of confidential information.\n\n"
+      },
+      "expected": {
+        "kind": "string",
+        "value": "Term: 3 years"
+      },
+      "id": "term-present",
+      "message": "Assertion term-present passed",
+      "operator": "contains",
+      "passed": true,
+      "target": "contract_text"
+    },
+    {
+      "actual": {
+        "kind": "text",
+        "messages": [],
+        "source": "nda-review.docx",
+        "value": "Mutual Confidentiality Agreement\n\nDisclosing Party: Acme Robotics Inc.\n\nReceiving Party: Northwind Manufacturing Inc.\n\nEffective date: 2026-01-15\n\nPurpose and Scope\n\nPurpose: evaluate strategic manufacturing partnership\n\nConfidential information includes technical designs, manufacturing plans, pricing, and partner diligence materials.\n\nObligations\n\nTerm: 3 years\n\nReturn or destroy materials within 10 business days after written request.\n\nLegal Terms\n\nGoverning law: Delaware\n\nInjunctive relief available for unauthorized disclosure or misuse of confidential information.\n\n"
+      },
+      "expected": {
+        "kind": "string",
+        "value": "Return or destroy materials within 10 business days"
+      },
+      "id": "return-destroy-present",
+      "message": "Assertion return-destroy-present passed",
+      "operator": "contains",
+      "passed": true,
+      "target": "contract_text"
+    },
+    {
+      "actual": {
+        "kind": "text",
+        "messages": [],
+        "source": "nda-review.docx",
+        "value": "Mutual Confidentiality Agreement\n\nDisclosing Party: Acme Robotics Inc.\n\nReceiving Party: Northwind Manufacturing Inc.\n\nEffective date: 2026-01-15\n\nPurpose and Scope\n\nPurpose: evaluate strategic manufacturing partnership\n\nConfidential information includes technical designs, manufacturing plans, pricing, and partner diligence materials.\n\nObligations\n\nTerm: 3 years\n\nReturn or destroy materials within 10 business days after written request.\n\nLegal Terms\n\nGoverning law: Delaware\n\nInjunctive relief available for unauthorized disclosure or misuse of confidential information.\n\n"
+      },
+      "expected": {
+        "kind": "string",
+        "value": "Governing law: Delaware"
+      },
+      "id": "governing-law-present",
+      "message": "Assertion governing-law-present passed",
+      "operator": "contains",
+      "passed": true,
+      "target": "contract_text"
+    },
+    {
+      "actual": {
+        "kind": "text",
+        "messages": [],
+        "source": "nda-review.docx",
+        "value": "Mutual Confidentiality Agreement\n\nDisclosing Party: Acme Robotics Inc.\n\nReceiving Party: Northwind Manufacturing Inc.\n\nEffective date: 2026-01-15\n\nPurpose and Scope\n\nPurpose: evaluate strategic manufacturing partnership\n\nConfidential information includes technical designs, manufacturing plans, pricing, and partner diligence materials.\n\nObligations\n\nTerm: 3 years\n\nReturn or destroy materials within 10 business days after written request.\n\nLegal Terms\n\nGoverning law: Delaware\n\nInjunctive relief available for unauthorized disclosure or misuse of confidential information.\n\n"
+      },
+      "expected": {
+        "kind": "string",
+        "value": "Injunctive relief available"
+      },
+      "id": "injunctive-relief-present",
+      "message": "Assertion injunctive-relief-present passed",
+      "operator": "contains",
+      "passed": true,
+      "target": "contract_text"
+    }
+  ],
+  "benchmark": "docx_contract_review",
+  "schema_version": "devlish-assertion-report-v0",
+  "success": true
+}

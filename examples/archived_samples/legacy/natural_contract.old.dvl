@@ -1,0 +1,19 @@
+# Contract Validation in Plain English
+# Quotes for specific terms, Capitalization for defined terms
+
+Load document
+
+# Check for required clauses using natural language
+Document must contain "liability clause"
+Document must contain Termination Clause
+Document should have Intellectual Property Rights
+
+# Extract key financial terms
+Find liability cap and save as liability_cap
+Find contract value and save as contract_value
+Find termination notice and save as termination_days
+
+# Validate extracted amounts
+liability_cap must be at least 1000000
+contract_value must be at least 10000
+termination_days must be at least 30

@@ -1,0 +1,30 @@
+{
+  "schema_version": "devlish-benchmark-v0",
+  "benchmark": "docx_contract_review",
+  "description": "A representative DOCX skill conversion benchmark that replaces a multi-turn Word-document clause review with precompiled Devlish bytecode.",
+  "wasm_path": "../../pkg/devlish_wasm_runner/devlish_runner.wasm",
+  "baseline": {
+    "path": "baseline.skill-transcript.json",
+    "sha256": "7bb5ef040208f0e3e100b41a807e8b1c717bb8ca56bcd091b879be514e094b95"
+  },
+  "workflow": {
+    "source_path": "workflow.dvl",
+    "bytecode_path": "workflow.dvlc.json",
+    "bytecode_sha256": "528cd31a0b65559e7c120a479f8c78646fc1fa26cfd304c1837eaa62b520bffb"
+  },
+  "input": {
+    "path": "input.json",
+    "sha256": "f449751fe54a955ed52fb27111edca49529e790d4324784ba76e0260a49b3982"
+  },
+  "outputs": {
+    "assertion_report_path": "../../tmp/docx_contract_review/report.json",
+    "benchmark_report_path": "../../tmp/docx_contract_review/benchmark-report.json"
+  },
+  "expected_assertion_report": {
+    "path": "expected-report.json"
+  },
+  "thresholds": {
+    "minimum_model_visible_byte_reduction_ratio": 0.8,
+    "minimum_estimated_avoided_tokens": 1000
+  }
+}

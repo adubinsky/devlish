@@ -1,0 +1,4 @@
+Scenario "try block recovers with a fallback"
+When I run "../examples/06_try_recovery.dvl"
+Then run should succeed
+Then review_status should equal "manual_review"

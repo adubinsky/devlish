@@ -1,0 +1,32 @@
+# DOE Coal Closure Energy Community Check
+# Queries the DOE/NETL 2024 Coal Closure Energy Communities layer.
+#
+# Input: latitude, longitude
+# Output: record with hit (boolean), service name, and feature attributes if found
+#
+# Usage:
+#   devlish run lib/doe_coal_closure.dvl --input '{"latitude": 37.78, "longitude": -81.18}'
+
+inputs:
+  latitude
+  longitude
+
+query url equals "https://arcgis.netl.doe.gov/server/rest/services/Hosted/2024_Coal_Closure_Energy_Communities/FeatureServer/0/query?geometry=" plus longitude plus "," plus latitude plus "&geometryType=esriGeometryPoint&inSR=4326&spatialRel=esriSpatialRelIntersects&returnGeometry=false&outFields=*&f=json"
+
+Get the url at query url as api response
+
+response body equals body of api response
+features equals features of response body
+
+If features is missing:
+  Respond with record with false as hit and latitude as latitude and longitude as longitude and "DOECoalClosure" as service
+
+feature count equals count of features
+
+If feature count equals 0:
+  Respond with record with false as hit and latitude as latitude and longitude as longitude and "DOECoalClosure" as service
+
+first feature equals first of features
+attrs equals attributes of first feature
+
+Respond with record with true as hit and latitude as latitude and longitude as longitude and "DOECoalClosure" as service and attrs as attributes

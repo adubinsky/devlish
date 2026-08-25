@@ -1,0 +1,4 @@
+cost basis: 300000
+land value: 60000
+months in service: 10
+service month: 3

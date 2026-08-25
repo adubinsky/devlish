@@ -1,0 +1,5 @@
+contract name: vendor renewal.
+liability cap: $1500000.
+payment terms: 45 days.
+termination clause: included.
+governing law: Colorado.

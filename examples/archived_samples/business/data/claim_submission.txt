@@ -1,0 +1,5 @@
+patient id: P-1042
+claim id: C-7788
+ndc code: 12345-6789-10
+quantity: 30
+attachment: prior auth form

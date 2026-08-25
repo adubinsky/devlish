@@ -1,0 +1,233 @@
+{
+  "format": "devlish-bytecode",
+  "format_version": 0,
+  "compiler_version": "0.1.0",
+  "source_path": "examples/xlsx_expected_cells/workflow.dvl",
+  "source_hash": "a267d71bd22cd0a8ddf330d866cf7ef4b8ba66289d11fdc7c1b19ae8518d6def",
+  "constant_pool": [
+    "Solar Site Alpha",
+    250000
+  ],
+  "symbol_table": [
+    "site_name",
+    "credit_value",
+    "domestic_content_value",
+    "error_check",
+    "assertion_report_path"
+  ],
+  "instructions": [
+    {
+      "op": "XLSX_READ_CELL",
+      "target": "site_name",
+      "sheet": "Summary",
+      "cell": "B2"
+    },
+    {
+      "op": "CONST",
+      "dest": "r0",
+      "const": 0
+    },
+    {
+      "op": "ASSERT",
+      "assertion_id": "site-name",
+      "target": "site_name",
+      "operator": "equals",
+      "expected": "r0"
+    },
+    {
+      "op": "XLSX_READ_CELL",
+      "target": "credit_value",
+      "sheet": "Summary",
+      "cell": "B4"
+    },
+    {
+      "op": "CONST",
+      "dest": "r1",
+      "const": 1
+    },
+    {
+      "op": "ASSERT",
+      "assertion_id": "credit-value",
+      "target": "credit_value",
+      "operator": "equals",
+      "expected": "r1"
+    },
+    {
+      "op": "XLSX_READ_CELL",
+      "target": "domestic_content_value",
+      "sheet": "Inputs",
+      "cell": "C8"
+    },
+    {
+      "op": "ASSERT",
+      "assertion_id": "domestic-content-present",
+      "target": "domestic_content_value",
+      "operator": "present"
+    },
+    {
+      "op": "XLSX_READ_CELL",
+      "target": "error_check",
+      "sheet": "Inputs",
+      "cell": "C9"
+    },
+    {
+      "op": "ASSERT",
+      "assertion_id": "no-error-value",
+      "target": "error_check",
+      "operator": "not_spreadsheet_error"
+    },
+    {
+      "op": "LOAD",
+      "dest": "r2",
+      "symbol": "assertion_report_path"
+    },
+    {
+      "op": "EXPORT_ASSERTIONS",
+      "path": "r2"
+    },
+    {
+      "op": "RETURN"
+    }
+  ],
+  "source_map": [
+    {
+      "address": 0,
+      "line": 1,
+      "source_text": "Read XLSX cell \"Summary!B2\" as site name"
+    },
+    {
+      "address": 1,
+      "line": 2,
+      "source_text": "Expect site_name equals \"Solar Site Alpha\" as \"site-name\""
+    },
+    {
+      "address": 2,
+      "line": 2,
+      "source_text": "Expect site_name equals \"Solar Site Alpha\" as \"site-name\""
+    },
+    {
+      "address": 3,
+      "line": 4,
+      "source_text": "Read XLSX cell \"Summary!B4\" as credit value"
+    },
+    {
+      "address": 4,
+      "line": 5,
+      "source_text": "Expect credit_value equals 250000 as \"credit-value\""
+    },
+    {
+      "address": 5,
+      "line": 5,
+      "source_text": "Expect credit_value equals 250000 as \"credit-value\""
+    },
+    {
+      "address": 6,
+      "line": 7,
+      "source_text": "Read XLSX cell \"Inputs!C8\" as domestic content value"
+    },
+    {
+      "address": 7,
+      "line": 8,
+      "source_text": "Expect domestic_content_value is present as \"domestic-content-present\""
+    },
+    {
+      "address": 8,
+      "line": 10,
+      "source_text": "Read XLSX cell \"Inputs!C9\" as error check"
+    },
+    {
+      "address": 9,
+      "line": 11,
+      "source_text": "Expect error_check is not spreadsheet error as \"no-error-value\""
+    },
+    {
+      "address": 10,
+      "line": 13,
+      "source_text": "Export assertions to assertion report path"
+    },
+    {
+      "address": 11,
+      "line": 13,
+      "source_text": "Export assertions to assertion report path"
+    },
+    {
+      "address": 12
+    }
+  ],
+  "effect_table": [
+    {
+      "kind": "xlsx_read_cell",
+      "line": 1,
+      "source_text": "Read XLSX cell \"Summary!B2\" as site name",
+      "target": "site_name",
+      "sheet": "Summary",
+      "cell": "B2"
+    },
+    {
+      "kind": "assertion",
+      "line": 2,
+      "source_text": "Expect site_name equals \"Solar Site Alpha\" as \"site-name\"",
+      "assertion_id": "site-name",
+      "target": "site_name",
+      "operator": "equals"
+    },
+    {
+      "kind": "xlsx_read_cell",
+      "line": 4,
+      "source_text": "Read XLSX cell \"Summary!B4\" as credit value",
+      "target": "credit_value",
+      "sheet": "Summary",
+      "cell": "B4"
+    },
+    {
+      "kind": "assertion",
+      "line": 5,
+      "source_text": "Expect credit_value equals 250000 as \"credit-value\"",
+      "assertion_id": "credit-value",
+      "target": "credit_value",
+      "operator": "equals"
+    },
+    {
+      "kind": "xlsx_read_cell",
+      "line": 7,
+      "source_text": "Read XLSX cell \"Inputs!C8\" as domestic content value",
+      "target": "domestic_content_value",
+      "sheet": "Inputs",
+      "cell": "C8"
+    },
+    {
+      "kind": "assertion",
+      "line": 8,
+      "source_text": "Expect domestic_content_value is present as \"domestic-content-present\"",
+      "assertion_id": "domestic-content-present",
+      "target": "domestic_content_value",
+      "operator": "present"
+    },
+    {
+      "kind": "xlsx_read_cell",
+      "line": 10,
+      "source_text": "Read XLSX cell \"Inputs!C9\" as error check",
+      "target": "error_check",
+      "sheet": "Inputs",
+      "cell": "C9"
+    },
+    {
+      "kind": "assertion",
+      "line": 11,
+      "source_text": "Expect error_check is not spreadsheet error as \"no-error-value\"",
+      "assertion_id": "no-error-value",
+      "target": "error_check",
+      "operator": "not_spreadsheet_error"
+    },
+    {
+      "kind": "file_write",
+      "line": 13,
+      "source_text": "Export assertions to assertion report path",
+      "mode": "assertions"
+    }
+  ],
+  "imports": [
+    "emit_event",
+    "write_file"
+  ]
+}

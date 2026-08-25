@@ -1,0 +1,7 @@
+# Lesson 5.3 example: the same pattern in finance
+
+# Compute a domain decision, then route it to the finance queue.
+total_amount equals 1800
+manual_review equals false
+manual_review equals true if total_amount >= 1000
+Route manual_review to finance_expense_queue

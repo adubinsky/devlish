@@ -1,0 +1,10 @@
+{
+  "schema_version": "devlish-benchmark-input-v0",
+  "benchmark": "docx_contract_review",
+  "assertion_report_schema_version": "devlish-assertion-report-v0",
+  "docx": {
+    "nda-review.docx": "nda-review.docx"
+  },
+  "assertion_report_path": "../../tmp/docx_contract_review/report.json",
+  "benchmark_report_path": "../../tmp/docx_contract_review/benchmark-report.json"
+}

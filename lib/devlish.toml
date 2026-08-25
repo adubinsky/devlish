@@ -1,0 +1,43 @@
+name = "devlish-ec-tools"
+version = "0.1.0"
+
+[[tools]]
+source = "ec_check.dvl"
+description = "Full energy community eligibility check for a latitude/longitude"
+
+[tools.inputs]
+latitude = { type = "number", description = "WGS84 latitude" }
+longitude = { type = "number", description = "WGS84 longitude" }
+
+[[tools]]
+source = "census_geocoder.dvl"
+description = "Census Bureau geocoding for coordinates"
+
+[tools.inputs]
+latitude = { type = "number", description = "WGS84 latitude" }
+longitude = { type = "number", description = "WGS84 longitude" }
+
+[[tools]]
+source = "doe_coal_closure.dvl"
+description = "DOE Coal Closure energy community layer check"
+
+[tools.inputs]
+latitude = { type = "number", description = "WGS84 latitude" }
+longitude = { type = "number", description = "WGS84 longitude" }
+
+[[tools]]
+source = "doe_stat_area.dvl"
+description = "DOE Statistical Area energy community layer check"
+
+[tools.inputs]
+latitude = { type = "number", description = "WGS84 latitude" }
+longitude = { type = "number", description = "WGS84 longitude" }
+
+[[tools]]
+source = "irs_appendix.dvl"
+description = "Download and query an IRS Notice appendix XLSX by county FIPS"
+
+[tools.inputs]
+appendix_url = { type = "string", description = "URL to the IRS appendix XLSX file" }
+notice = { type = "string", description = "IRS notice identifier (e.g., 2026-39)" }
+lookup_fips = { type = "string", description = "Optional 5-digit county FIPS to look up" }

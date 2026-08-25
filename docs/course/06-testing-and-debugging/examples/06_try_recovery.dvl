@@ -1,0 +1,13 @@
+# Lesson 6.6 example: recover from a failed requirement
+
+review_status equals "pending"
+
+# Try runs the risky step first.
+Try:
+  Require review_status is "approved" otherwise fail with "Review must be approved"
+Otherwise:
+  # Otherwise runs only if the Try block fails.
+  review_status equals "manual_review"
+  Print "used fallback"
+
+Print review_status

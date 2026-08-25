@@ -1,0 +1,120 @@
+{
+  "schema_version": "devlish-baseline-transcript-v0",
+  "kind": "captured_transcript",
+  "notes": "Representative open-source DOCX skill-style contract review: extract document text, inspect clause sections, search required terms, and export findings.",
+  "prompts": [
+    {
+      "id": "p1",
+      "phase": "intake",
+      "utf8_bytes": 1700
+    },
+    {
+      "id": "p2",
+      "phase": "clause-review",
+      "utf8_bytes": 1300
+    },
+    {
+      "id": "p3",
+      "phase": "cross-check",
+      "utf8_bytes": 1000
+    },
+    {
+      "id": "p4",
+      "phase": "reporting",
+      "utf8_bytes": 900
+    }
+  ],
+  "tool_calls": [
+    {
+      "id": "t1",
+      "phase": "intake",
+      "name": "docx.inspect_document",
+      "reason": "identify document structure and headings",
+      "request_utf8_bytes": 430,
+      "response_utf8_bytes": 8600
+    },
+    {
+      "id": "t2",
+      "phase": "extraction",
+      "name": "docx.extract_text",
+      "reason": "extract full document text",
+      "request_utf8_bytes": 450,
+      "response_utf8_bytes": 15600
+    },
+    {
+      "id": "t3",
+      "phase": "search",
+      "name": "docx.search_text",
+      "reason": "find parties and effective date",
+      "request_utf8_bytes": 450,
+      "response_utf8_bytes": 14200
+    },
+    {
+      "id": "t4",
+      "phase": "search",
+      "name": "docx.search_text",
+      "reason": "find confidentiality scope and purpose",
+      "request_utf8_bytes": 520,
+      "response_utf8_bytes": 19400
+    },
+    {
+      "id": "t5",
+      "phase": "search",
+      "name": "docx.search_text",
+      "reason": "find term and return-destroy obligations",
+      "request_utf8_bytes": 560,
+      "response_utf8_bytes": 15800
+    },
+    {
+      "id": "t6",
+      "phase": "search",
+      "name": "docx.search_text",
+      "reason": "find governing law and remedies",
+      "request_utf8_bytes": 600,
+      "response_utf8_bytes": 20200
+    },
+    {
+      "id": "t7",
+      "phase": "review",
+      "name": "docx.extract_comments",
+      "reason": "check review comments for clause exceptions",
+      "request_utf8_bytes": 540,
+      "response_utf8_bytes": 12600
+    },
+    {
+      "id": "t8",
+      "phase": "reporting",
+      "name": "docx.export_findings",
+      "reason": "write assertion report",
+      "request_utf8_bytes": 500,
+      "response_utf8_bytes": 8400
+    }
+  ],
+  "model_checkpoints": [
+    {
+      "id": "m1",
+      "reason": "decide document sections to inspect"
+    },
+    {
+      "id": "m2",
+      "reason": "map extracted text to required clause checklist"
+    },
+    {
+      "id": "m3",
+      "reason": "decide whether comments alter clause status"
+    },
+    {
+      "id": "m4",
+      "reason": "summarize missing versus present clauses"
+    },
+    {
+      "id": "m5",
+      "reason": "prepare final report"
+    }
+  ],
+  "prompt_bytes": 8950,
+  "tool_output_bytes": 114800,
+  "agent_observed_tool_calls": 8,
+  "model_checkpoint_count": 5,
+  "provider_usage": null
+}

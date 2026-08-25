@@ -1,0 +1,16 @@
+# Simple Example 4: Route based on extracted data
+
+Load examples/sample_contract.txt
+
+Find termination notice and save as termination_notice
+manual_review equals false
+
+If termination_notice is missing
+  manual_review equals true
+Otherwise
+  manual_review equals false
+
+If manual_review is true
+  Route contract to legal_review_queue
+Otherwise
+  Route contract to approved_queue

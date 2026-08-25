@@ -1,0 +1,18 @@
+Scenario "review decider returns false for small invoices"
+When I run "../examples/01_review_decider.dvl" method "decide_review" with [8000]
+Then run should succeed
+Then return value should equal false
+Then review_needed should equal false
+
+Scenario "payroll calculator multiplies hours by rate"
+When I run "../examples/02_payroll_calculator.dvl" method "calculate_wages" with [40, 25]
+Then run should succeed
+Then return value should equal 1000
+Then wages should equal 1000
+
+Scenario "invoice reviewer escalates large invoices"
+When I run "../examples/04_invoice_reviewer.dvl" method "review_invoice" with [12000]
+Then run should succeed
+Then return value should equal "priority"
+Then review_needed should equal true
+Then escalation_label should equal "priority"

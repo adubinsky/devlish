@@ -1,0 +1,10 @@
+Scenario "class method can import a workflow fragment"
+When I run "../examples/05_reusing_workflow_fragments_in_class.dvl" method "review_invoice" with []
+Then run should succeed
+Then return value should equal "needs_review"
+Then final_label should equal "needs_review"
+
+Scenario "class file can import another class file"
+When I run "../examples/06_importing_class_files.dvl" method "review_invoice" with []
+Then run should succeed
+Then return value should equal "ready"

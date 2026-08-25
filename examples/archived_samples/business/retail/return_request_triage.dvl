@@ -1,0 +1,18 @@
+# Retail: Return request triage
+
+Load examples/business/data/return_request.txt as Return Request
+Alias Return Request as Return Form
+
+Find order id and save as order_id
+Find sku and save as sku
+Find return reason and save as return_reason
+Find purchase amount and save as purchase_amount
+
+If order_id is missing
+  return_status equals "needs review"
+Otherwise
+  return_status equals "processable"
+
+purchase_amount must be at least 1
+
+Route return_status to return_ops_queue

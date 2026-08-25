@@ -1,0 +1,564 @@
+(* Devlish language grammar
+ *
+ * Last updated: 2026-07-10
+ *
+ * Status:
+ *   Derived from the current implementation in:
+ *   - crates/devlish_core/src/lib.rs
+ *
+ * Scope:
+ *   This is a parser-faithful, line-oriented EBNF for the current Devlish
+ *   surface language. It describes what the parser accepts today, not an
+ *   idealized future grammar.
+ *
+ * Notes:
+ *   - Devlish currently has two parser modes:
+ *     1. English mode
+ *     2. Class mode
+ *   - Parser mode is selected outside the grammar:
+ *     if the first non-comment line matches class_declaration, class mode
+ *     is used; otherwise flat workflow mode is used.
+ *   - Block structure in workflow mode is indentation-sensitive.
+ *)
+
+devlish_file        = english_file | class_file ;
+
+
+(* ---------------------------------------------------------------------- *)
+(* Shared lexical rules                                                    *)
+(* ---------------------------------------------------------------------- *)
+
+newline             = ? line break ? ;
+indent              = { " " | "\t" } ;
+blank_line          = indent ;
+comment_line        = indent , "#" , { ? any character except newline ? } ;
+
+digit               = "0" | "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9" ;
+letter              = "A" | "B" | "C" | "D" | "E" | "F" | "G" | "H" | "I" | "J" | "K" | "L" | "M"
+                    | "N" | "O" | "P" | "Q" | "R" | "S" | "T" | "U" | "V" | "W" | "X" | "Y" | "Z"
+                    | "a" | "b" | "c" | "d" | "e" | "f" | "g" | "h" | "i" | "j" | "k" | "l" | "m"
+                    | "n" | "o" | "p" | "q" | "r" | "s" | "t" | "u" | "v" | "w" | "x" | "y" | "z" ;
+word_char           = letter | digit | "_" ;
+word                = letter , { word_char } ;
+snake_identifier    = ( "a" | "b" | "c" | "d" | "e" | "f" | "g" | "h" | "i" | "j" | "k" | "l" | "m"
+                     | "n" | "o" | "p" | "q" | "r" | "s" | "t" | "u" | "v" | "w" | "x" | "y" | "z"
+                     | "_" ) , { word_char } ;
+service_identifier  = letter , { word_char | "." } ;
+number              = digit , { digit } , [ "." , digit , { digit } ] ;
+integer_with_seps   = digit , { digit | "," | "_" } ;
+quoted_string       = "\"" , { ? any character except double quote ? } , "\""
+                    | "'" , { ? any character except single quote ? } , "'" ;
+path_token          = [ quoted_string | unquoted_path ] ;
+unquoted_path       = ? non-space token accepted by the load regex, typically foo/bar.ext ? ;
+
+name_word           = letter , { letter | digit | "_" | "." } ;
+name_phrase         = name_word , { " " , name_word } ;
+free_text           = ? remaining non-empty text on the line ? ;
+
+time_literal        = digit , [ digit ] , [ ":" , digit , digit ] , "am"
+                    | digit , [ digit ] , [ ":" , digit , digit ] , "pm" ;
+weekday             = "Monday" | "Tuesday" | "Wednesday" | "Thursday"
+                    | "Friday" | "Saturday" | "Sunday" ;
+interval_unit       = "hour" | "minute" | "second" | "day" | "week" ;
+comparison_op       = "==" | "!=" | "<=" | ">=" | "<" | ">" | "equals" ;
+boolean_op          = "and" | "or" ;
+binding_kind        = "Alias" | "Nickname" | "Symbol" | "Handle"
+                    | "alias" | "nickname" | "symbol" | "handle" ;
+
+
+(* ---------------------------------------------------------------------- *)
+(* English mode                                                            *)
+(* ---------------------------------------------------------------------- *)
+
+english_file        = { english_entry , newline } , [ english_entry ] ;
+english_entry       = blank_line
+                    | comment_line
+                    | english_statement ;
+
+english_statement   = trigger_statement
+                    | control_statement
+                    | service_statement
+                    | binding_statement
+                    | io_statement
+                    | filesystem_statement
+                    | assignment_statement
+                    | definition_statement
+                    | document_requirement_statement
+                    | require_statement
+                    | look_for_statement
+                    | load_statement
+                    | extract_statement
+                    | threshold_statement
+                    | http_statement
+                    | respond_statement
+                    | shorthand_notification_statement
+                    | standalone_check_statement ;
+
+
+(* Interactive input and file output *)
+
+io_statement        = ask_statement
+                    | read_input_statement
+                    | typed_file_read_statement
+                    | file_write_statement ;
+
+ask_statement       = ( "Ask" | "ask" | "Prompt" | "prompt" ) , " " ,
+                      [ "multiline" , " " ] ,
+                      expression , " " , "as" , " " , name_phrase ;
+
+read_input_statement =
+                    ( "Read" | "read" ) , " " ,
+                    [ "the" , " " ] ,
+                    [ "multiline" , " " ] ,
+                    ( "input" | "line" | "stdin" ) , " " ,
+                    "as" , " " , name_phrase ;
+
+typed_file_read_statement =
+                    ( "Read JSON from" | "read JSON from" | "Read CSV from" | "read CSV from" ) ,
+                    " " , expression , " " , "as" , " " , name_phrase ;
+
+file_write_statement =
+                    simple_file_write_statement
+                    | overwrite_file_statement
+                    | append_file_statement ;
+
+simple_file_write_statement =
+                    ( "Write" | "write" | "Export" | "export" ) , " " ,
+                    expression , " " , "to" , " " , expression ,
+                    [ " " , "as" , " " , "CSV" ] ;
+
+overwrite_file_statement =
+                    ( "Overwrite" | "overwrite" ) , " " ,
+                    expression , " " , "to" , " " , [ "file" , " " ] , expression ;
+
+append_file_statement =
+                    ( "Append" | "append" ) , " " ,
+                    expression , " " , "to" , " " , "file" , " " , expression ;
+
+
+(* Triggers are parsed as metadata, not executable statements. *)
+
+trigger_statement   = daily_trigger
+                    | weekly_trigger
+                    | interval_trigger
+                    | hourly_trigger
+                    | model_event_trigger
+                    | custom_event_trigger ;
+
+daily_trigger       = "Every" , " " , "day" , " " , [ "at" , " " ] , time_literal , [ ":" ]
+                    | "every" , " " , "day" , " " , [ "at" , " " ] , time_literal , [ ":" ] ;
+
+weekly_trigger      = ( "Every" | "every" ) , " " , weekday , " " ,
+                      [ "at" , " " ] , time_literal , [ ":" ] ;
+
+interval_trigger    = ( "Every" | "every" ) , " " , number , " " ,
+                      interval_unit , [ "s" ] , [ ":" ] ;
+
+hourly_trigger      = "Every hour" , [ ":" ]
+                    | "every hour" , [ ":" ] ;
+
+model_event_trigger = ( "When" | "when" ) , " " , ( "a" | "an" ) , " " ,
+                      word , " " , "is" , " " ,
+                      ( "created" | "updated" | "deleted" ) , [ ":" ] ;
+
+custom_event_trigger = ( "When" | "when" ) , " " , free_text , [ ":" ] ;
+
+
+(* Control flow is indentation-sensitive. *)
+
+control_statement   = if_statement
+                    | otherwise_statement
+                    | for_each_statement
+                    | try_statement ;
+
+if_statement        = ( "If" | "if" ) , " " , condition_text , [ ":" ] ;
+otherwise_statement = "Otherwise" , [ ":" ]
+                    | "otherwise" , [ ":" ] ;
+for_each_statement  = ( "For each" | "for each" ) , " " ,
+                      snake_identifier , " " , "in" , " " ,
+                      collection_text , [ ":" ] ;
+try_statement       = ( "Try" | "try" ) , [ ":" ] ;
+
+
+(* HTTP requests *)
+
+http_statement      = http_get_statement
+                    | http_post_statement
+                    | http_put_statement
+                    | http_delete_statement ;
+
+http_get_statement  = ( "Get the url at" | "get the url at" ) , " " ,
+                      string_like , " " , "as" , " " , name_phrase ;
+
+http_post_statement = ( "Post to" | "post to" ) , " " ,
+                      string_like , " " , "with" , " " , expression ,
+                      " " , "as" , " " , name_phrase ;
+
+http_put_statement  = ( "Put to" | "put to" ) , " " ,
+                      string_like , " " , "with" , " " , expression ,
+                      " " , "as" , " " , name_phrase ;
+
+http_delete_statement = ( "Delete the url at" | "delete the url at" ) , " " ,
+                      string_like , " " , "as" , " " , name_phrase ;
+
+
+(* Filesystem operations *)
+
+filesystem_statement = file_copy_statement
+                     | file_move_statement
+                     | file_mkdir_statement
+                     | file_delete_statement
+                     | file_exists_statement
+                     | file_stat_statement
+                     | file_list_statement
+                     | file_glob_statement ;
+
+file_copy_statement = ( "Copy file from" | "copy file from" ) , " " ,
+                      expression , " " , "to" , " " , expression ;
+
+file_move_statement = ( "Move file from" | "move file from" ) , " " ,
+                      expression , " " , "to" , " " , expression ;
+
+file_mkdir_statement = ( "Create directory" | "create directory" ) , " " ,
+                       expression ;
+
+file_delete_statement = ( "Delete file" | "delete file" ) , " " , expression ;
+
+file_exists_statement = ( "Check if" | "check if" ) , " " ,
+                        expression , " " , "exists" , " " , "as" , " " , name_phrase ;
+
+file_stat_statement = ( "Get file info for" | "get file info for" ) , " " ,
+                      expression , " " , "as" , " " , name_phrase ;
+
+file_list_statement = ( "List files in" | "list files in" ) , " " ,
+                      expression , " " , "as" , " " , name_phrase ;
+
+file_glob_statement = ( "Find files matching" | "find files matching" ) , " " ,
+                      expression , " " , "in" , " " , expression ,
+                      " " , "as" , " " , name_phrase ;
+
+
+(* Program manifest — optional header block before program body *)
+
+manifest_block      = { manifest_section } ;
+manifest_section    = permissions_section | boundaries_section | callers_section ;
+
+permissions_section = "Permissions:" , newline , { indent , permission_line , newline } ;
+boundaries_section  = "Boundaries:" , newline , { indent , free_text , newline } ;
+callers_section     = "Callers:" , newline , { indent , free_text , newline } ;
+
+permission_line     = "Read files" , [ " " , "from" , " " , quoted_string ]
+                    | "Write files" , [ " " , "to" , " " , quoted_string ]
+                    | "HTTP requests" , [ " " , "to" , " " , quoted_string ]
+                    | "Filesystem operations" , [ " " , "on" , " " , quoted_string ]
+                    | "Call" , " " , name_phrase , " " , "service" ;
+
+
+(* Structured output *)
+
+respond_statement   = ( "Respond with" | "respond with" ) , " " , expression ;
+
+
+(* Service actions *)
+
+service_statement   = search_service_statement
+                    | create_entry_statement
+                    | route_statement
+                    | send_email_via_service_statement
+                    | send_message_via_service_statement ;
+
+search_service_statement =
+                    ( "Search the" | "search the" ) , " " , service_identifier ,
+                    " " , "for" , " " , service_argument ,
+                    [ " " , "at" , " " , service_argument ] ;
+
+create_entry_statement =
+                    ( "Create" | "create" ) , " " , service_identifier ,
+                    " " , "entry with" , " " , field_list ;
+
+route_statement     = ( "Route" | "route" ) , " " , free_text ,
+                      " " , "to" , " " , free_text ;
+
+send_email_via_service_statement =
+                    ( "Send Email via" | "send email via" ) , " " , service_identifier ,
+                    " " , "to" , " " , service_argument ,
+                    [ " " , "with template" , " " , string_like ] ;
+
+send_message_via_service_statement =
+                    ( "Send message via" | "send message via" ) , " " , service_identifier ,
+                    " " , "to" , " " , service_argument ,
+                    [ " " , "with template" , " " , string_like ] ;
+
+field_list          = field_name , { "," , " " , field_name } ;
+field_name          = name_phrase ;
+
+
+(* Bindings *)
+
+binding_statement   = binding_kind , " " , binding_name ,
+                      " " , "as" , " " , binding_name ;
+binding_name        = name_phrase ;
+
+
+(* Assignments *)
+
+assignment_statement = assignment_target , " " , "equals" , " " ,
+                       expression_text ,
+                       [ " " , "if" , " " , condition_expression_text ] ;
+assignment_target   = lower_name_phrase ;
+lower_name_phrase   = lower_name_word , { " " , lower_name_word } ;
+lower_name_word     = "a" | "b" | "c" | "d" | "e" | "f" | "g" | "h" | "i" | "j" | "k" | "l" | "m"
+                    | "n" | "o" | "p" | "q" | "r" | "s" | "t" | "u" | "v" | "w" | "x" | "y" | "z" ,
+                      { letter | digit | "_" } ;
+
+
+(* Definitions *)
+
+definition_statement = definition_lhs , " " , "is" , " " , definition_rhs ;
+definition_lhs      = name_phrase ;
+definition_rhs      = free_text ;
+
+
+(* Document requirements *)
+
+document_requirement_statement =
+                    [ ( "the" | "all" | "The" | "All" ) , " " ] ,
+                    ( "document" | "documents" | "Document" | "Documents" ) , " " ,
+                    ( "must" | "should" ) , " " ,
+                    ( "contain" | "have" | "include" ) , " " ,
+                    [ ( "a" | "an" | "the" | "A" | "An" | "The" ) , " " ] ,
+                    free_text ;
+
+require_statement   = ( "Require" | "require" ) , " " , free_text ,
+                      [ " " , "in" , " " , [ "the" , " " ] , "document" ] ;
+
+look_for_statement  = ( "Check for" | "check for" | "Look for" | "look for" ) ,
+                      " " , free_text ;
+
+
+(* Loads *)
+
+load_statement      = load_document_statement
+                    | load_as_alias_statement
+                    | load_alias_from_path_statement
+                    | load_path_statement
+                    | read_or_load_from_location_statement ;
+
+load_document_statement =
+                    ( "Load document" | "load document"
+                    | "Load the document" | "load the document" ) ;
+
+load_as_alias_statement =
+                    ( "Load" | "load" ) , " " , path_token , " " ,
+                    "as" , " " , alias_name ;
+
+load_alias_from_path_statement =
+                    ( "Load" | "load" ) , " " , alias_name , " " ,
+                    "from" , " " , path_token ;
+
+load_path_statement = ( "Load" | "load" ) , " " ,
+                      [ "the" , " " ] , [ "file" , " " ] ,
+                      path_token , [ " " , "file" ] ;
+
+read_or_load_from_location_statement =
+                    ( "Read" | "read" | "Load" | "load" ) , " " ,
+                    [ "the" , " " ] ,
+                    path_like_name , " " ,
+                    [ "file" , " " ] ,
+                    "from" , " " , free_text ;
+
+alias_name          = name_phrase ;
+path_like_name      = quoted_string | unquoted_path ;
+
+
+(* Extract/find *)
+
+extract_statement   = ( "Find" | "find" | "Extract" | "extract" ) , " " ,
+                      [ "the" , " " ] ,
+                      free_text ,
+                      [ " " , "and save" , " " , [ "it" , " " ] ,
+                        "as" , " " , snake_identifier ] ;
+
+
+(* Threshold checks *)
+
+threshold_statement = validation_statement ;
+
+validation_statement =
+                    minimum_statement
+                    | maximum_statement
+                    | equality_validation_statement
+                    | contains_validation_statement
+                    | matches_validation_statement
+                    | presence_validation_statement
+                    | missing_validation_statement
+                    | one_of_validation_statement
+                    | verify_minimum_statement ;
+
+minimum_statement   = snake_identifier , " " ,
+                      ( "must" | "should" ) , " " ,
+                      "be at least" , " " , integer_with_seps ;
+
+maximum_statement   = snake_identifier , " " ,
+                      ( "must" | "should" ) , " " ,
+                      "be at most" , " " , integer_with_seps ;
+
+equality_validation_statement =
+                    snake_identifier , " " , ( "must" | "should" ) , " " ,
+                    ( "equal" | "equals" ) , " " , expression ;
+
+contains_validation_statement =
+                    snake_identifier , " " , ( "must" | "should" ) , " " ,
+                    ( "contain" | "contains" ) , " " , expression ;
+
+matches_validation_statement =
+                    snake_identifier , " " , ( "must" | "should" ) , " " ,
+                    ( "match" | "matches" ) , " " , expression ;
+
+presence_validation_statement =
+                    snake_identifier , " " , ( "must" | "should" ) , " " ,
+                    ( "be present" | "be provided" | "exist" ) ;
+
+missing_validation_statement =
+                    snake_identifier , " " , ( "must" | "should" ) , " " ,
+                    ( "be missing" | "be blank" | "not be present" ) ;
+
+one_of_validation_statement =
+                    snake_identifier , " " , ( "must" | "should" ) , " " ,
+                    ( "be one of" | "be in" ) , " " , expression ;
+
+verify_minimum_statement =
+                    ( "Verify" | "verify" ) , " " ,
+                    snake_identifier , " " ,
+                    "is at least" , " " , integer_with_seps ;
+
+
+(* Notification shorthands *)
+
+shorthand_notification_statement =
+                    send_message_shorthand
+                    | email_shorthand
+                    | notify_shorthand ;
+
+send_message_shorthand =
+                    ( "Send message to" | "send message to" ) , " " ,
+                    service_argument ,
+                    [ " " , "if" , " " , condition_expression_text ] ;
+
+email_shorthand     = ( "Email" | "email"
+                      | "Send email to" | "send email to"
+                      | "Send an email to" | "send an email to"
+                      | "Send a email to" | "send a email to" ) ,
+                      " " , service_argument ,
+                      [ " " , "if" , " " , condition_expression_text ] ;
+
+notify_shorthand    = ( "Notify" | "notify"
+                      | "Send notification to" | "send notification to"
+                      | "Send a notification to" | "send a notification to" ) ,
+                      " " , service_argument ,
+                      [ " " , "if" , " " , condition_expression_text ] ;
+
+
+(* Standalone check; note that earlier "check for" lines are consumed as
+ * document requirements. This production reflects the later fallback regex. *)
+
+standalone_check_statement =
+                    ( "Check for" | "check for" ) , " " , free_text ;
+
+
+(* Expression helper domains used by the parser's second-stage tokenization *)
+
+expression_text     = value_term ,
+                      { " " , arithmetic_op , " " , value_term } ;
+arithmetic_op       = "+" | "-" | "*" | "/"
+                    | "plus" | "minus" | "times" | "divided by" ;
+
+condition_text      = missing_condition
+                    | membership_condition
+                    | field_requirement_condition
+                    | shape_match_condition
+                    | is_not_condition
+                    | is_condition
+                    | condition_expression_text ;
+
+missing_condition   = value_term , " " , "is missing" ;
+membership_condition = value_term , " " , "is in" , " " , collection_text ;
+field_requirement_condition =
+                    value_term , " " , "has" , " " ,
+                    ( "field" | "fields" ) , " " , field_list ;
+shape_match_condition =
+                    value_term , " " , "matches" , " " ,
+                    ( "shape" | "schema" ) , " " , value_term ;
+is_not_condition    = value_term , " " , "is not" , " " , value_term ;
+is_condition        = value_term , " " , "is" , " " , value_term ;
+
+condition_expression_text =
+                    condition_atom ,
+                    { " " , boolean_op , " " , condition_atom } ;
+
+condition_atom      = value_term , " " , comparison_op , " " , value_term
+                    | field_requirement_condition
+                    | shape_match_condition
+                    | value_term ;
+
+collection_text     = value_term ;
+service_argument    = value_term , { " " , "and" , " " , value_term } ;
+value_term          = string_like | number | boolean_literal | nil_literal | name_phrase ;
+string_like         = quoted_string | free_text ;
+boolean_literal     = "true" | "false" | "yes" | "no" ;
+nil_literal         = "nil" ;
+
+
+(* ---------------------------------------------------------------------- *)
+(* Class mode                                                              *)
+(* ---------------------------------------------------------------------- *)
+
+class_file          = { class_entry , newline } , [ class_entry ] ;
+class_entry         = blank_line
+                    | comment_line
+                    | class_declaration
+                    | method_declaration
+                    | method_body_line
+                    | top_level_class_text ;
+
+class_declaration   = module_name , "'s" , " " , class_name ,
+                      [ " " , "based on" , " " , module_name , "'s" , " " , class_name ] ,
+                      ":" ;
+
+module_name         = upper_word ;
+class_name          = upper_name_phrase ;
+upper_word          = "A" | "B" | "C" | "D" | "E" | "F" | "G" | "H" | "I" | "J" | "K" | "L" | "M"
+                    | "N" | "O" | "P" | "Q" | "R" | "S" | "T" | "U" | "V" | "W" | "X" | "Y" | "Z" ,
+                      { letter | digit | "_" } ;
+upper_name_phrase   = upper_word , { " " , upper_word } ;
+
+method_declaration  = [ "privately" , " " ] ,
+                      method_name ,
+                      [ " " , "using" , " " , method_param_list ] ,
+                      ":" ;
+
+method_name         = free_text ;
+method_param_list   = method_param , { param_separator , method_param } ;
+param_separator     = " " , "and" , " "
+                    | " " , "&" , " " ;
+method_param        = name_phrase ;
+
+method_body_line    = indent , class_method_statement ;
+class_method_statement =
+                    respond_with_statement
+                    | english_statement
+                    | free_text ;
+
+respond_with_statement =
+                    ( "respond with" | "Respond with" ) , " " ,
+                    response_value ,
+                    [ " " , "if" , " " , condition_expression_text ] ;
+
+response_value      = boolean_literal
+                    | nil_literal
+                    | number
+                    | quoted_string
+                    | snake_identifier
+                    | name_phrase ;
+
+top_level_class_text = free_text ;

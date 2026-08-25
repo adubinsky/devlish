@@ -1,0 +1,7 @@
+#!/bin/bash
+# Stub executable for UTI registration.
+# This app exists so macOS recognizes .dvl files as Devlish source code.
+# When a .dvl file is double-clicked, open it in the user's default text editor.
+if [ -n "$1" ]; then
+  open -t "$1"
+fi

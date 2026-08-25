@@ -1,0 +1,149 @@
+{
+  "name": "devlish-vscode",
+  "displayName": "Devlish - English-First Programming",
+  "description": "Language support and syntax highlighting for the Devlish (.dvl) programming language.",
+  "version": "0.1.0",
+  "publisher": "devlish",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Programming Languages"
+  ],
+  "keywords": [
+    "devlish",
+    "dvl",
+    "english",
+    "business rules",
+    "domain-specific language"
+  ],
+  "activationEvents": [
+    "onLanguage:devlish",
+    "onDebugResolve:devlish"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "languages": [
+      {
+        "id": "devlish",
+        "aliases": ["Devlish", "dvl"],
+        "extensions": [".dvl"],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "devlish",
+        "scopeName": "source.devlish",
+        "path": "./syntaxes/devlish.tmLanguage.json"
+      }
+    ],
+    "snippets": [
+      {
+        "language": "devlish",
+        "path": "./snippets/devlish.json"
+      }
+    ],
+    "debuggers": [
+      {
+        "type": "devlish",
+        "label": "Devlish Debug",
+        "languages": [
+          "devlish"
+        ],
+        "configurationAttributes": {
+          "launch": {
+            "required": [
+              "program"
+            ],
+            "properties": {
+              "program": {
+                "type": "string",
+                "description": "Path to the .dvl file to debug",
+                "default": "${file}"
+              },
+              "input": {
+                "type": "object",
+                "description": "Input values for the program",
+                "default": {}
+              }
+            }
+          }
+        },
+        "initialConfigurations": [
+          {
+            "type": "devlish",
+            "request": "launch",
+            "name": "Debug Devlish",
+            "program": "${file}"
+          }
+        ],
+        "configurationSnippets": [
+          {
+            "label": "Devlish: Debug File",
+            "description": "Debug the current .dvl file",
+            "body": {
+              "type": "devlish",
+              "request": "launch",
+              "name": "Debug Devlish",
+              "program": "^\"\\${file}\""
+            }
+          }
+        ]
+      }
+    ],
+    "commands": [
+      {
+        "command": "devlish.runFile",
+        "title": "Devlish: Run File",
+        "icon": "$(play)"
+      },
+      {
+        "command": "devlish.setupMcp",
+        "title": "Devlish: Set up MCP for Claude / Cursor"
+      }
+    ],
+    "keybindings": [
+      {
+        "command": "devlish.runFile",
+        "key": "ctrl+shift+r",
+        "mac": "cmd+shift+r",
+        "when": "editorLangId == devlish"
+      }
+    ],
+    "menus": {
+      "editor/title": [
+        {
+          "command": "devlish.runFile",
+          "when": "editorLangId == devlish",
+          "group": "navigation@1"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "Devlish",
+      "properties": {
+        "devlish.lintOnSave": {
+          "type": "boolean",
+          "default": true,
+          "description": "Run devlish lint when saving .dvl files."
+        },
+        "devlish.cliPath": {
+          "type": "string",
+          "default": "",
+          "description": "Path to devlish-core binary. Leave empty to use PATH."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "package": "npx --yes @vscode/vsce package"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "@types/vscode": "^1.85.0",
+    "typescript": "^5.4.0"
+  }
+}

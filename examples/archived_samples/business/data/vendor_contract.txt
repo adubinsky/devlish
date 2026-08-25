@@ -1,0 +1,5 @@
+vendor: Acme Logistics
+liability clause: present
+termination clause: present
+data retention clause: missing
+term length months: 24

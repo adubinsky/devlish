@@ -1,0 +1,7 @@
+# Lesson 5: Produce a message output
+
+Load examples/archived_samples/tutorial/data/review_packet.txt
+
+Find claims queue and save as claims_queue
+
+Send message to claims_queue

@@ -1,0 +1,140 @@
+{
+  "schema_version": "devlish-baseline-transcript-v0",
+  "kind": "captured_transcript",
+  "notes": "Representative open-source PDF skill-style packet review: extract text, inspect pages, reconcile required clauses, summarize gaps, and export a findings report.",
+  "prompts": [
+    {
+      "id": "p1",
+      "phase": "intake",
+      "utf8_bytes": 1800
+    },
+    {
+      "id": "p2",
+      "phase": "page-review",
+      "utf8_bytes": 1400
+    },
+    {
+      "id": "p3",
+      "phase": "cross-check",
+      "utf8_bytes": 1200
+    },
+    {
+      "id": "p4",
+      "phase": "reporting",
+      "utf8_bytes": 900
+    }
+  ],
+  "tool_calls": [
+    {
+      "id": "t1",
+      "phase": "intake",
+      "name": "pdf.inspect_metadata",
+      "reason": "identify document count and page structure",
+      "request_utf8_bytes": 420,
+      "response_utf8_bytes": 3600
+    },
+    {
+      "id": "t2",
+      "phase": "extraction",
+      "name": "pdf.extract_text",
+      "reason": "extract all text for page 1",
+      "request_utf8_bytes": 460,
+      "response_utf8_bytes": 14200
+    },
+    {
+      "id": "t3",
+      "phase": "extraction",
+      "name": "pdf.extract_text",
+      "reason": "extract all text for page 2",
+      "request_utf8_bytes": 460,
+      "response_utf8_bytes": 12800
+    },
+    {
+      "id": "t4",
+      "phase": "extraction",
+      "name": "pdf.extract_text",
+      "reason": "extract all text for page 3",
+      "request_utf8_bytes": 460,
+      "response_utf8_bytes": 11900
+    },
+    {
+      "id": "t5",
+      "phase": "search",
+      "name": "pdf.search_text",
+      "reason": "find transfer election statement",
+      "request_utf8_bytes": 520,
+      "response_utf8_bytes": 7200
+    },
+    {
+      "id": "t6",
+      "phase": "search",
+      "name": "pdf.search_text",
+      "reason": "find parties, project name, and site address",
+      "request_utf8_bytes": 560,
+      "response_utf8_bytes": 18600
+    },
+    {
+      "id": "t7",
+      "phase": "search",
+      "name": "pdf.search_text",
+      "reason": "find credit value and placed-in-service date",
+      "request_utf8_bytes": 540,
+      "response_utf8_bytes": 13300
+    },
+    {
+      "id": "t8",
+      "phase": "checklist",
+      "name": "pdf.extract_tables",
+      "reason": "read required-document checklist table",
+      "request_utf8_bytes": 600,
+      "response_utf8_bytes": 22600
+    },
+    {
+      "id": "t9",
+      "phase": "review",
+      "name": "pdf.render_pages",
+      "reason": "visually inspect pages for OCR misses",
+      "request_utf8_bytes": 580,
+      "response_utf8_bytes": 16800
+    },
+    {
+      "id": "t10",
+      "phase": "reporting",
+      "name": "pdf.export_findings",
+      "reason": "write assertion report",
+      "request_utf8_bytes": 520,
+      "response_utf8_bytes": 9000
+    }
+  ],
+  "model_checkpoints": [
+    {
+      "id": "m1",
+      "reason": "decide packet structure from metadata"
+    },
+    {
+      "id": "m2",
+      "reason": "decide which pages need extraction"
+    },
+    {
+      "id": "m3",
+      "reason": "map extracted text to checklist fields"
+    },
+    {
+      "id": "m4",
+      "reason": "decide whether visual page review is needed"
+    },
+    {
+      "id": "m5",
+      "reason": "summarize missing versus present requirements"
+    },
+    {
+      "id": "m6",
+      "reason": "prepare final report"
+    }
+  ],
+  "prompt_bytes": 10420,
+  "tool_output_bytes": 130000,
+  "agent_observed_tool_calls": 10,
+  "model_checkpoint_count": 6,
+  "provider_usage": null
+}

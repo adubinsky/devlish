@@ -1,0 +1,37 @@
+{
+  "name": "devlish-runtime",
+  "version": "0.1.0",
+  "description": "Run compiled Devlish business rules in any JavaScript environment",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    },
+    "./worker": {
+      "import": "./dist/worker.js",
+      "types": "./dist/worker.d.ts"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build:wasm": "node scripts/inline-wasm.mjs",
+    "build:ts": "tsc",
+    "build": "npm run build:wasm && npm run build:ts",
+    "test": "node --test test/runtime.test.mjs"
+  },
+  "keywords": [
+    "devlish",
+    "business-rules",
+    "wasm",
+    "rules-engine"
+  ],
+  "license": "MIT",
+  "devDependencies": {
+    "typescript": "^5.5.0"
+  }
+}

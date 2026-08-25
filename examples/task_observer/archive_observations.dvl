@@ -1,0 +1,73 @@
+# Task Observer: Archive Resolved Observations (DEVL-81)
+#
+# Moves ACTIONED and DECLINED observations from the active log to a
+# dated archive file. Keeps only OPEN entries in the active log.
+#
+# Input: JSON with "workspace" path
+# Output: JSON with count of archived entries
+
+Permissions:
+  Read files
+  Write files
+  Filesystem operations
+
+inputs:
+  workspace
+
+workspace_dir equals workspace
+log_path equals workspace_dir plus "/log.md"
+archive_dir equals workspace_dir plus "/archive"
+
+Check if log_path exists as log_exists
+
+If log_exists equals false:
+  Respond with record with 0 as archived and "No log file found" as message
+
+# Read and parse the log
+Read text from log_path as log_content
+sections equals split log_content by "### Observation "
+
+# First section is the header
+header equals first of sections
+
+# Process each observation section
+open_sections equals list of "init"
+archived_sections equals list of "init"
+archived_count equals 0
+
+For each section in sections:
+  If section contains "**Status:**":
+    If section contains "ACTIONED":
+      Append section to archived_sections
+      archived_count equals archived_count plus 1
+    Otherwise:
+      If section contains "DECLINED":
+        Append section to archived_sections
+        archived_count equals archived_count plus 1
+      Otherwise:
+        Append section to open_sections
+
+If archived_count equals 0:
+  Respond with record with 0 as archived and "No resolved observations to archive" as message
+
+# Write archived entries to dated archive file
+Create directory archive_dir
+archive_path equals archive_dir plus "/log-2026-07-11.md"
+
+For each section in archived_sections:
+  If section equals "init":
+    Continue
+  archive_entry equals "### Observation " plus section
+  Append archive_entry to file archive_path
+
+# Rebuild the active log with only OPEN entries
+new_log equals header
+
+For each section in open_sections:
+  If section equals "init":
+    Continue
+  new_log equals new_log plus "### Observation " plus section
+
+Export new_log to log_path
+
+Respond with record with archived_count as archived and archive_path as archive_file

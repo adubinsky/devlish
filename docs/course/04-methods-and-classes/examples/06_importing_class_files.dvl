@@ -1,0 +1,8 @@
+# Lesson 4.6 example: import a base class before deriving from it
+
+# The imported file defines Operations's Review Base.
+Import 06_review_base.dvl
+
+Operations's Invoice Reviewer based on Operations's Review Base:
+  review invoice:
+    respond with "ready"

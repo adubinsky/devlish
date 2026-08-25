@@ -1,0 +1,11 @@
+# Lesson 2.2 example: choose one branch or another
+
+# Start with a default decision that the branch can replace.
+invoice_amount equals 1200
+decision equals "approved"
+
+# Only one branch runs: the If body when true, the Otherwise body when false.
+If invoice_amount >= 1000
+  decision equals "needs review"
+Otherwise
+  decision equals "approved"

@@ -1,0 +1,4 @@
+# Shared review values imported by the lesson 4.5 class example.
+
+review_threshold equals 1000
+final_label equals "needs_review"

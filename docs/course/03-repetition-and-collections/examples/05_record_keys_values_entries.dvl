@@ -1,0 +1,20 @@
+# Lesson 3.5 example: inspect record fields and nested records
+
+# The invoice field is itself a record, so this example has nested data.
+invoice equals record with 1200 as amount and "pending" as status
+review_packet equals record with invoice as invoice and "Ada" as reviewer
+
+# Keys, values, and entries expose a record in three different shapes.
+packet_keys equals keys of review_packet
+packet_values equals values of review_packet
+packet_entries equals entries of review_packet
+
+# Read through nested records from right to left: invoice of review_packet, then amount of invoice.
+review_amount equals amount of invoice of review_packet
+
+Print packet_keys
+Print review_amount
+
+# Entries are records with key and value fields.
+For each entry in packet_entries:
+  Print key of entry

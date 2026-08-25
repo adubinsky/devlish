@@ -1,0 +1,32 @@
+# DOE Statistical Area Energy Community Check
+# Queries the DOE/NETL 2024 MSAs/NonMSAs Energy Communities layer.
+#
+# Input: latitude, longitude
+# Output: record with hit (boolean), service name, and feature attributes if found
+#
+# Usage:
+#   devlish run lib/doe_stat_area.dvl --input '{"latitude": 32.78, "longitude": -96.80}'
+
+inputs:
+  latitude
+  longitude
+
+query url equals "https://arcgis.netl.doe.gov/server/rest/services/Hosted/2024_MSAs_NonMSAs_that_are_Energy_Communities/FeatureServer/0/query?geometry=" plus longitude plus "," plus latitude plus "&geometryType=esriGeometryPoint&inSR=4326&spatialRel=esriSpatialRelIntersects&returnGeometry=false&outFields=*&f=json"
+
+Get the url at query url as api response
+
+response body equals body of api response
+features equals features of response body
+
+If features is missing:
+  Respond with record with false as hit and latitude as latitude and longitude as longitude and "DOEStatArea" as service
+
+feature count equals count of features
+
+If feature count equals 0:
+  Respond with record with false as hit and latitude as latitude and longitude as longitude and "DOEStatArea" as service
+
+first feature equals first of features
+attrs equals attributes of first feature
+
+Respond with record with true as hit and latitude as latitude and longitude as longitude and "DOEStatArea" as service and attrs as attributes

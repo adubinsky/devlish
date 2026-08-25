@@ -1,0 +1,11 @@
+Load document
+
+Document must contain liability clause
+Document must contain termination clause
+Document should have intellectual property rights
+
+Find liability cap and save as liability_cap
+Find contract value and save as contract_value
+
+liability_cap must be at least 1000000
+contract_value must be at least 10000

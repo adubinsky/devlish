@@ -1,0 +1,12 @@
+# Lesson 3.7 example: skip or stop a loop
+
+statuses equals list of approved, pending, rejected, and archived
+
+For each status in statuses:
+  # Continue skips printing pending and moves to the next status.
+  If status is "pending"
+    Continue
+  # Break stops the whole loop when rejected appears.
+  If status is "rejected"
+    Break
+  Print status

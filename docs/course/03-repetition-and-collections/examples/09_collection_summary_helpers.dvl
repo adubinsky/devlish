@@ -1,0 +1,16 @@
+# Lesson 3.8 example: flattening, deduplicating, and summarizing collections
+
+# Flatten removes one level of nesting from a list of lists.
+nested_statuses equals list of list of "approved" and "pending", and list of "approved" and "rejected"
+flattened_statuses equals flatten nested_statuses
+
+# Unique keeps one copy of each value.
+unique_statuses equals unique of flattened_statuses
+
+# Minimum and maximum summarize numeric lists.
+smallest_amount equals minimum of list of 1200, 300, and 800
+largest_amount equals maximum of list of 1200, 300, and 800
+
+Print count of unique_statuses
+Print smallest_amount
+Print largest_amount

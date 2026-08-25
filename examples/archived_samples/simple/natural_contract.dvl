@@ -1,0 +1,12 @@
+# Simple plain-English contract validation
+
+Load examples/sample_contract.txt
+
+Document must contain liability clause
+Document must contain termination clause
+
+Find liability cap and save as liability_cap
+Find contract value and save as contract_value
+
+liability_cap must be at least 1000000
+contract_value must be at least 10000

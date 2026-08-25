@@ -1,0 +1,103 @@
+name = "task-observer"
+description = "Task Observer: monitors work sessions for skill improvement opportunities"
+
+[[tools]]
+name = "log_observation"
+description = "Log a new observation to the task observer observation log"
+source = "log_observation.dvl"
+
+  [tools.parameters.workspace]
+  type = "string"
+  description = "Path to the skill-observations directory"
+  required = true
+
+  [tools.parameters.title]
+  type = "string"
+  description = "Short descriptive title for the observation"
+  required = true
+
+  [tools.parameters.session_context]
+  type = "string"
+  description = "What task was being worked on"
+  required = true
+
+  [tools.parameters.skill]
+  type = "string"
+  description = "Existing skill name or 'New skill candidate: <name>'"
+  required = true
+
+  [tools.parameters.obs_type]
+  type = "string"
+  description = "open-source or internal"
+  required = true
+
+  [tools.parameters.phase]
+  type = "string"
+  description = "Which part of the skill or workflow this relates to"
+  required = true
+
+  [tools.parameters.issue]
+  type = "string"
+  description = "What happened or was observed"
+  required = true
+
+  [tools.parameters.suggested_improvement]
+  type = "string"
+  description = "Concrete suggestion for improvement"
+  required = true
+
+  [tools.parameters.principle]
+  type = "string"
+  description = "Generalisable takeaway"
+  required = true
+
+[[tools]]
+name = "list_observations"
+description = "List all OPEN observations from the task observer log"
+source = "list_observations.dvl"
+
+  [tools.parameters.workspace]
+  type = "string"
+  description = "Path to the skill-observations directory"
+  required = true
+
+[[tools]]
+name = "archive_observations"
+description = "Move resolved (ACTIONED/DECLINED) observations to dated archive"
+source = "archive_observations.dvl"
+
+  [tools.parameters.workspace]
+  type = "string"
+  description = "Path to the skill-observations directory"
+  required = true
+
+[[tools]]
+name = "manage_principles"
+description = "Add or list cross-cutting principles"
+source = "manage_principles.dvl"
+
+  [tools.parameters.workspace]
+  type = "string"
+  description = "Path to the skill-observations directory"
+  required = true
+
+  [tools.parameters.action]
+  type = "string"
+  description = "Action: 'add' or 'list'"
+  required = true
+
+  [tools.parameters.title]
+  type = "string"
+  description = "Principle title (required for 'add')"
+
+  [tools.parameters.applies_to]
+  type = "string"
+  description = "What skills this applies to (required for 'add')"
+
+  [tools.parameters.requirement]
+  type = "string"
+  description = "What the principle requires (required for 'add')"
+
+  [tools.parameters.propagation]
+  type = "string"
+  description = "immediate or opportunistic (required for 'add')"

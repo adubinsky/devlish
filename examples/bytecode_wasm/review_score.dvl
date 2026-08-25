@@ -1,0 +1,10 @@
+Ask "Customer tier?" as customer tier
+base score equals 10
+bonus score equals 5
+review score equals base_score plus bonus_score
+
+If customer_tier is "priority"
+  review score equals review_score plus 10
+
+Print review_score
+Export review_score to "tmp/review-score.json"

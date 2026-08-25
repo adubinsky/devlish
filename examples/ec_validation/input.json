@@ -1,0 +1,43 @@
+{
+  "appendix_cy2025_url": "https://www.irs.gov/pub/irs-drop/n-26-39-appendix-1.xlsx",
+  "appendix_cy2024_url": "https://www.irs.gov/pub/irs-drop/n-25-31-appendix-3.xlsx",
+  "assertion_report_path": "ec_validation_report.json",
+  "projects": [
+    {
+      "id": "6110",
+      "address": "10910 Rison St, Texas City, TX 77591",
+      "latitude": 29.419253,
+      "longitude": -95.032520,
+      "zip": "77591",
+      "county": "Galveston",
+      "claimed_ec": true,
+      "claimed_category": "Statistical Area",
+      "basis": 375000,
+      "rate": 0.4
+    },
+    {
+      "id": "6127",
+      "address": "273 FM 1366, Wortham, TX 76693",
+      "latitude": 31.741180,
+      "longitude": -96.372570,
+      "zip": "76693",
+      "county": "Freestone",
+      "claimed_ec": true,
+      "claimed_category": "Coal Closure",
+      "basis": 1950000,
+      "rate": 0.4
+    },
+    {
+      "id": "6100",
+      "address": "1321 Saddle Ridge Dr, Aubrey, TX 76227",
+      "latitude": 33.245460,
+      "longitude": -96.904524,
+      "zip": "76227",
+      "county": "Denton",
+      "claimed_ec": false,
+      "claimed_category": "None",
+      "basis": 650000,
+      "rate": 0.3
+    }
+  ]
+}

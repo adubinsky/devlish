@@ -1,0 +1,5 @@
+# Lesson 5.3 example: the same pattern in HR
+
+# The same route pattern works with HR-specific names.
+packet_complete equals false
+Route packet_complete to hr_onboarding_queue

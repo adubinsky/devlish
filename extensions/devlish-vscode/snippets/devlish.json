@@ -1,0 +1,159 @@
+{
+  "If/Otherwise": {
+    "prefix": ["if", "If"],
+    "body": [
+      "If ${1:condition}",
+      "  ${2:body}",
+      "Otherwise",
+      "  ${3:alternative}"
+    ],
+    "description": "If/Otherwise conditional branch"
+  },
+  "If only": {
+    "prefix": ["ifonly"],
+    "body": [
+      "If ${1:condition}",
+      "  ${2:body}"
+    ],
+    "description": "If conditional without Otherwise"
+  },
+  "For each": {
+    "prefix": ["for", "For each"],
+    "body": [
+      "For each ${1:item} in ${2:collection}:",
+      "  ${3:body}"
+    ],
+    "description": "Loop over each item in a collection"
+  },
+  "While": {
+    "prefix": ["while", "While"],
+    "body": [
+      "While ${1:condition}:",
+      "  ${2:body}"
+    ],
+    "description": "Repeat while a condition is true"
+  },
+  "Until": {
+    "prefix": ["until", "Until"],
+    "body": [
+      "Until ${1:condition}:",
+      "  ${2:body}"
+    ],
+    "description": "Repeat until a condition becomes true"
+  },
+  "Try/Otherwise": {
+    "prefix": ["try", "Try"],
+    "body": [
+      "Try",
+      "  ${1:body}",
+      "Otherwise",
+      "  ${2:recovery}"
+    ],
+    "description": "Try a risky step with a fallback"
+  },
+  "Class": {
+    "prefix": ["class"],
+    "body": [
+      "${1:Module}'s ${2:ClassName}:",
+      "  ${3:method_name} using ${4:params}:",
+      "    ${5:body}",
+      "    respond with ${6:result}"
+    ],
+    "description": "Class with a method"
+  },
+  "Method": {
+    "prefix": ["method"],
+    "body": [
+      "${1:method_name} using ${2:params}:",
+      "  ${3:body}",
+      "  respond with ${4:result}"
+    ],
+    "description": "A named method"
+  },
+  "Private method": {
+    "prefix": ["private"],
+    "body": [
+      "private ${1:method_name} using ${2:params}:",
+      "  ${3:body}",
+      "  respond with ${4:result}"
+    ],
+    "description": "A private helper method"
+  },
+  "Require": {
+    "prefix": ["require", "Require"],
+    "body": [
+      "Require ${1:condition}, \"${2:error message}\""
+    ],
+    "description": "Require a condition or fail"
+  },
+  "Fail with": {
+    "prefix": ["fail", "Fail"],
+    "body": [
+      "Fail with \"${1:error message}\""
+    ],
+    "description": "Stop execution with an error message"
+  },
+  "Expect": {
+    "prefix": ["expect", "Expect"],
+    "body": [
+      "Expect ${1:variable} equals ${2:expected}"
+    ],
+    "description": "Assert a value in tests"
+  },
+  "Load": {
+    "prefix": ["load", "Load"],
+    "body": [
+      "Load ${1:path} as ${2:Name}"
+    ],
+    "description": "Load a file as a named module"
+  },
+  "Import": {
+    "prefix": ["import", "Import"],
+    "body": [
+      "Import \"${1:path}\""
+    ],
+    "description": "Import another Devlish file"
+  },
+  "Checkpoint": {
+    "prefix": ["checkpoint", "Checkpoint"],
+    "body": [
+      "Checkpoint \"${1:label}\""
+    ],
+    "description": "Save a named checkpoint"
+  },
+  "Print": {
+    "prefix": ["print", "Print"],
+    "body": [
+      "Print ${1:value}"
+    ],
+    "description": "Print a value to output"
+  },
+  "Set": {
+    "prefix": ["set", "Set"],
+    "body": [
+      "Set ${1:name} to ${2:value}"
+    ],
+    "description": "Set a variable to a value"
+  },
+  "Record": {
+    "prefix": ["record"],
+    "body": [
+      "record with ${1:key} as ${2:value} and ${3:key2} as ${4:value2}"
+    ],
+    "description": "Create a record with key-value pairs"
+  },
+  "Validate": {
+    "prefix": ["must"],
+    "body": [
+      "${1:field} must ${2|contain,equal,be present,be missing,match,be one of|} ${3:value}"
+    ],
+    "description": "Validate a field with a constraint"
+  },
+  "Conditional assignment": {
+    "prefix": ["equals if"],
+    "body": [
+      "${1:name} equals ${2:value} if ${3:condition}"
+    ],
+    "description": "Assign a value conditionally"
+  }
+}

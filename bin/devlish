@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+# Devlish CLI - delegates to the native Rust binary (devlish-core)
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+
+# Find the devlish-core binary
+if [ -x "$REPO_ROOT/crates/devlish_core/target/release/devlish-core" ]; then
+  exec "$REPO_ROOT/crates/devlish_core/target/release/devlish-core" "$@"
+elif [ -x "$REPO_ROOT/crates/devlish_core/target/debug/devlish-core" ]; then
+  exec "$REPO_ROOT/crates/devlish_core/target/debug/devlish-core" "$@"
+elif command -v devlish-core >/dev/null 2>&1; then
+  exec devlish-core "$@"
+else
+  echo "devlish-core binary not found." >&2
+  echo "Build it with: cd crates/devlish_core && cargo build --release" >&2
+  exit 1
+fi

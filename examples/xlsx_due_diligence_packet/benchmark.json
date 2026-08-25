@@ -1,0 +1,29 @@
+{
+  "schema_version": "devlish-benchmark-v0",
+  "benchmark": "xlsx_due_diligence_packet",
+  "description": "A representative worksheet reconciliation workflow that replaces a multi-turn XLSX inspection loop with precompiled Devlish bytecode.",
+  "baseline": {
+    "path": "baseline.skill-transcript.json",
+    "sha256": "..."
+  },
+  "workflow": {
+    "source_path": "workflow.dvl",
+    "bytecode_path": "workflow.dvlc.json",
+    "bytecode_sha256": "..."
+  },
+  "input": {
+    "path": "input.json",
+    "sha256": "..."
+  },
+  "outputs": {
+    "assertion_report_path": "../../tmp/xlsx_due_diligence_packet/report.json",
+    "benchmark_report_path": "../../tmp/xlsx_due_diligence_packet/benchmark-report.json"
+  },
+  "expected_assertion_report": {
+    "path": "expected-report.json"
+  },
+  "thresholds": {
+    "minimum_model_visible_byte_reduction_ratio": 0.8,
+    "minimum_estimated_avoided_tokens": 1000
+  }
+}

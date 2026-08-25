@@ -1,0 +1,4 @@
+Target App: dealstar
+Verification Mode: exploratory
+Requested Surface: project submission
+Production Blocker: no

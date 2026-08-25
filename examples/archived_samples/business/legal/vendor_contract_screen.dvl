@@ -1,0 +1,13 @@
+# Legal: Vendor contract screen
+
+Load examples/business/data/vendor_contract.txt as Vendor Contract
+Alias Vendor Contract as Contract
+
+require liability clause
+require termination clause
+check for data retention clause
+
+Find term length months and save as term_length_months
+term_length_months must be at least 12
+
+Route term_length_months to legal_contract_queue

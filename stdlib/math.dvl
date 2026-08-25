@@ -1,0 +1,8 @@
+# Devlish standard library: math
+# Constants only for now. Functions (square root, power, floor, ceiling,
+# logarithms, trigonometry) arrive with the numeric tower (DEVL-134) and
+# arithmetic operators (DEVL-136).
+
+pi equals 3.141592653589793
+e equals 2.718281828459045
+tau equals 6.283185307179586

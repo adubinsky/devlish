@@ -1,0 +1,5 @@
+# Shared labels and limits imported by the multi-file workflow.
+
+review_threshold equals 1000
+review_label equals "needs_review"
+safe_label equals "approved"

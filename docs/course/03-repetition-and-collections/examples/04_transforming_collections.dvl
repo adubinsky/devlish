@@ -1,0 +1,14 @@
+# Lesson 3.4 example: transform a collection into new values
+
+# Start with intentionally messy text so map has useful work to do.
+statuses equals list of " approved ", "pending", and "rejected"
+
+# Map changes each item; reject removes items that match the condition.
+cleaned_statuses equals map statuses to trim item
+kept_statuses equals reject cleaned_statuses where item is "pending"
+
+# Reduce combines the remaining values into one final count.
+status_count equals reduce kept_statuses starting at 0 with total and item to total plus 1
+
+Print first of cleaned_statuses
+Print status_count

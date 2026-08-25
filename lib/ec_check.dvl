@@ -1,0 +1,38 @@
+# Energy Community Eligibility Check
+# Full verification combining Census geocoding, DOE layers, and IRS appendix.
+#
+# Input: latitude, longitude
+# Output: record with census, coal closure, statistical area, and IRS results
+#
+# Usage:
+#   devlish run lib/ec_check.dvl --input '{"latitude": 32.7767, "longitude": -96.7970}'
+
+inputs:
+  latitude
+  longitude
+
+# Step 1: Census geocoding
+census url equals "https://geocoding.geo.census.gov/geocoder/geographies/coordinates?x=" plus longitude plus "&y=" plus latitude plus "&benchmark=Public_AR_Current&vintage=Census2020_Current&format=json"
+Get the url at census url as census response
+census body equals body of census response
+
+# Step 2: DOE Coal Closure layer
+coal url equals "https://arcgis.netl.doe.gov/server/rest/services/Hosted/2024_Coal_Closure_Energy_Communities/FeatureServer/0/query?geometry=" plus longitude plus "," plus latitude plus "&geometryType=esriGeometryPoint&inSR=4326&spatialRel=esriSpatialRelIntersects&returnGeometry=false&outFields=*&f=json"
+Get the url at coal url as coal response
+coal body equals body of coal response
+
+# Step 3: DOE Statistical Area layer
+stat url equals "https://arcgis.netl.doe.gov/server/rest/services/Hosted/2024_MSAs_NonMSAs_that_are_Energy_Communities/FeatureServer/0/query?geometry=" plus longitude plus "," plus latitude plus "&geometryType=esriGeometryPoint&inSR=4326&spatialRel=esriSpatialRelIntersects&returnGeometry=false&outFields=*&f=json"
+Get the url at stat url as stat response
+stat body equals body of stat response
+
+# Determine hits
+coal features equals features of coal body
+stat features equals features of stat body
+coal hit equals false
+coal hit equals true if count of coal features is greater than 0
+stat hit equals false
+stat hit equals true if count of stat features is greater than 0
+
+# Build result
+Respond with record with latitude as latitude and longitude as longitude and census body as census and coal hit as coal closure hit and coal body as coal closure and stat hit as statistical area hit and stat body as statistical area

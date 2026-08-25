@@ -1,0 +1,14 @@
+# Lesson 5.4 example: combine this workflow with shared rules
+
+# Import resolves relative to this file before falling back to search paths.
+Import 04_shared_review_rules.dvl
+
+invoice_amount equals 1200
+
+# The imported names are available after the Import line.
+If invoice_amount >= review_threshold
+  final_label equals review_label
+Otherwise
+  final_label equals safe_label
+
+Print final_label

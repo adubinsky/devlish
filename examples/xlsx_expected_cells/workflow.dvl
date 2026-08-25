@@ -1,0 +1,13 @@
+Read XLSX cell "Summary!B2" as site name
+Expect site_name equals "Solar Site Alpha" as "site-name"
+
+Read XLSX cell "Summary!B4" as credit value
+Expect credit_value equals 250000 as "credit-value"
+
+Read XLSX cell "Inputs!C8" as domestic content value
+Expect domestic_content_value is present as "domestic-content-present"
+
+Read XLSX cell "Inputs!C9" as error check
+Expect error_check is not spreadsheet error as "no-error-value"
+
+Export assertions to assertion report path

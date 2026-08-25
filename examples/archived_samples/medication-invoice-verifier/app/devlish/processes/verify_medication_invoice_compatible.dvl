@@ -1,0 +1,53 @@
+# Process: verify_medication_invoice_compatible
+#
+# Objective:
+# Verify that an invoiced medication is approved for a specific patient.
+# This version intentionally uses parser-supported patterns.
+
+# Load payload document context
+Load document
+
+# Extract core fields from invoice payload text
+Find patient id and save as patient_id
+Find medication name and save as medication_name
+Find ndc code and save as ndc_code
+Find quantity and save as invoice_quantity
+Find refill count and save as invoice_refill_count
+Find service date and save as service_date
+
+# Initialize decision state
+manual_review equals false
+decision_status equals pending
+
+# Required data checks (single-line conditionals)
+manual_review equals true if patient_id == nil
+decision_status equals needs_review if patient_id == nil
+
+# Medication eligibility checks
+# Note: service lookups are represented as extract/search placeholders for now.
+Find approved medication list and save as approved_list
+Find normalized medication and save as normalized_medication
+
+manual_review equals true if approved_list == nil
+decision_status equals needs_review if approved_list == nil
+manual_review equals true if normalized_medication == nil
+decision_status equals needs_review if normalized_medication == nil
+
+# If a normalized medication is found and list exists, attempt deterministic path
+# Current parser does not support block-style if/otherwise statements yet.
+# We stage values and enforce numeric guards below.
+
+Find quantity limit and save as quantity_limit
+Find refill limit and save as refill_limit
+
+# Conservative defaults if values are absent are handled in gateway pre-processing.
+invoice_quantity must be at most 30
+invoice_refill_count must be at most 3
+
+# Confidence threshold (percentage encoded as integer)
+Find mapping confidence and save as mapping_confidence
+mapping_confidence must be at least 90
+
+# Routing hooks
+Send notification to payment integrity team if manual_review == true
+Email billing team if decision_status == approved

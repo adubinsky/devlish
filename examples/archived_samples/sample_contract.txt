@@ -1,0 +1,41 @@
+VENDOR SERVICE AGREEMENT
+
+This Vendor Service Agreement ("Agreement") is entered into as of January 15, 2024.
+
+PARTIES:
+Client: Acme Corporation
+Vendor: Tech Services LLC
+
+TERMS AND CONDITIONS:
+
+1. SCOPE OF SERVICES
+The Vendor agrees to provide software development services as outlined in the attached Statement of Work.
+
+2. COMPENSATION
+Total Contract Value: $250,000
+Payment Schedule: Net 30 days
+
+3. LIABILITY CLAUSE
+The Vendor's total liability under this Agreement shall be limited to a maximum of $500,000. This liability cap applies to all claims arising under this Agreement, whether in contract, tort, or otherwise.
+
+4. TERMINATION CLAUSE
+Either party may terminate this Agreement with 45 days written notice. Upon termination, all outstanding payments shall become immediately due and payable.
+
+5. INTELLECTUAL PROPERTY RIGHTS
+All intellectual property developed under this Agreement shall remain the property of the Client. The Vendor assigns all rights, title, and interest in any work product to the Client.
+
+6. CONFIDENTIALITY
+Both parties agree to maintain confidentiality of all proprietary information shared during the term of this Agreement.
+
+7. FORCE MAJEURE
+Neither party shall be liable for delays or failures in performance resulting from acts of God, natural disasters, pandemics, or other circumstances beyond their reasonable control.
+
+8. GOVERNING LAW
+This Agreement shall be governed by the laws of the State of Delaware.
+
+SIGNATURES:
+_________________________
+Client Representative
+
+_________________________
+Vendor Representative

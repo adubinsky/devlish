@@ -1,0 +1,21 @@
+# Accounting: Rental property depreciation (simplified)
+
+Load examples/accounting/data/asset_record.txt as Property Record
+
+Find cost basis and save as cost_basis
+Find land value and save as land_value
+Find service month and save as service_month
+
+cost_basis equals 0 if cost_basis == nil
+land_value equals 0 if land_value == nil
+service_month equals 1 if service_month == nil
+
+depreciable_basis equals cost_basis minus land_value
+recovery_period equals 27.5
+annual_depreciation equals depreciable_basis / recovery_period
+months_in_service equals 12 minus service_month plus 0.5
+first_year_depreciation equals annual_depreciation * months_in_service / 12
+
+depreciable_basis must be at least 1
+
+Route first_year_depreciation to accounting_rental_depreciation_queue

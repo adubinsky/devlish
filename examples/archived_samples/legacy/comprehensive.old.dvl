@@ -1,0 +1,34 @@
+# Comprehensive Example: Defined Terms + Article Semantics
+
+# Define terms for better LLM expansion
+liability_cap - the highest amount the liability settlement can go
+termination_notice - the number of days required before contract termination
+Effective Date - the date when the contract becomes binding
+Maximum Liability - the total cap on all liability claims combined
+
+Load document
+
+# Article semantics in action:
+
+# "a/an" = introducing/defining (existential - any instance satisfies)
+Document must contain a Liability Clause
+Document must contain an Indemnification Clause
+Document must contain a Termination Clause
+
+# "the" = referencing specific instance (definite)
+the Document must contain the Effective Date
+the Document must contain the Maximum Liability
+
+# "All" = universal quantifier (every instance must satisfy)
+All Documents must contain a Confidentiality Clause
+
+# Extract using defined terms
+# Parser expands definitions for better matching
+Find liability_cap and save as liability_cap
+Find termination_notice and save as termination_notice
+Find Maximum Liability and save as maximum_liability
+
+# Validations
+liability_cap must be at least 1000000
+termination_notice must be at least 30
+maximum_liability must be at least 5000000

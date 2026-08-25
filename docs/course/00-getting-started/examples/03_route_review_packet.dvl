@@ -1,0 +1,13 @@
+# Lesson 0.3 example: input, work, and output
+
+# Load the review packet so later lines can extract fields from it.
+Load docs/course/00-getting-started/examples/03_review_packet.txt as Document
+
+# Save the extracted status under a name the decision can reuse.
+Find review status and save as review_status
+
+# Route approved packets automatically and send everything else for review.
+If review_status is "approved"
+  Route invoice to approved_queue
+Otherwise
+  Route invoice to manual_review_queue

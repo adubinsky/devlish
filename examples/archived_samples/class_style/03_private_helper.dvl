@@ -1,0 +1,12 @@
+# Lesson 3: Add a private helper method
+
+Operations's Invoice Reviewer:
+  review invoice using invoice amount:
+    review_needed equals false
+    review_needed equals true if invoice amount >= 10000
+    respond with review_needed
+
+  privately escalation label using review needed:
+    escalation_label equals "standard"
+    escalation_label equals "priority" if review needed == true
+    respond with escalation_label

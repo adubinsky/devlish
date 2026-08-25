@@ -1,0 +1,17 @@
+# Accounting: Contract validator (simplified)
+
+Load examples/accounting/data/contract_review_packet.txt as Contract Packet
+Alias Contract Packet as Contract
+
+Find liability cap and save as liability_cap
+Find payment terms days and save as payment_terms_days
+
+liability_cap must be at least 1000000
+payment_terms_days must be at least 30
+
+If liability_cap is missing
+  contract_status equals "needs review"
+Otherwise
+  contract_status equals "compliant"
+
+Route contract_status to accounting_contract_queue

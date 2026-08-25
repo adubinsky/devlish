@@ -1,0 +1,177 @@
+{
+  "assertions": [
+    {
+      "actual": {
+        "kind": "text",
+        "pages": 3,
+        "source": "transfer-request.pdf",
+        "value": "Transfer Election Statement\nSeller: Helio Ridge LLC\nBuyer: Northwind Manufacturing Inc.\nProject: Solar Site Alpha\nSite address: 1200 Desert Sun Road, Maricopa County, AZ\nCredit value: $250,000\nPDF transfer packet fixture - page 1\n\n-- 1 of 3 --\n\nPlaced in Service Certificate\nPlaced in service date: 2025-04-30\nEligible credit type: Section 48 clean electricity investment credit\nFacility owner attestation received and signed.\nPDF transfer packet fixture - page 2\n\n-- 2 of 3 --\n\nRequired Supporting Documents\nCost segregation report: Present\nDomestic content affidavit: Present\nPrevailing wage certification: Present\nInsurance binder: Pending post-term-sheet\nPDF transfer packet fixture - page 3\n\n-- 3 of 3 --\n\n"
+      },
+      "expected": {
+        "kind": "string",
+        "value": "Transfer Election Statement"
+      },
+      "id": "transfer-election-statement",
+      "message": "Assertion transfer-election-statement passed",
+      "operator": "contains",
+      "passed": true,
+      "target": "transfer_packet"
+    },
+    {
+      "actual": {
+        "kind": "text",
+        "pages": 3,
+        "source": "transfer-request.pdf",
+        "value": "Transfer Election Statement\nSeller: Helio Ridge LLC\nBuyer: Northwind Manufacturing Inc.\nProject: Solar Site Alpha\nSite address: 1200 Desert Sun Road, Maricopa County, AZ\nCredit value: $250,000\nPDF transfer packet fixture - page 1\n\n-- 1 of 3 --\n\nPlaced in Service Certificate\nPlaced in service date: 2025-04-30\nEligible credit type: Section 48 clean electricity investment credit\nFacility owner attestation received and signed.\nPDF transfer packet fixture - page 2\n\n-- 2 of 3 --\n\nRequired Supporting Documents\nCost segregation report: Present\nDomestic content affidavit: Present\nPrevailing wage certification: Present\nInsurance binder: Pending post-term-sheet\nPDF transfer packet fixture - page 3\n\n-- 3 of 3 --\n\n"
+      },
+      "expected": {
+        "kind": "string",
+        "value": "Seller: Helio Ridge LLC"
+      },
+      "id": "seller-name-present",
+      "message": "Assertion seller-name-present passed",
+      "operator": "contains",
+      "passed": true,
+      "target": "transfer_packet"
+    },
+    {
+      "actual": {
+        "kind": "text",
+        "pages": 3,
+        "source": "transfer-request.pdf",
+        "value": "Transfer Election Statement\nSeller: Helio Ridge LLC\nBuyer: Northwind Manufacturing Inc.\nProject: Solar Site Alpha\nSite address: 1200 Desert Sun Road, Maricopa County, AZ\nCredit value: $250,000\nPDF transfer packet fixture - page 1\n\n-- 1 of 3 --\n\nPlaced in Service Certificate\nPlaced in service date: 2025-04-30\nEligible credit type: Section 48 clean electricity investment credit\nFacility owner attestation received and signed.\nPDF transfer packet fixture - page 2\n\n-- 2 of 3 --\n\nRequired Supporting Documents\nCost segregation report: Present\nDomestic content affidavit: Present\nPrevailing wage certification: Present\nInsurance binder: Pending post-term-sheet\nPDF transfer packet fixture - page 3\n\n-- 3 of 3 --\n\n"
+      },
+      "expected": {
+        "kind": "string",
+        "value": "Buyer: Northwind Manufacturing Inc."
+      },
+      "id": "buyer-name-present",
+      "message": "Assertion buyer-name-present passed",
+      "operator": "contains",
+      "passed": true,
+      "target": "transfer_packet"
+    },
+    {
+      "actual": {
+        "kind": "text",
+        "pages": 3,
+        "source": "transfer-request.pdf",
+        "value": "Transfer Election Statement\nSeller: Helio Ridge LLC\nBuyer: Northwind Manufacturing Inc.\nProject: Solar Site Alpha\nSite address: 1200 Desert Sun Road, Maricopa County, AZ\nCredit value: $250,000\nPDF transfer packet fixture - page 1\n\n-- 1 of 3 --\n\nPlaced in Service Certificate\nPlaced in service date: 2025-04-30\nEligible credit type: Section 48 clean electricity investment credit\nFacility owner attestation received and signed.\nPDF transfer packet fixture - page 2\n\n-- 2 of 3 --\n\nRequired Supporting Documents\nCost segregation report: Present\nDomestic content affidavit: Present\nPrevailing wage certification: Present\nInsurance binder: Pending post-term-sheet\nPDF transfer packet fixture - page 3\n\n-- 3 of 3 --\n\n"
+      },
+      "expected": {
+        "kind": "string",
+        "value": "Project: Solar Site Alpha"
+      },
+      "id": "project-name-present",
+      "message": "Assertion project-name-present passed",
+      "operator": "contains",
+      "passed": true,
+      "target": "transfer_packet"
+    },
+    {
+      "actual": {
+        "kind": "text",
+        "pages": 3,
+        "source": "transfer-request.pdf",
+        "value": "Transfer Election Statement\nSeller: Helio Ridge LLC\nBuyer: Northwind Manufacturing Inc.\nProject: Solar Site Alpha\nSite address: 1200 Desert Sun Road, Maricopa County, AZ\nCredit value: $250,000\nPDF transfer packet fixture - page 1\n\n-- 1 of 3 --\n\nPlaced in Service Certificate\nPlaced in service date: 2025-04-30\nEligible credit type: Section 48 clean electricity investment credit\nFacility owner attestation received and signed.\nPDF transfer packet fixture - page 2\n\n-- 2 of 3 --\n\nRequired Supporting Documents\nCost segregation report: Present\nDomestic content affidavit: Present\nPrevailing wage certification: Present\nInsurance binder: Pending post-term-sheet\nPDF transfer packet fixture - page 3\n\n-- 3 of 3 --\n\n"
+      },
+      "expected": {
+        "kind": "string",
+        "value": "Site address: 1200 Desert Sun Road, Maricopa County, AZ"
+      },
+      "id": "site-address-present",
+      "message": "Assertion site-address-present passed",
+      "operator": "contains",
+      "passed": true,
+      "target": "transfer_packet"
+    },
+    {
+      "actual": {
+        "kind": "text",
+        "pages": 3,
+        "source": "transfer-request.pdf",
+        "value": "Transfer Election Statement\nSeller: Helio Ridge LLC\nBuyer: Northwind Manufacturing Inc.\nProject: Solar Site Alpha\nSite address: 1200 Desert Sun Road, Maricopa County, AZ\nCredit value: $250,000\nPDF transfer packet fixture - page 1\n\n-- 1 of 3 --\n\nPlaced in Service Certificate\nPlaced in service date: 2025-04-30\nEligible credit type: Section 48 clean electricity investment credit\nFacility owner attestation received and signed.\nPDF transfer packet fixture - page 2\n\n-- 2 of 3 --\n\nRequired Supporting Documents\nCost segregation report: Present\nDomestic content affidavit: Present\nPrevailing wage certification: Present\nInsurance binder: Pending post-term-sheet\nPDF transfer packet fixture - page 3\n\n-- 3 of 3 --\n\n"
+      },
+      "expected": {
+        "kind": "string",
+        "value": "Credit value: $250,000"
+      },
+      "id": "credit-value-present",
+      "message": "Assertion credit-value-present passed",
+      "operator": "contains",
+      "passed": true,
+      "target": "transfer_packet"
+    },
+    {
+      "actual": {
+        "kind": "text",
+        "pages": 3,
+        "source": "transfer-request.pdf",
+        "value": "Transfer Election Statement\nSeller: Helio Ridge LLC\nBuyer: Northwind Manufacturing Inc.\nProject: Solar Site Alpha\nSite address: 1200 Desert Sun Road, Maricopa County, AZ\nCredit value: $250,000\nPDF transfer packet fixture - page 1\n\n-- 1 of 3 --\n\nPlaced in Service Certificate\nPlaced in service date: 2025-04-30\nEligible credit type: Section 48 clean electricity investment credit\nFacility owner attestation received and signed.\nPDF transfer packet fixture - page 2\n\n-- 2 of 3 --\n\nRequired Supporting Documents\nCost segregation report: Present\nDomestic content affidavit: Present\nPrevailing wage certification: Present\nInsurance binder: Pending post-term-sheet\nPDF transfer packet fixture - page 3\n\n-- 3 of 3 --\n\n"
+      },
+      "expected": {
+        "kind": "string",
+        "value": "Placed in service date: 2025-04-30"
+      },
+      "id": "placed-in-service-present",
+      "message": "Assertion placed-in-service-present passed",
+      "operator": "contains",
+      "passed": true,
+      "target": "transfer_packet"
+    },
+    {
+      "actual": {
+        "kind": "text",
+        "pages": 3,
+        "source": "transfer-request.pdf",
+        "value": "Transfer Election Statement\nSeller: Helio Ridge LLC\nBuyer: Northwind Manufacturing Inc.\nProject: Solar Site Alpha\nSite address: 1200 Desert Sun Road, Maricopa County, AZ\nCredit value: $250,000\nPDF transfer packet fixture - page 1\n\n-- 1 of 3 --\n\nPlaced in Service Certificate\nPlaced in service date: 2025-04-30\nEligible credit type: Section 48 clean electricity investment credit\nFacility owner attestation received and signed.\nPDF transfer packet fixture - page 2\n\n-- 2 of 3 --\n\nRequired Supporting Documents\nCost segregation report: Present\nDomestic content affidavit: Present\nPrevailing wage certification: Present\nInsurance binder: Pending post-term-sheet\nPDF transfer packet fixture - page 3\n\n-- 3 of 3 --\n\n"
+      },
+      "expected": {
+        "kind": "string",
+        "value": "Cost segregation report: Present"
+      },
+      "id": "cost-seg-present",
+      "message": "Assertion cost-seg-present passed",
+      "operator": "contains",
+      "passed": true,
+      "target": "transfer_packet"
+    },
+    {
+      "actual": {
+        "kind": "text",
+        "pages": 3,
+        "source": "transfer-request.pdf",
+        "value": "Transfer Election Statement\nSeller: Helio Ridge LLC\nBuyer: Northwind Manufacturing Inc.\nProject: Solar Site Alpha\nSite address: 1200 Desert Sun Road, Maricopa County, AZ\nCredit value: $250,000\nPDF transfer packet fixture - page 1\n\n-- 1 of 3 --\n\nPlaced in Service Certificate\nPlaced in service date: 2025-04-30\nEligible credit type: Section 48 clean electricity investment credit\nFacility owner attestation received and signed.\nPDF transfer packet fixture - page 2\n\n-- 2 of 3 --\n\nRequired Supporting Documents\nCost segregation report: Present\nDomestic content affidavit: Present\nPrevailing wage certification: Present\nInsurance binder: Pending post-term-sheet\nPDF transfer packet fixture - page 3\n\n-- 3 of 3 --\n\n"
+      },
+      "expected": {
+        "kind": "string",
+        "value": "Domestic content affidavit: Present"
+      },
+      "id": "domestic-content-present",
+      "message": "Assertion domestic-content-present passed",
+      "operator": "contains",
+      "passed": true,
+      "target": "transfer_packet"
+    },
+    {
+      "actual": {
+        "kind": "text",
+        "pages": 3,
+        "source": "transfer-request.pdf",
+        "value": "Transfer Election Statement\nSeller: Helio Ridge LLC\nBuyer: Northwind Manufacturing Inc.\nProject: Solar Site Alpha\nSite address: 1200 Desert Sun Road, Maricopa County, AZ\nCredit value: $250,000\nPDF transfer packet fixture - page 1\n\n-- 1 of 3 --\n\nPlaced in Service Certificate\nPlaced in service date: 2025-04-30\nEligible credit type: Section 48 clean electricity investment credit\nFacility owner attestation received and signed.\nPDF transfer packet fixture - page 2\n\n-- 2 of 3 --\n\nRequired Supporting Documents\nCost segregation report: Present\nDomestic content affidavit: Present\nPrevailing wage certification: Present\nInsurance binder: Pending post-term-sheet\nPDF transfer packet fixture - page 3\n\n-- 3 of 3 --\n\n"
+      },
+      "expected": {
+        "kind": "string",
+        "value": "Prevailing wage certification: Present"
+      },
+      "id": "prevailing-wage-present",
+      "message": "Assertion prevailing-wage-present passed",
+      "operator": "contains",
+      "passed": true,
+      "target": "transfer_packet"
+    }
+  ],
+  "benchmark": "pdf_transfer_packet",
+  "schema_version": "devlish-assertion-report-v0",
+  "success": true
+}

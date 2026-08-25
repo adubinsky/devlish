@@ -1,0 +1,18 @@
+# Reserved Words Demo (parser-safe subset)
+
+payment terms is payment term count
+late fee is late fee amount
+grace period is grace period count
+
+Load examples/sample_contract.txt
+
+Document must contain payment terms
+Document must contain late fee
+
+Find payment terms and save as payment_terms
+Find late fee and save as late_fee
+Find grace period and save as grace_period
+
+payment_terms must be at least 30
+late_fee must be at most 500
+grace_period must be at least 5

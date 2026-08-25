@@ -1,0 +1,14 @@
+Read PDF text "transfer-request.pdf" as transfer packet
+
+Expect transfer_packet contains "Transfer Election Statement" as "transfer-election-statement"
+Expect transfer_packet contains "Seller: Helio Ridge LLC" as "seller-name-present"
+Expect transfer_packet contains "Buyer: Northwind Manufacturing Inc." as "buyer-name-present"
+Expect transfer_packet contains "Project: Solar Site Alpha" as "project-name-present"
+Expect transfer_packet contains "Site address: 1200 Desert Sun Road, Maricopa County, AZ" as "site-address-present"
+Expect transfer_packet contains "Credit value: $250,000" as "credit-value-present"
+Expect transfer_packet contains "Placed in service date: 2025-04-30" as "placed-in-service-present"
+Expect transfer_packet contains "Cost segregation report: Present" as "cost-seg-present"
+Expect transfer_packet contains "Domestic content affidavit: Present" as "domestic-content-present"
+Expect transfer_packet contains "Prevailing wage certification: Present" as "prevailing-wage-present"
+
+Export assertions to assertion report path

@@ -1,0 +1,20 @@
+# Operations: Incident priority sorting
+
+Load examples/business/data/incident_report.txt as Incident Report
+Alias Incident Report as Incident
+
+Find severity and save as severity
+Find affected users and save as affected_users
+
+priority equals "normal"
+
+If severity is missing
+  priority equals "review"
+
+If severity is high
+  priority equals "urgent"
+
+If affected_users is missing
+  priority equals "review"
+
+Route priority to incident_response_queue

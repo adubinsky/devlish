@@ -1,0 +1,7 @@
+# Lesson 6.3 example: buggy threshold
+
+# This limit is intentionally too low for the lesson.
+invoice_amount equals 900
+review_limit equals 500
+needs_review equals false
+needs_review equals true if invoice_amount >= review_limit

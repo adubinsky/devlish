@@ -1,0 +1,1124 @@
+{
+  "format": "devlish-bytecode",
+  "format_version": 0,
+  "compiler_version": "0.1.0",
+  "source_path": "examples/xlsx_due_diligence_packet/workflow.dvl",
+  "source_hash": "0985a6cf3bbc8f0b2545ba09016a965e51116138bd41333247afab65443d773e",
+  "constant_pool": [
+    250000,
+    337500,
+    "US-sourced steel documented",
+    "Certified payroll package complete",
+    18,
+    "Present"
+  ],
+  "symbol_table": [
+    "site_name",
+    "site_address",
+    "credit_value",
+    "placed_in_service_date",
+    "legal_site_name",
+    "legal_address",
+    "ppa_site_name",
+    "ppa_address",
+    "cost_seg_asset_total",
+    "eligible_basis",
+    "calculated_credit_value",
+    "domestic_content_affidavit",
+    "steel_origin_status",
+    "prevailing_wage_status",
+    "usa_equipment_count",
+    "total_equipment_count",
+    "formula_health_check",
+    "form_status",
+    "ppa_status",
+    "land_lease_status",
+    "cost_seg_report_status",
+    "domestic_content_status",
+    "payroll_status",
+    "assertion_report_path"
+  ],
+  "instructions": [
+    {
+      "op": "XLSX_READ_CELL",
+      "target": "site_name",
+      "sheet": "Summary",
+      "cell": "B2"
+    },
+    {
+      "op": "XLSX_READ_CELL",
+      "target": "site_address",
+      "sheet": "Summary",
+      "cell": "B3"
+    },
+    {
+      "op": "XLSX_READ_CELL",
+      "target": "credit_value",
+      "sheet": "Summary",
+      "cell": "B4"
+    },
+    {
+      "op": "XLSX_READ_CELL",
+      "target": "placed_in_service_date",
+      "sheet": "Summary",
+      "cell": "B5"
+    },
+    {
+      "op": "XLSX_READ_CELL",
+      "target": "legal_site_name",
+      "sheet": "Legal",
+      "cell": "B2"
+    },
+    {
+      "op": "XLSX_READ_CELL",
+      "target": "legal_address",
+      "sheet": "Legal",
+      "cell": "B3"
+    },
+    {
+      "op": "XLSX_READ_CELL",
+      "target": "ppa_site_name",
+      "sheet": "PPA",
+      "cell": "B2"
+    },
+    {
+      "op": "XLSX_READ_CELL",
+      "target": "ppa_address",
+      "sheet": "PPA",
+      "cell": "B3"
+    },
+    {
+      "op": "XLSX_READ_CELL",
+      "target": "cost_seg_asset_total",
+      "sheet": "Cost Seg",
+      "cell": "B6"
+    },
+    {
+      "op": "XLSX_READ_CELL",
+      "target": "eligible_basis",
+      "sheet": "Cost Seg",
+      "cell": "B8"
+    },
+    {
+      "op": "XLSX_READ_CELL",
+      "target": "calculated_credit_value",
+      "sheet": "Cost Seg",
+      "cell": "B9"
+    },
+    {
+      "op": "XLSX_READ_CELL",
+      "target": "domestic_content_affidavit",
+      "sheet": "Domestic Content",
+      "cell": "C5"
+    },
+    {
+      "op": "XLSX_READ_CELL",
+      "target": "steel_origin_status",
+      "sheet": "Domestic Content",
+      "cell": "C8"
+    },
+    {
+      "op": "XLSX_READ_CELL",
+      "target": "prevailing_wage_status",
+      "sheet": "Payroll",
+      "cell": "D12"
+    },
+    {
+      "op": "XLSX_READ_CELL",
+      "target": "usa_equipment_count",
+      "sheet": "Equipment",
+      "cell": "E15"
+    },
+    {
+      "op": "XLSX_READ_CELL",
+      "target": "total_equipment_count",
+      "sheet": "Equipment",
+      "cell": "E16"
+    },
+    {
+      "op": "XLSX_READ_CELL",
+      "target": "formula_health_check",
+      "sheet": "Controls",
+      "cell": "B2"
+    },
+    {
+      "op": "XLSX_READ_CELL",
+      "target": "form_status",
+      "sheet": "Documents",
+      "cell": "C2"
+    },
+    {
+      "op": "XLSX_READ_CELL",
+      "target": "ppa_status",
+      "sheet": "Documents",
+      "cell": "C3"
+    },
+    {
+      "op": "XLSX_READ_CELL",
+      "target": "land_lease_status",
+      "sheet": "Documents",
+      "cell": "C4"
+    },
+    {
+      "op": "XLSX_READ_CELL",
+      "target": "cost_seg_report_status",
+      "sheet": "Documents",
+      "cell": "C5"
+    },
+    {
+      "op": "XLSX_READ_CELL",
+      "target": "domestic_content_status",
+      "sheet": "Documents",
+      "cell": "C6"
+    },
+    {
+      "op": "XLSX_READ_CELL",
+      "target": "payroll_status",
+      "sheet": "Documents",
+      "cell": "C7"
+    },
+    {
+      "op": "ASSERT",
+      "assertion_id": "summary-site-name-present",
+      "target": "site_name",
+      "operator": "present"
+    },
+    {
+      "op": "ASSERT",
+      "assertion_id": "summary-site-address-present",
+      "target": "site_address",
+      "operator": "present"
+    },
+    {
+      "op": "LOAD",
+      "dest": "r0",
+      "symbol": "site_name"
+    },
+    {
+      "op": "ASSERT",
+      "assertion_id": "legal-site-name-matches-summary",
+      "target": "legal_site_name",
+      "operator": "equals",
+      "expected": "r0"
+    },
+    {
+      "op": "LOAD",
+      "dest": "r1",
+      "symbol": "site_name"
+    },
+    {
+      "op": "ASSERT",
+      "assertion_id": "ppa-site-name-matches-summary",
+      "target": "ppa_site_name",
+      "operator": "equals",
+      "expected": "r1"
+    },
+    {
+      "op": "LOAD",
+      "dest": "r2",
+      "symbol": "site_address"
+    },
+    {
+      "op": "ASSERT",
+      "assertion_id": "legal-address-matches-summary",
+      "target": "legal_address",
+      "operator": "equals",
+      "expected": "r2"
+    },
+    {
+      "op": "LOAD",
+      "dest": "r3",
+      "symbol": "site_address"
+    },
+    {
+      "op": "ASSERT",
+      "assertion_id": "ppa-address-matches-summary",
+      "target": "ppa_address",
+      "operator": "equals",
+      "expected": "r3"
+    },
+    {
+      "op": "CONST",
+      "dest": "r4",
+      "const": 0
+    },
+    {
+      "op": "ASSERT",
+      "assertion_id": "credit-value-expected",
+      "target": "credit_value",
+      "operator": "equals",
+      "expected": "r4"
+    },
+    {
+      "op": "CONST",
+      "dest": "r5",
+      "const": 1
+    },
+    {
+      "op": "ASSERT",
+      "assertion_id": "cost-seg-total-expected",
+      "target": "cost_seg_asset_total",
+      "operator": "equals",
+      "expected": "r5"
+    },
+    {
+      "op": "LOAD",
+      "dest": "r6",
+      "symbol": "credit_value"
+    },
+    {
+      "op": "ASSERT",
+      "assertion_id": "calculated-credit-matches-summary",
+      "target": "calculated_credit_value",
+      "operator": "equals",
+      "expected": "r6"
+    },
+    {
+      "op": "ASSERT",
+      "assertion_id": "placed-in-service-date-present",
+      "target": "placed_in_service_date",
+      "operator": "present"
+    },
+    {
+      "op": "ASSERT",
+      "assertion_id": "domestic-content-affidavit-present",
+      "target": "domestic_content_affidavit",
+      "operator": "present"
+    },
+    {
+      "op": "CONST",
+      "dest": "r7",
+      "const": 2
+    },
+    {
+      "op": "ASSERT",
+      "assertion_id": "steel-origin-status",
+      "target": "steel_origin_status",
+      "operator": "equals",
+      "expected": "r7"
+    },
+    {
+      "op": "CONST",
+      "dest": "r8",
+      "const": 3
+    },
+    {
+      "op": "ASSERT",
+      "assertion_id": "prevailing-wage-certified",
+      "target": "prevailing_wage_status",
+      "operator": "equals",
+      "expected": "r8"
+    },
+    {
+      "op": "CONST",
+      "dest": "r9",
+      "const": 4
+    },
+    {
+      "op": "ASSERT",
+      "assertion_id": "usa-equipment-count",
+      "target": "usa_equipment_count",
+      "operator": "equals",
+      "expected": "r9"
+    },
+    {
+      "op": "LOAD",
+      "dest": "r10",
+      "symbol": "usa_equipment_count"
+    },
+    {
+      "op": "ASSERT",
+      "assertion_id": "all-equipment-made-in-usa",
+      "target": "total_equipment_count",
+      "operator": "equals",
+      "expected": "r10"
+    },
+    {
+      "op": "ASSERT",
+      "assertion_id": "formula-health-no-error",
+      "target": "formula_health_check",
+      "operator": "not_spreadsheet_error"
+    },
+    {
+      "op": "CONST",
+      "dest": "r11",
+      "const": 5
+    },
+    {
+      "op": "ASSERT",
+      "assertion_id": "irs-form-present",
+      "target": "form_status",
+      "operator": "equals",
+      "expected": "r11"
+    },
+    {
+      "op": "CONST",
+      "dest": "r12",
+      "const": 5
+    },
+    {
+      "op": "ASSERT",
+      "assertion_id": "ppa-present",
+      "target": "ppa_status",
+      "operator": "equals",
+      "expected": "r12"
+    },
+    {
+      "op": "CONST",
+      "dest": "r13",
+      "const": 5
+    },
+    {
+      "op": "ASSERT",
+      "assertion_id": "land-lease-present",
+      "target": "land_lease_status",
+      "operator": "equals",
+      "expected": "r13"
+    },
+    {
+      "op": "CONST",
+      "dest": "r14",
+      "const": 5
+    },
+    {
+      "op": "ASSERT",
+      "assertion_id": "cost-seg-report-present",
+      "target": "cost_seg_report_status",
+      "operator": "equals",
+      "expected": "r14"
+    },
+    {
+      "op": "CONST",
+      "dest": "r15",
+      "const": 5
+    },
+    {
+      "op": "ASSERT",
+      "assertion_id": "domestic-content-package-present",
+      "target": "domestic_content_status",
+      "operator": "equals",
+      "expected": "r15"
+    },
+    {
+      "op": "CONST",
+      "dest": "r16",
+      "const": 5
+    },
+    {
+      "op": "ASSERT",
+      "assertion_id": "payroll-package-present",
+      "target": "payroll_status",
+      "operator": "equals",
+      "expected": "r16"
+    },
+    {
+      "op": "LOAD",
+      "dest": "r17",
+      "symbol": "assertion_report_path"
+    },
+    {
+      "op": "EXPORT_ASSERTIONS",
+      "path": "r17"
+    },
+    {
+      "op": "RETURN"
+    }
+  ],
+  "source_map": [
+    {
+      "address": 0,
+      "line": 4,
+      "source_text": "Read XLSX cell \"Summary!B2\" as site name"
+    },
+    {
+      "address": 1,
+      "line": 5,
+      "source_text": "Read XLSX cell \"Summary!B3\" as site address"
+    },
+    {
+      "address": 2,
+      "line": 6,
+      "source_text": "Read XLSX cell \"Summary!B4\" as credit value"
+    },
+    {
+      "address": 3,
+      "line": 7,
+      "source_text": "Read XLSX cell \"Summary!B5\" as placed in service date"
+    },
+    {
+      "address": 4,
+      "line": 9,
+      "source_text": "Read XLSX cell \"Legal!B2\" as legal site name"
+    },
+    {
+      "address": 5,
+      "line": 10,
+      "source_text": "Read XLSX cell \"Legal!B3\" as legal address"
+    },
+    {
+      "address": 6,
+      "line": 11,
+      "source_text": "Read XLSX cell \"PPA!B2\" as ppa site name"
+    },
+    {
+      "address": 7,
+      "line": 12,
+      "source_text": "Read XLSX cell \"PPA!B3\" as ppa address"
+    },
+    {
+      "address": 8,
+      "line": 14,
+      "source_text": "Read XLSX cell \"Cost Seg!B6\" as cost seg asset total"
+    },
+    {
+      "address": 9,
+      "line": 15,
+      "source_text": "Read XLSX cell \"Cost Seg!B8\" as eligible basis"
+    },
+    {
+      "address": 10,
+      "line": 16,
+      "source_text": "Read XLSX cell \"Cost Seg!B9\" as calculated credit value"
+    },
+    {
+      "address": 11,
+      "line": 18,
+      "source_text": "Read XLSX cell \"Domestic Content!C5\" as domestic content affidavit"
+    },
+    {
+      "address": 12,
+      "line": 19,
+      "source_text": "Read XLSX cell \"Domestic Content!C8\" as steel origin status"
+    },
+    {
+      "address": 13,
+      "line": 20,
+      "source_text": "Read XLSX cell \"Payroll!D12\" as prevailing wage status"
+    },
+    {
+      "address": 14,
+      "line": 21,
+      "source_text": "Read XLSX cell \"Equipment!E15\" as usa equipment count"
+    },
+    {
+      "address": 15,
+      "line": 22,
+      "source_text": "Read XLSX cell \"Equipment!E16\" as total equipment count"
+    },
+    {
+      "address": 16,
+      "line": 23,
+      "source_text": "Read XLSX cell \"Controls!B2\" as formula health check"
+    },
+    {
+      "address": 17,
+      "line": 25,
+      "source_text": "Read XLSX cell \"Documents!C2\" as form status"
+    },
+    {
+      "address": 18,
+      "line": 26,
+      "source_text": "Read XLSX cell \"Documents!C3\" as ppa status"
+    },
+    {
+      "address": 19,
+      "line": 27,
+      "source_text": "Read XLSX cell \"Documents!C4\" as land lease status"
+    },
+    {
+      "address": 20,
+      "line": 28,
+      "source_text": "Read XLSX cell \"Documents!C5\" as cost seg report status"
+    },
+    {
+      "address": 21,
+      "line": 29,
+      "source_text": "Read XLSX cell \"Documents!C6\" as domestic content status"
+    },
+    {
+      "address": 22,
+      "line": 30,
+      "source_text": "Read XLSX cell \"Documents!C7\" as payroll status"
+    },
+    {
+      "address": 23,
+      "line": 32,
+      "source_text": "Expect site name is present as \"summary-site-name-present\""
+    },
+    {
+      "address": 24,
+      "line": 33,
+      "source_text": "Expect site address is present as \"summary-site-address-present\""
+    },
+    {
+      "address": 25,
+      "line": 34,
+      "source_text": "Expect legal site name equals site name as \"legal-site-name-matches-summary\""
+    },
+    {
+      "address": 26,
+      "line": 34,
+      "source_text": "Expect legal site name equals site name as \"legal-site-name-matches-summary\""
+    },
+    {
+      "address": 27,
+      "line": 35,
+      "source_text": "Expect ppa site name equals site name as \"ppa-site-name-matches-summary\""
+    },
+    {
+      "address": 28,
+      "line": 35,
+      "source_text": "Expect ppa site name equals site name as \"ppa-site-name-matches-summary\""
+    },
+    {
+      "address": 29,
+      "line": 36,
+      "source_text": "Expect legal address equals site address as \"legal-address-matches-summary\""
+    },
+    {
+      "address": 30,
+      "line": 36,
+      "source_text": "Expect legal address equals site address as \"legal-address-matches-summary\""
+    },
+    {
+      "address": 31,
+      "line": 37,
+      "source_text": "Expect ppa address equals site address as \"ppa-address-matches-summary\""
+    },
+    {
+      "address": 32,
+      "line": 37,
+      "source_text": "Expect ppa address equals site address as \"ppa-address-matches-summary\""
+    },
+    {
+      "address": 33,
+      "line": 38,
+      "source_text": "Expect credit value equals 250000 as \"credit-value-expected\""
+    },
+    {
+      "address": 34,
+      "line": 38,
+      "source_text": "Expect credit value equals 250000 as \"credit-value-expected\""
+    },
+    {
+      "address": 35,
+      "line": 39,
+      "source_text": "Expect cost seg asset total equals 337500 as \"cost-seg-total-expected\""
+    },
+    {
+      "address": 36,
+      "line": 39,
+      "source_text": "Expect cost seg asset total equals 337500 as \"cost-seg-total-expected\""
+    },
+    {
+      "address": 37,
+      "line": 40,
+      "source_text": "Expect calculated credit value equals credit value as \"calculated-credit-matches-summary\""
+    },
+    {
+      "address": 38,
+      "line": 40,
+      "source_text": "Expect calculated credit value equals credit value as \"calculated-credit-matches-summary\""
+    },
+    {
+      "address": 39,
+      "line": 41,
+      "source_text": "Expect placed in service date is present as \"placed-in-service-date-present\""
+    },
+    {
+      "address": 40,
+      "line": 42,
+      "source_text": "Expect domestic content affidavit is present as \"domestic-content-affidavit-present\""
+    },
+    {
+      "address": 41,
+      "line": 43,
+      "source_text": "Expect steel origin status equals \"US-sourced steel documented\" as \"steel-origin-status\""
+    },
+    {
+      "address": 42,
+      "line": 43,
+      "source_text": "Expect steel origin status equals \"US-sourced steel documented\" as \"steel-origin-status\""
+    },
+    {
+      "address": 43,
+      "line": 44,
+      "source_text": "Expect prevailing wage status equals \"Certified payroll package complete\" as \"prevailing-wage-certified\""
+    },
+    {
+      "address": 44,
+      "line": 44,
+      "source_text": "Expect prevailing wage status equals \"Certified payroll package complete\" as \"prevailing-wage-certified\""
+    },
+    {
+      "address": 45,
+      "line": 45,
+      "source_text": "Expect usa equipment count equals 18 as \"usa-equipment-count\""
+    },
+    {
+      "address": 46,
+      "line": 45,
+      "source_text": "Expect usa equipment count equals 18 as \"usa-equipment-count\""
+    },
+    {
+      "address": 47,
+      "line": 46,
+      "source_text": "Expect total equipment count equals usa equipment count as \"all-equipment-made-in-usa\""
+    },
+    {
+      "address": 48,
+      "line": 46,
+      "source_text": "Expect total equipment count equals usa equipment count as \"all-equipment-made-in-usa\""
+    },
+    {
+      "address": 49,
+      "line": 47,
+      "source_text": "Expect formula health check is not spreadsheet error as \"formula-health-no-error\""
+    },
+    {
+      "address": 50,
+      "line": 48,
+      "source_text": "Expect form status equals \"Present\" as \"irs-form-present\""
+    },
+    {
+      "address": 51,
+      "line": 48,
+      "source_text": "Expect form status equals \"Present\" as \"irs-form-present\""
+    },
+    {
+      "address": 52,
+      "line": 49,
+      "source_text": "Expect ppa status equals \"Present\" as \"ppa-present\""
+    },
+    {
+      "address": 53,
+      "line": 49,
+      "source_text": "Expect ppa status equals \"Present\" as \"ppa-present\""
+    },
+    {
+      "address": 54,
+      "line": 50,
+      "source_text": "Expect land lease status equals \"Present\" as \"land-lease-present\""
+    },
+    {
+      "address": 55,
+      "line": 50,
+      "source_text": "Expect land lease status equals \"Present\" as \"land-lease-present\""
+    },
+    {
+      "address": 56,
+      "line": 51,
+      "source_text": "Expect cost seg report status equals \"Present\" as \"cost-seg-report-present\""
+    },
+    {
+      "address": 57,
+      "line": 51,
+      "source_text": "Expect cost seg report status equals \"Present\" as \"cost-seg-report-present\""
+    },
+    {
+      "address": 58,
+      "line": 52,
+      "source_text": "Expect domestic content status equals \"Present\" as \"domestic-content-package-present\""
+    },
+    {
+      "address": 59,
+      "line": 52,
+      "source_text": "Expect domestic content status equals \"Present\" as \"domestic-content-package-present\""
+    },
+    {
+      "address": 60,
+      "line": 53,
+      "source_text": "Expect payroll status equals \"Present\" as \"payroll-package-present\""
+    },
+    {
+      "address": 61,
+      "line": 53,
+      "source_text": "Expect payroll status equals \"Present\" as \"payroll-package-present\""
+    },
+    {
+      "address": 62,
+      "line": 55,
+      "source_text": "Export assertions to assertion report path"
+    },
+    {
+      "address": 63,
+      "line": 55,
+      "source_text": "Export assertions to assertion report path"
+    },
+    {
+      "address": 64
+    }
+  ],
+  "effect_table": [
+    {
+      "kind": "xlsx_read_cell",
+      "line": 4,
+      "source_text": "Read XLSX cell \"Summary!B2\" as site name",
+      "target": "site_name",
+      "sheet": "Summary",
+      "cell": "B2"
+    },
+    {
+      "kind": "xlsx_read_cell",
+      "line": 5,
+      "source_text": "Read XLSX cell \"Summary!B3\" as site address",
+      "target": "site_address",
+      "sheet": "Summary",
+      "cell": "B3"
+    },
+    {
+      "kind": "xlsx_read_cell",
+      "line": 6,
+      "source_text": "Read XLSX cell \"Summary!B4\" as credit value",
+      "target": "credit_value",
+      "sheet": "Summary",
+      "cell": "B4"
+    },
+    {
+      "kind": "xlsx_read_cell",
+      "line": 7,
+      "source_text": "Read XLSX cell \"Summary!B5\" as placed in service date",
+      "target": "placed_in_service_date",
+      "sheet": "Summary",
+      "cell": "B5"
+    },
+    {
+      "kind": "xlsx_read_cell",
+      "line": 9,
+      "source_text": "Read XLSX cell \"Legal!B2\" as legal site name",
+      "target": "legal_site_name",
+      "sheet": "Legal",
+      "cell": "B2"
+    },
+    {
+      "kind": "xlsx_read_cell",
+      "line": 10,
+      "source_text": "Read XLSX cell \"Legal!B3\" as legal address",
+      "target": "legal_address",
+      "sheet": "Legal",
+      "cell": "B3"
+    },
+    {
+      "kind": "xlsx_read_cell",
+      "line": 11,
+      "source_text": "Read XLSX cell \"PPA!B2\" as ppa site name",
+      "target": "ppa_site_name",
+      "sheet": "PPA",
+      "cell": "B2"
+    },
+    {
+      "kind": "xlsx_read_cell",
+      "line": 12,
+      "source_text": "Read XLSX cell \"PPA!B3\" as ppa address",
+      "target": "ppa_address",
+      "sheet": "PPA",
+      "cell": "B3"
+    },
+    {
+      "kind": "xlsx_read_cell",
+      "line": 14,
+      "source_text": "Read XLSX cell \"Cost Seg!B6\" as cost seg asset total",
+      "target": "cost_seg_asset_total",
+      "sheet": "Cost Seg",
+      "cell": "B6"
+    },
+    {
+      "kind": "xlsx_read_cell",
+      "line": 15,
+      "source_text": "Read XLSX cell \"Cost Seg!B8\" as eligible basis",
+      "target": "eligible_basis",
+      "sheet": "Cost Seg",
+      "cell": "B8"
+    },
+    {
+      "kind": "xlsx_read_cell",
+      "line": 16,
+      "source_text": "Read XLSX cell \"Cost Seg!B9\" as calculated credit value",
+      "target": "calculated_credit_value",
+      "sheet": "Cost Seg",
+      "cell": "B9"
+    },
+    {
+      "kind": "xlsx_read_cell",
+      "line": 18,
+      "source_text": "Read XLSX cell \"Domestic Content!C5\" as domestic content affidavit",
+      "target": "domestic_content_affidavit",
+      "sheet": "Domestic Content",
+      "cell": "C5"
+    },
+    {
+      "kind": "xlsx_read_cell",
+      "line": 19,
+      "source_text": "Read XLSX cell \"Domestic Content!C8\" as steel origin status",
+      "target": "steel_origin_status",
+      "sheet": "Domestic Content",
+      "cell": "C8"
+    },
+    {
+      "kind": "xlsx_read_cell",
+      "line": 20,
+      "source_text": "Read XLSX cell \"Payroll!D12\" as prevailing wage status",
+      "target": "prevailing_wage_status",
+      "sheet": "Payroll",
+      "cell": "D12"
+    },
+    {
+      "kind": "xlsx_read_cell",
+      "line": 21,
+      "source_text": "Read XLSX cell \"Equipment!E15\" as usa equipment count",
+      "target": "usa_equipment_count",
+      "sheet": "Equipment",
+      "cell": "E15"
+    },
+    {
+      "kind": "xlsx_read_cell",
+      "line": 22,
+      "source_text": "Read XLSX cell \"Equipment!E16\" as total equipment count",
+      "target": "total_equipment_count",
+      "sheet": "Equipment",
+      "cell": "E16"
+    },
+    {
+      "kind": "xlsx_read_cell",
+      "line": 23,
+      "source_text": "Read XLSX cell \"Controls!B2\" as formula health check",
+      "target": "formula_health_check",
+      "sheet": "Controls",
+      "cell": "B2"
+    },
+    {
+      "kind": "xlsx_read_cell",
+      "line": 25,
+      "source_text": "Read XLSX cell \"Documents!C2\" as form status",
+      "target": "form_status",
+      "sheet": "Documents",
+      "cell": "C2"
+    },
+    {
+      "kind": "xlsx_read_cell",
+      "line": 26,
+      "source_text": "Read XLSX cell \"Documents!C3\" as ppa status",
+      "target": "ppa_status",
+      "sheet": "Documents",
+      "cell": "C3"
+    },
+    {
+      "kind": "xlsx_read_cell",
+      "line": 27,
+      "source_text": "Read XLSX cell \"Documents!C4\" as land lease status",
+      "target": "land_lease_status",
+      "sheet": "Documents",
+      "cell": "C4"
+    },
+    {
+      "kind": "xlsx_read_cell",
+      "line": 28,
+      "source_text": "Read XLSX cell \"Documents!C5\" as cost seg report status",
+      "target": "cost_seg_report_status",
+      "sheet": "Documents",
+      "cell": "C5"
+    },
+    {
+      "kind": "xlsx_read_cell",
+      "line": 29,
+      "source_text": "Read XLSX cell \"Documents!C6\" as domestic content status",
+      "target": "domestic_content_status",
+      "sheet": "Documents",
+      "cell": "C6"
+    },
+    {
+      "kind": "xlsx_read_cell",
+      "line": 30,
+      "source_text": "Read XLSX cell \"Documents!C7\" as payroll status",
+      "target": "payroll_status",
+      "sheet": "Documents",
+      "cell": "C7"
+    },
+    {
+      "kind": "assertion",
+      "line": 32,
+      "source_text": "Expect site name is present as \"summary-site-name-present\"",
+      "assertion_id": "summary-site-name-present",
+      "target": "site_name",
+      "operator": "present"
+    },
+    {
+      "kind": "assertion",
+      "line": 33,
+      "source_text": "Expect site address is present as \"summary-site-address-present\"",
+      "assertion_id": "summary-site-address-present",
+      "target": "site_address",
+      "operator": "present"
+    },
+    {
+      "kind": "assertion",
+      "line": 34,
+      "source_text": "Expect legal site name equals site name as \"legal-site-name-matches-summary\"",
+      "assertion_id": "legal-site-name-matches-summary",
+      "target": "legal_site_name",
+      "operator": "equals"
+    },
+    {
+      "kind": "assertion",
+      "line": 35,
+      "source_text": "Expect ppa site name equals site name as \"ppa-site-name-matches-summary\"",
+      "assertion_id": "ppa-site-name-matches-summary",
+      "target": "ppa_site_name",
+      "operator": "equals"
+    },
+    {
+      "kind": "assertion",
+      "line": 36,
+      "source_text": "Expect legal address equals site address as \"legal-address-matches-summary\"",
+      "assertion_id": "legal-address-matches-summary",
+      "target": "legal_address",
+      "operator": "equals"
+    },
+    {
+      "kind": "assertion",
+      "line": 37,
+      "source_text": "Expect ppa address equals site address as \"ppa-address-matches-summary\"",
+      "assertion_id": "ppa-address-matches-summary",
+      "target": "ppa_address",
+      "operator": "equals"
+    },
+    {
+      "kind": "assertion",
+      "line": 38,
+      "source_text": "Expect credit value equals 250000 as \"credit-value-expected\"",
+      "assertion_id": "credit-value-expected",
+      "target": "credit_value",
+      "operator": "equals"
+    },
+    {
+      "kind": "assertion",
+      "line": 39,
+      "source_text": "Expect cost seg asset total equals 337500 as \"cost-seg-total-expected\"",
+      "assertion_id": "cost-seg-total-expected",
+      "target": "cost_seg_asset_total",
+      "operator": "equals"
+    },
+    {
+      "kind": "assertion",
+      "line": 40,
+      "source_text": "Expect calculated credit value equals credit value as \"calculated-credit-matches-summary\"",
+      "assertion_id": "calculated-credit-matches-summary",
+      "target": "calculated_credit_value",
+      "operator": "equals"
+    },
+    {
+      "kind": "assertion",
+      "line": 41,
+      "source_text": "Expect placed in service date is present as \"placed-in-service-date-present\"",
+      "assertion_id": "placed-in-service-date-present",
+      "target": "placed_in_service_date",
+      "operator": "present"
+    },
+    {
+      "kind": "assertion",
+      "line": 42,
+      "source_text": "Expect domestic content affidavit is present as \"domestic-content-affidavit-present\"",
+      "assertion_id": "domestic-content-affidavit-present",
+      "target": "domestic_content_affidavit",
+      "operator": "present"
+    },
+    {
+      "kind": "assertion",
+      "line": 43,
+      "source_text": "Expect steel origin status equals \"US-sourced steel documented\" as \"steel-origin-status\"",
+      "assertion_id": "steel-origin-status",
+      "target": "steel_origin_status",
+      "operator": "equals"
+    },
+    {
+      "kind": "assertion",
+      "line": 44,
+      "source_text": "Expect prevailing wage status equals \"Certified payroll package complete\" as \"prevailing-wage-certified\"",
+      "assertion_id": "prevailing-wage-certified",
+      "target": "prevailing_wage_status",
+      "operator": "equals"
+    },
+    {
+      "kind": "assertion",
+      "line": 45,
+      "source_text": "Expect usa equipment count equals 18 as \"usa-equipment-count\"",
+      "assertion_id": "usa-equipment-count",
+      "target": "usa_equipment_count",
+      "operator": "equals"
+    },
+    {
+      "kind": "assertion",
+      "line": 46,
+      "source_text": "Expect total equipment count equals usa equipment count as \"all-equipment-made-in-usa\"",
+      "assertion_id": "all-equipment-made-in-usa",
+      "target": "total_equipment_count",
+      "operator": "equals"
+    },
+    {
+      "kind": "assertion",
+      "line": 47,
+      "source_text": "Expect formula health check is not spreadsheet error as \"formula-health-no-error\"",
+      "assertion_id": "formula-health-no-error",
+      "target": "formula_health_check",
+      "operator": "not_spreadsheet_error"
+    },
+    {
+      "kind": "assertion",
+      "line": 48,
+      "source_text": "Expect form status equals \"Present\" as \"irs-form-present\"",
+      "assertion_id": "irs-form-present",
+      "target": "form_status",
+      "operator": "equals"
+    },
+    {
+      "kind": "assertion",
+      "line": 49,
+      "source_text": "Expect ppa status equals \"Present\" as \"ppa-present\"",
+      "assertion_id": "ppa-present",
+      "target": "ppa_status",
+      "operator": "equals"
+    },
+    {
+      "kind": "assertion",
+      "line": 50,
+      "source_text": "Expect land lease status equals \"Present\" as \"land-lease-present\"",
+      "assertion_id": "land-lease-present",
+      "target": "land_lease_status",
+      "operator": "equals"
+    },
+    {
+      "kind": "assertion",
+      "line": 51,
+      "source_text": "Expect cost seg report status equals \"Present\" as \"cost-seg-report-present\"",
+      "assertion_id": "cost-seg-report-present",
+      "target": "cost_seg_report_status",
+      "operator": "equals"
+    },
+    {
+      "kind": "assertion",
+      "line": 52,
+      "source_text": "Expect domestic content status equals \"Present\" as \"domestic-content-package-present\"",
+      "assertion_id": "domestic-content-package-present",
+      "target": "domestic_content_status",
+      "operator": "equals"
+    },
+    {
+      "kind": "assertion",
+      "line": 53,
+      "source_text": "Expect payroll status equals \"Present\" as \"payroll-package-present\"",
+      "assertion_id": "payroll-package-present",
+      "target": "payroll_status",
+      "operator": "equals"
+    },
+    {
+      "kind": "file_write",
+      "line": 55,
+      "source_text": "Export assertions to assertion report path",
+      "mode": "assertions"
+    }
+  ],
+  "imports": [
+    "emit_event",
+    "write_file"
+  ]
+}

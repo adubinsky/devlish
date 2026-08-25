@@ -1,0 +1,112 @@
+{
+  "schema_version": "devlish-baseline-transcript-v0",
+  "kind": "captured_transcript",
+  "source_host": "claude_code",
+  "captured_at": "2026-06-16T18:31:28Z",
+  "determinism": {
+    "captured_once": true,
+    "fixture_sha256": "...",
+    "notes": "Representative skill-style XLSX expected-cell inspection run."
+  },
+  "prompts": [
+    {
+      "id": "skill-instructions",
+      "role": "system",
+      "included_in_prompt_bytes": true,
+      "utf8_bytes": 5000,
+      "sha256": "..."
+    },
+    {
+      "id": "user-task",
+      "role": "user",
+      "included_in_prompt_bytes": true,
+      "utf8_bytes": 7000,
+      "sha256": "..."
+    }
+  ],
+  "tool_calls": [
+    {
+      "id": "tool-1",
+      "name": "xlsx.inspect_workbook",
+      "request_utf8_bytes": 250,
+      "response_utf8_bytes": 8000,
+      "model_visible_response": true
+    },
+    {
+      "id": "tool-2",
+      "name": "xlsx.inspect_sheet",
+      "request_utf8_bytes": 250,
+      "response_utf8_bytes": 7000,
+      "model_visible_response": true
+    },
+    {
+      "id": "tool-3",
+      "name": "xlsx.read_cell",
+      "request_utf8_bytes": 250,
+      "response_utf8_bytes": 6500,
+      "model_visible_response": true
+    },
+    {
+      "id": "tool-4",
+      "name": "xlsx.read_cell",
+      "request_utf8_bytes": 250,
+      "response_utf8_bytes": 6000,
+      "model_visible_response": true
+    },
+    {
+      "id": "tool-5",
+      "name": "xlsx.read_cell",
+      "request_utf8_bytes": 250,
+      "response_utf8_bytes": 5500,
+      "model_visible_response": true
+    },
+    {
+      "id": "tool-6",
+      "name": "xlsx.read_cell",
+      "request_utf8_bytes": 250,
+      "response_utf8_bytes": 5000,
+      "model_visible_response": true
+    },
+    {
+      "id": "tool-7",
+      "name": "xlsx.summarize_findings",
+      "request_utf8_bytes": 250,
+      "response_utf8_bytes": 4500,
+      "model_visible_response": true
+    },
+    {
+      "id": "tool-8",
+      "name": "xlsx.export_report",
+      "request_utf8_bytes": 250,
+      "response_utf8_bytes": 9500,
+      "model_visible_response": true
+    }
+  ],
+  "model_checkpoints": [
+    {
+      "id": "checkpoint-1",
+      "reason": "plan workbook inspection"
+    },
+    {
+      "id": "checkpoint-2",
+      "reason": "choose sheets to inspect"
+    },
+    {
+      "id": "checkpoint-3",
+      "reason": "compare expected cells"
+    },
+    {
+      "id": "checkpoint-4",
+      "reason": "interpret spreadsheet error state"
+    },
+    {
+      "id": "checkpoint-5",
+      "reason": "summarize final report"
+    }
+  ],
+  "prompt_bytes": 14000,
+  "tool_output_bytes": 52000,
+  "agent_observed_tool_calls": 8,
+  "model_checkpoint_count": 5,
+  "provider_usage": null
+}

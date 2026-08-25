@@ -1,0 +1,31 @@
+[package]
+name = "devlish-core"
+version = "0.1.0"
+edition = "2021"
+publish = false
+license = "MIT"
+description = "Native Rust parser and bytecode compiler core for Devlish"
+
+[lib]
+name = "devlish_core"
+path = "src/lib.rs"
+
+[[bin]]
+name = "devlish-core"
+path = "src/main.rs"
+
+[dependencies]
+devlish-vm = { path = "../devlish_vm" }
+serde = { version = "=1.0.228", features = ["derive"] }
+serde_json = "=1.0.150"
+ureq = { version = "2.12", optional = true }
+calamine = { version = "0.26", optional = true }
+glob = "0.3"
+libc = "0.2"
+
+[features]
+default = ["native"]
+# Native host effects: HTTP (ureq) and spreadsheet reading (calamine).
+# These pull in ring/getrandom/cc-rs and are not wasm32-compatible, so they
+# are gated behind this feature. Build wasm targets with --no-default-features.
+native = ["ureq", "calamine"]

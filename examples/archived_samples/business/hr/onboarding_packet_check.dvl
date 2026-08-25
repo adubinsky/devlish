@@ -1,0 +1,18 @@
+# HR: New hire onboarding packet check
+
+Load examples/business/data/onboarding_packet.txt as Onboarding Packet
+Alias Onboarding Packet as Packet
+
+require employee name
+require start date
+require manager
+check for equipment request
+
+Find offer letter and save as offer_letter
+
+If offer_letter is missing
+  packet_status equals "incomplete"
+Otherwise
+  packet_status equals "ready"
+
+Route packet_status to hr_onboarding_queue

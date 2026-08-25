@@ -1,0 +1,9 @@
+# Simple Example 2: Extract values and validate thresholds
+
+Load examples/sample_contract.txt
+
+Find liability cap and save as liability_cap
+Find contract value and save as contract_value
+
+liability_cap must be at least 1000000
+contract_value must be at least 10000

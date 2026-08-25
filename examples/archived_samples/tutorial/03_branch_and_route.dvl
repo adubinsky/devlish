@@ -1,0 +1,10 @@
+# Lesson 3: Branch on extracted input and route work
+
+Load examples/archived_samples/tutorial/data/review_packet.txt
+
+Find review status and save as review_status
+
+If review_status is "approved"
+  Route invoice to approved_queue
+Otherwise
+  Route invoice to manual_review_queue

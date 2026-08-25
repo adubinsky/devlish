@@ -1,0 +1,3 @@
+liability cap: 1500000
+payment terms days: 45
+termination clause: present

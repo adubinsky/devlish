@@ -1,0 +1,7 @@
+# Simple Example 1: Load a document and check required clauses
+
+Load examples/sample_contract.txt as Document
+
+Document must contain liability clause
+Document must contain termination clause
+Document should have intellectual property rights

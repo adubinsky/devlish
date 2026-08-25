@@ -1,0 +1,78 @@
+# Task Observer: List Observations (DEVL-80)
+#
+# Reads the observation log and returns all OPEN observations as JSON.
+#
+# Input: JSON with "workspace" path
+# Output: JSON list of open observations
+
+Permissions:
+  Read files
+  Filesystem operations
+
+inputs:
+  workspace
+
+# --- Configuration ---
+
+workspace_dir equals workspace
+log_path equals workspace_dir plus "/log.md"
+
+# --- Check log exists ---
+
+Check if log_path exists as log_exists
+
+If log_exists equals false:
+  Respond with record with list of "init" as observations and 0 as count
+
+# --- Parse observations ---
+
+Read text from log_path as log_content
+log_lines equals split log_content by "\n"
+
+observations equals list of "init"
+current_id equals 0
+current_title equals ""
+current_status equals ""
+current_skill equals ""
+in_observation equals false
+
+For each line in log_lines:
+
+  If line contains "### Observation ":
+    # If we were tracking a previous OPEN observation, save it
+    If in_observation equals true:
+      If current_status contains "OPEN":
+        entry equals record with current_id as id and current_title as title and current_skill as skill and current_status as status
+        Append entry to observations
+
+    # Start new observation
+    in_observation equals true
+    after_prefix equals replace "### Observation " in line with ""
+    parts equals split after_prefix by ":"
+    id_text equals first of parts
+    id_text equals trim id_text
+    current_id equals id_text times 1
+    current_title equals after_prefix
+    current_status equals "OPEN"
+    current_skill equals ""
+
+  If line contains "**Status:**":
+    current_status equals replace "**Status:** " in line with ""
+    current_status equals trim current_status
+
+  If line contains "**Skill:**":
+    current_skill equals replace "**Skill:** " in line with ""
+    current_skill equals trim current_skill
+
+# Capture the last observation if OPEN
+If in_observation equals true:
+  If current_status contains "OPEN":
+    entry equals record with current_id as id and current_title as title and current_skill as skill and current_status as status
+    Append entry to observations
+
+# Filter out the init placeholder
+open_list equals reject observations where item equals "init"
+
+open_count equals count of open_list
+
+Respond with record with open_list as observations and open_count as count

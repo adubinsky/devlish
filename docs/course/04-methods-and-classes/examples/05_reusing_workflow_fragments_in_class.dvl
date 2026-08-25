@@ -1,0 +1,7 @@
+# Lesson 4.5 example: reuse shared workflow lines inside a method
+
+Operations's Invoice Reviewer:
+  review invoice:
+    # Import inserts statements from the shared file during compilation.
+    Import 05_shared_review_logic.dvl
+    respond with final_label

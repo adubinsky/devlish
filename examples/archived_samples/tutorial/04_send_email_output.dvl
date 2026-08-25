@@ -1,0 +1,7 @@
+# Lesson 4: Produce an email output
+
+Load examples/archived_samples/tutorial/data/review_packet.txt
+
+Find review mailbox and save as review_mailbox
+
+Send Email via NotificationService to review_mailbox with template "review_complete"

@@ -1,0 +1,21 @@
+# Simple Comprehensive Example (current parser-safe style)
+
+Load examples/sample_contract.txt
+
+Document must contain liability clause
+Document must contain termination clause
+
+Find liability cap and save as liability_cap
+Find contract value and save as contract_value
+
+review_needed equals false
+
+If liability_cap is missing
+  review_needed equals true
+Otherwise
+  review_needed equals false
+
+If review_needed is true
+  Route contract to legal_review_queue
+Otherwise
+  Route contract to approved_queue

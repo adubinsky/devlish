@@ -1,0 +1,7 @@
+# Lesson 4.2 example: parameters in a class-style method
+
+HR's Payroll Calculator:
+  calculate wages using hours worked and hourly rate:
+    # Method parameters can participate in normal arithmetic.
+    wages equals hours worked times hourly rate
+    respond with wages

@@ -1,0 +1,55 @@
+# XLSX due-diligence packet reconciliation.
+# This is intentionally source-readable by business reviewers.
+
+Read XLSX cell "Summary!B2" as site name
+Read XLSX cell "Summary!B3" as site address
+Read XLSX cell "Summary!B4" as credit value
+Read XLSX cell "Summary!B5" as placed in service date
+
+Read XLSX cell "Legal!B2" as legal site name
+Read XLSX cell "Legal!B3" as legal address
+Read XLSX cell "PPA!B2" as ppa site name
+Read XLSX cell "PPA!B3" as ppa address
+
+Read XLSX cell "Cost Seg!B6" as cost seg asset total
+Read XLSX cell "Cost Seg!B8" as eligible basis
+Read XLSX cell "Cost Seg!B9" as calculated credit value
+
+Read XLSX cell "Domestic Content!C5" as domestic content affidavit
+Read XLSX cell "Domestic Content!C8" as steel origin status
+Read XLSX cell "Payroll!D12" as prevailing wage status
+Read XLSX cell "Equipment!E15" as usa equipment count
+Read XLSX cell "Equipment!E16" as total equipment count
+Read XLSX cell "Controls!B2" as formula health check
+
+Read XLSX cell "Documents!C2" as form status
+Read XLSX cell "Documents!C3" as ppa status
+Read XLSX cell "Documents!C4" as land lease status
+Read XLSX cell "Documents!C5" as cost seg report status
+Read XLSX cell "Documents!C6" as domestic content status
+Read XLSX cell "Documents!C7" as payroll status
+
+Expect site name is present as "summary-site-name-present"
+Expect site address is present as "summary-site-address-present"
+Expect legal site name equals site name as "legal-site-name-matches-summary"
+Expect ppa site name equals site name as "ppa-site-name-matches-summary"
+Expect legal address equals site address as "legal-address-matches-summary"
+Expect ppa address equals site address as "ppa-address-matches-summary"
+Expect credit value equals 250000 as "credit-value-expected"
+Expect cost seg asset total equals 337500 as "cost-seg-total-expected"
+Expect calculated credit value equals credit value as "calculated-credit-matches-summary"
+Expect placed in service date is present as "placed-in-service-date-present"
+Expect domestic content affidavit is present as "domestic-content-affidavit-present"
+Expect steel origin status equals "US-sourced steel documented" as "steel-origin-status"
+Expect prevailing wage status equals "Certified payroll package complete" as "prevailing-wage-certified"
+Expect usa equipment count equals 18 as "usa-equipment-count"
+Expect total equipment count equals usa equipment count as "all-equipment-made-in-usa"
+Expect formula health check is not spreadsheet error as "formula-health-no-error"
+Expect form status equals "Present" as "irs-form-present"
+Expect ppa status equals "Present" as "ppa-present"
+Expect land lease status equals "Present" as "land-lease-present"
+Expect cost seg report status equals "Present" as "cost-seg-report-present"
+Expect domestic content status equals "Present" as "domestic-content-package-present"
+Expect payroll status equals "Present" as "payroll-package-present"
+
+Export assertions to assertion report path

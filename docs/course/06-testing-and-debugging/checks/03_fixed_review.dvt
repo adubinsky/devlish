@@ -1,0 +1,4 @@
+Scenario "small invoices do not need review"
+When I run "../examples/03_fixed_review.dvl"
+Then run should succeed
+Then needs_review should equal false

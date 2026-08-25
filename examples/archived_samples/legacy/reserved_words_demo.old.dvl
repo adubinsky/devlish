@@ -1,0 +1,40 @@
+# Reserved Words Demo
+# Shows natural language understanding of time, money, comparisons, etc.
+
+# Define terms with semantic meaning
+payment_terms - the number of days until payment is due
+late_fee - the penalty amount charged for late payment
+grace_period - the number of days before late fees apply
+discount_rate - the percentage discount for early payment
+
+Load document
+
+# Check for clauses
+Document must contain a Payment Terms clause
+Document must contain a Late Fee provision
+
+# Extract with automatic type inference
+# Parser recognizes "days" as time unit
+Find payment_terms and save as payment_terms
+
+# Parser recognizes "fee" as currency
+Find late_fee and save as late_fee
+
+# Parser recognizes "period" with "days" as time
+Find grace_period and save as grace_period
+
+# Parser recognizes "rate" and "percentage"
+Find discount_rate and save as discount_rate
+
+# Natural language comparisons using reserved words
+# "at least" = >=
+payment_terms must be at least 30 days
+
+# "at most" = <=
+late_fee must be at most 500 dollars
+
+# "between" for ranges
+grace_period must be between 5 and 15 days
+
+# Percentage validation
+discount_rate must be at least 2 percent

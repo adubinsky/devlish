@@ -1,0 +1,1133 @@
+{
+  "title": "Devlish Course",
+  "chapters": [
+    {
+      "id": "00-getting-started",
+      "title": "Unit 0: Getting Started",
+      "description": "This unit introduces: - what programming is - what a Devlish program is - how to run a program - how to read a program from top to bottom",
+      "lessons": [
+        {
+          "id": "01-what-is-a-program",
+          "title": "Lesson 0.1: What Is A Program?",
+          "markdown": "# Lesson 0.1: What Is A Program?\n\nLast updated: 2026-03-23\nStatus: Current lesson.\n\n## Purpose\n\nIntroduce the idea that a program is a set of instructions a computer follows\nstep by step.\n\n## Learning Goals\n\n- explain what a program is in plain language\n- describe input, work, and output\n- read a tiny Devlish file from top to bottom\n\n## Vocabulary\n\n- program\n- instruction\n- input\n- output\n\n## First Example\n\nIn this lesson, we will use a very small Devlish program:\n\n```text\nLoad docs/course/00-getting-started/examples/01_notice.txt as Document\n\nDocument must contain payment terms\nDocument must contain contact email\n```\n\nYou can open the example files here:\n- [01_check_notice.dvl](/Users/admin/code/devlish/docs/course/00-getting-started/examples/01_check_notice.dvl#L1)\n- [01_notice.txt](/Users/admin/code/devlish/docs/course/00-getting-started/examples/01_notice.txt#L1)\n\n## Big Idea\n\nA program is a set of instructions.\n\nThe computer does not guess what you mean. It follows the instructions you\ngive it, in order, from top to bottom.\n\nIn this example:\n- the input is a text document\n- the work is checking whether certain phrases are present\n- the output is a visible success or failure result\n\nThat pattern appears again and again in programming:\n- receive something\n- do work with it\n- produce a result\n\n## Run It\n\nFrom the Devlish project root, run:\n\n```bash\n./bin/devlish run docs/course/00-getting-started/examples/01_check_notice.dvl --debug\n```\n\nBecause the sample notice includes both required phrases, this run should\nsucceed.\n\n## Line By Line\n\n### `Load docs/course/00-getting-started/examples/01_notice.txt as Document`\n\nThis tells the program what to work on.\n\n- `Load` means “bring this input into the program”\n- the file path tells Devlish which text file to read\n- `as Document` gives that loaded text a name inside the program\n\nAt this point, the program knows what its input is.\n\n### `Document must contain payment terms`\n\nThis is the first check.\n\nThe program looks inside the loaded document and asks:\n\n\"Does this document contain the phrase `payment terms`?\"\n\nIf the phrase is missing, this check fails.\n\n### `Document must contain contact email`\n\nThis is the second check.\n\nThe program asks whether the document also contains the phrase\n`contact email`.\n\nBecause the program reads from top to bottom, it performs this check after the\nfirst one.\n\n## What The Program Is Doing\n\nHere is the same program described in plain language:\n\n1. Open the notice file.\n2. Call that file `Document`.\n3. Check whether `Document` contains `payment terms`.\n4. Check whether `Document` contains `contact email`.\n\nThat is a program.\n\nIt is small, but it still has the three main parts:\n- input\n- work\n- output\n\n## What Counts As Output Here?\n\nIn many beginner languages, the first output is something printed to the\nscreen.\n\nIn this Devlish lesson, the first output is simpler:\n- the program succeeds if the document passes its checks\n- the program fails if a required phrase is missing\n\nThat still counts as output because the program has produced a visible result.\n\n## Try One Small Change\n\nOpen [01_check_notice.dvl](/Users/admin/code/devlish/docs/course/00-getting-started/examples/01_check_notice.dvl#L1) and change one line to this:\n\n```text\nDocument must contain office address\n```\n\nThen run the file again.\n\nWhat should happen?\n\nIt should fail, because the sample notice does not contain that phrase.\n\n## Check Yourself\n\n1. What is the input in this program?\n   The input is the text file [01_notice.txt](/Users/admin/code/devlish/docs/course/00-getting-started/examples/01_notice.txt#L1).\n\n2. What work does the program do?\n   It checks whether the document contains required phrases.\n\n3. What is the output?\n   The output is whether the run succeeds or fails.\n\n## Practice\n\n1. In your own words, explain what `Load ... as Document` means.\n2. Add a third check that should pass.\n3. Add a third check that should fail.\n4. Run the program after each change and describe what happened.\n\n## Vocabulary Review\n\n- `program`: a set of instructions for the computer\n- `instruction`: one step in a program\n- `input`: what the program receives\n- `output`: the result the program produces\n\n## Next Lesson\n\nIn Lesson 0.2, the focus will be on running Devlish programs comfortably and\nreading their results with more confidence.\n",
+          "examples": [
+            {
+              "filename": "01_check_notice.dvl",
+              "source": "# Lesson 0.1 example: load a notice and check for required text\n\n# Load the sample notice into the built-in Document name.\nLoad docs/course/00-getting-started/examples/01_notice.txt as Document\n\n# Each requirement succeeds only when the loaded document contains the phrase.\nDocument must contain payment terms\nDocument must contain contact email \n"
+            }
+          ],
+          "fixtures": [
+            {
+              "filename": "01_notice.txt",
+              "content": "Community Notice\n\nPlease review the following payment terms before signing.\n\nIf you have questions, contact email: notices@example.com\n\nThank you.\n"
+            }
+          ],
+          "exercises": [
+            {
+              "id": "01-what-is-a-program-exercise-1",
+              "title": "Practice",
+              "description": "1. In your own words, explain what `Load ... as Document` means.\n2. Add a third check that should pass.\n3. Add a third check that should fail.\n4. Run the program after each change and describe what happened.",
+              "starterCode": "# Lesson 0.1 example: load a notice and check for required text\n\n# Load the sample notice into the built-in Document name.\nLoad docs/course/00-getting-started/examples/01_notice.txt as Document\n\n# Each requirement succeeds only when the loaded document contains the phrase.\nDocument must contain payment terms\nDocument must contain contact email \n",
+              "expected": {
+                "outputs": [],
+                "variables": {}
+              },
+              "hints": [
+                "In your own words, explain what `Load ... as Document` means.",
+                "Add a third check that should pass.",
+                "Add a third check that should fail.",
+                "Run the program after each change and describe what happened."
+              ]
+            }
+          ],
+          "dvtScenarios": []
+        },
+        {
+          "id": "02-running-your-first-program",
+          "title": "Lesson 0.2: Running Your First Program",
+          "markdown": "# Lesson 0.2: Running Your First Program\n\nLast updated: 2026-03-23\nStatus: Current lesson.\n\n## Purpose\n\nShow the student how to run a Devlish file and observe its result.\n\n## Learning Goals\n\n- run a Devlish program from the command line\n- recognize a successful run\n- describe what changed because the program ran\n\n## Vocabulary\n\n- run\n- result\n- success\n- trace\n\n## First Example\n\nThis lesson uses two almost identical files:\n\n- [01_check_notice.dvl](/Users/admin/code/devlish/docs/course/00-getting-started/examples/01_check_notice.dvl#L1)\n- [02_check_notice_missing_email.dvl](/Users/admin/code/devlish/docs/course/00-getting-started/examples/02_check_notice_missing_email.dvl#L1)\n\nOne succeeds.\nOne fails.\n\n## Big Idea\n\nRunning a program means asking the computer to follow the instructions in a\nfile right now.\n\nThe file does not become “real” only after a human explains it. It becomes\nreal when the computer follows its steps.\n\n## Run A Successful File\n\n```bash\n./bin/devlish run docs/course/00-getting-started/examples/01_check_notice.dvl --debug\n```\n\nYou should see a successful result.\n\n## Run A Failing File\n\n```bash\n./bin/devlish run docs/course/00-getting-started/examples/02_check_notice_missing_email.dvl --debug\n```\n\nYou should see a failure because the second notice is missing one required\nphrase.\n\n## Why This Is Useful\n\nFailure is not always bad.\n\nIf a document is missing required information, the correct behavior may be to\nfail and report that problem.\n\nThat is part of what programs are for.\n\n## What `--debug` Shows\n\nThe `--debug` flag gives you extra visibility.\n\nIt helps a beginner answer:\n- what file ran\n- what steps happened\n- what passed\n- what failed\n\n## Check Yourself\n\n1. What changed between the two runs?\n   The input document changed.\n\n2. Did the instructions change?\n   No.\n\n3. Why did the result change?\n   Because the program received different input.\n\n## Practice\n\n1. Run both files without `--debug`.\n2. Run both files again with `--debug`.\n3. Describe one thing the debug output taught you.\n",
+          "examples": [
+            {
+              "filename": "02_check_notice_missing_email.dvl",
+              "source": "# Lesson 0.2 example: same checks, incomplete input\n\n# This file is intentionally missing one required phrase.\nLoad docs/course/00-getting-started/examples/02_notice_missing_email.txt as Document\n\n# The first check should pass; the second one should fail.\nDocument must contain payment terms\nDocument must contain contact email\n"
+            }
+          ],
+          "fixtures": [
+            {
+              "filename": "02_notice_missing_email.txt",
+              "content": "Community Notice\n\nPlease review the following payment terms before signing.\n\nThank you.\n"
+            }
+          ],
+          "exercises": [
+            {
+              "id": "02-running-your-first-program-exercise-1",
+              "title": "Practice",
+              "description": "1. Run both files without `--debug`.\n2. Run both files again with `--debug`.\n3. Describe one thing the debug output taught you.",
+              "starterCode": "# Lesson 0.2 example: same checks, incomplete input\n\n# This file is intentionally missing one required phrase.\nLoad docs/course/00-getting-started/examples/02_notice_missing_email.txt as Document\n\n# The first check should pass; the second one should fail.\nDocument must contain payment terms\nDocument must contain contact email\n",
+              "expected": {
+                "outputs": [],
+                "variables": {}
+              },
+              "hints": [
+                "Run both files without `--debug`.",
+                "Run both files again with `--debug`.",
+                "Describe one thing the debug output taught you."
+              ]
+            }
+          ],
+          "dvtScenarios": []
+        },
+        {
+          "id": "03-input-work-output",
+          "title": "Lesson 0.3: Input, Work, And Output",
+          "markdown": "# Lesson 0.3: Input, Work, And Output\n\nLast updated: 2026-03-23\nStatus: Current lesson.\n\n## Purpose\n\nTeach the beginner mental model that every program receives something, does\nwork, and produces a result.\n\n## Learning Goals\n\n- name the input of a Devlish program\n- describe the work a program performs\n- identify the output or effect\n\n## Vocabulary\n\n- input\n- process\n- output\n- effect\n\n## First Example\n\nUse this workflow:\n\n```text\nLoad docs/course/00-getting-started/examples/03_review_packet.txt as Document\n\nFind review status and save as review_status\n\nIf review_status is \"approved\"\n  Route invoice to approved_queue\nOtherwise\n  Route invoice to manual_review_queue\n```\n\nOpen the files here:\n- [03_route_review_packet.dvl](/Users/admin/code/devlish/docs/course/00-getting-started/examples/03_route_review_packet.dvl#L1)\n- [03_review_packet.txt](/Users/admin/code/devlish/docs/course/00-getting-started/examples/03_review_packet.txt#L1)\n\n## Big Idea\n\nMany programs can be explained with three questions:\n\n1. What goes in?\n2. What work happens?\n3. What comes out?\n\nThat is what “input, work, and output” means.\n\n## Run It\n\n```bash\n./bin/devlish run docs/course/00-getting-started/examples/03_route_review_packet.dvl --debug\n```\n\n## Input\n\nThe input is the text file.\n\nIt contains the review status the program needs.\n\n## Work\n\nThe work is:\n- finding the review status\n- storing it as `review_status`\n- comparing it to `\"approved\"`\n\n## Output\n\nThe output is the route:\n- `approved_queue` when the status is approved\n- `manual_review_queue` otherwise\n\n## Line By Line\n\n### `Load ... as Document`\n\nThis gives the program its input.\n\n### `Find review status and save as review_status`\n\nThis pulls one useful value out of the input and remembers it.\n\n### `If review_status is \"approved\"`\n\nThis asks a question.\n\n### `Route invoice to approved_queue`\n\nThis is one possible result.\n\n### `Otherwise`\n\nThis means “if the earlier condition was not true.”\n\n### `Route invoice to manual_review_queue`\n\nThis is the other possible result.\n\n## Practice\n\n1. Change the review status in the text file from `approved` to `pending`.\n2. Run the program again.\n3. Explain what changed in the output.\n",
+          "examples": [
+            {
+              "filename": "03_route_review_packet.dvl",
+              "source": "# Lesson 0.3 example: input, work, and output\n\n# Load the review packet so later lines can extract fields from it.\nLoad docs/course/00-getting-started/examples/03_review_packet.txt as Document\n\n# Save the extracted status under a name the decision can reuse.\nFind review status and save as review_status\n\n# Route approved packets automatically and send everything else for review.\nIf review_status is \"approved\"\n  Route invoice to approved_queue\nOtherwise\n  Route invoice to manual_review_queue\n"
+            }
+          ],
+          "fixtures": [
+            {
+              "filename": "03_review_packet.txt",
+              "content": "Review Packet\n\nreview status: approved\ninvoice id: INV-100\n"
+            }
+          ],
+          "exercises": [
+            {
+              "id": "03-input-work-output-exercise-1",
+              "title": "Practice",
+              "description": "1. Change the review status in the text file from `approved` to `pending`.\n2. Run the program again.\n3. Explain what changed in the output.",
+              "starterCode": "# Lesson 0.3 example: input, work, and output\n\n# Load the review packet so later lines can extract fields from it.\nLoad docs/course/00-getting-started/examples/03_review_packet.txt as Document\n\n# Save the extracted status under a name the decision can reuse.\nFind review status and save as review_status\n\n# Route approved packets automatically and send everything else for review.\nIf review_status is \"approved\"\n  Route invoice to approved_queue\nOtherwise\n  Route invoice to manual_review_queue\n",
+              "expected": {
+                "outputs": [],
+                "variables": {}
+              },
+              "hints": [
+                "Change the review status in the text file from `approved` to `pending`.",
+                "Run the program again.",
+                "Explain what changed in the output."
+              ]
+            }
+          ],
+          "dvtScenarios": []
+        }
+      ]
+    },
+    {
+      "id": "01-values-and-names",
+      "title": "Unit 1: Values And Names",
+      "description": "This unit introduces: - values - variables - assignment - binding a new name to a value",
+      "lessons": [
+        {
+          "id": "01-values",
+          "title": "Lesson 1.1: Values",
+          "markdown": "# Lesson 1.1: Values\n\nLast updated: 2026-03-23\nStatus: Current lesson.\n\n## Purpose\n\nIntroduce the idea that programs work with pieces of information called\nvalues.\n\n## Learning Goals\n\n- recognize strings, numbers, and true-or-false values\n- explain that a value is information the program can use\n\n## Vocabulary\n\n- value\n- text\n- number\n- true\n- false\n\n## First Example\n\n```text\ninvoice_amount equals 1200\nreview_needed equals false\ndecision_label equals \"approved\"\n```\n\nOpen the example file here:\n- [01_values.dvl](/Users/admin/code/devlish/docs/course/01-values-and-names/examples/01_values.dvl#L1)\n\n## Big Idea\n\nA value is a piece of information.\n\nIn this example:\n- `1200` is a number\n- `false` is a true-or-false value\n- `\"approved\"` is a piece of text\n\n## Run It\n\n```bash\n./bin/devlish run docs/course/01-values-and-names/examples/01_values.dvl --debug\n```\n\n## Line By Line\n\n### `invoice_amount equals 1200`\n\nThis stores a number.\n\n### `review_needed equals false`\n\nThis stores a true-or-false value.\n\n### `decision_label equals \"approved\"`\n\nThis stores text.\n\n## Practice\n\n1. Which line uses a number?\n2. Which line uses text?\n3. Which line uses a true-or-false value?\n4. Change `false` to `true` and run the file again.\n",
+          "examples": [
+            {
+              "filename": "01_values.dvl",
+              "source": "# Lesson 1.1 example: three common value types\n\n# Numbers, booleans, and quoted text can all be saved under names.\ninvoice_amount equals 1200\nreview_needed equals false\ndecision_label equals \"approved\"\n"
+            }
+          ],
+          "fixtures": [],
+          "exercises": [
+            {
+              "id": "01-values-exercise-1",
+              "title": "Practice",
+              "description": "1. Which line uses a number?\n2. Which line uses text?\n3. Which line uses a true-or-false value?\n4. Change `false` to `true` and run the file again.",
+              "starterCode": "# Lesson 1.1 example: three common value types\n\n# Numbers, booleans, and quoted text can all be saved under names.\ninvoice_amount equals 1200\nreview_needed equals false\ndecision_label equals \"approved\"\n",
+              "expected": {
+                "outputs": [],
+                "variables": {}
+              },
+              "hints": [
+                "Which line uses a number?",
+                "Which line uses text?",
+                "Which line uses a true-or-false value?",
+                "Change `false` to `true` and run the file again."
+              ]
+            }
+          ],
+          "dvtScenarios": []
+        },
+        {
+          "id": "02-names-and-memory",
+          "title": "Lesson 1.2: Names And Memory",
+          "markdown": "# Lesson 1.2: Names And Memory\n\nLast updated: 2026-03-23\nStatus: Current lesson.\n\n## Purpose\n\nTeach that a program can remember a value by giving it a name.\n\n## Learning Goals\n\n- explain what a named value is\n- describe why a program stores information for later use\n\n## Vocabulary\n\n- name\n- variable\n- remember\n- reuse\n\n## First Example\n\n```text\ninvoice_amount equals 1200\nreview_limit equals 1000\nmanual_review equals false\nmanual_review equals true if invoice_amount >= review_limit\n```\n\nOpen the example file here:\n- [02_names_and_memory.dvl](/Users/admin/code/devlish/docs/course/01-values-and-names/examples/02_names_and_memory.dvl#L1)\n\n## Big Idea\n\nA name lets the program remember a value so it can use it later.\n\nThat is why names matter. They turn stored information into something the\nprogram can refer to again.\n\n## Run It\n\n```bash\n./bin/devlish run docs/course/01-values-and-names/examples/02_names_and_memory.dvl --debug\n```\n\n## What Happens\n\nThe program remembers:\n- the invoice amount\n- the review limit\n- the current answer for `manual_review`\n\nThen it uses two earlier names to decide whether to change the answer.\n\n## Practice\n\n1. If `invoice_amount` were `900`, what would `manual_review` become?\n2. If `review_limit` were `2000`, what would happen?\n3. Change one value and rerun the file.\n",
+          "examples": [
+            {
+              "filename": "02_names_and_memory.dvl",
+              "source": "# Lesson 1.2 example: store values under names and reuse them\n\n# These names make the threshold decision easier to read.\ninvoice_amount equals 1200\nreview_limit equals 1000\nmanual_review equals false\n\n# Conditional assignment changes the saved value only when the condition is true.\nmanual_review equals true if invoice_amount >= review_limit\n"
+            }
+          ],
+          "fixtures": [],
+          "exercises": [
+            {
+              "id": "02-names-and-memory-exercise-1",
+              "title": "Practice",
+              "description": "1. If `invoice_amount` were `900`, what would `manual_review` become?\n2. If `review_limit` were `2000`, what would happen?\n3. Change one value and rerun the file.",
+              "starterCode": "# Lesson 1.2 example: store values under names and reuse them\n\n# These names make the threshold decision easier to read.\ninvoice_amount equals 1200\nreview_limit equals 1000\nmanual_review equals false\n\n# Conditional assignment changes the saved value only when the condition is true.\nmanual_review equals true if invoice_amount >= review_limit\n",
+              "expected": {
+                "outputs": [],
+                "variables": {}
+              },
+              "hints": [
+                "If `invoice_amount` were `900`, what would `manual_review` become?",
+                "If `review_limit` were `2000`, what would happen?",
+                "Change one value and rerun the file."
+              ]
+            }
+          ],
+          "dvtScenarios": []
+        },
+        {
+          "id": "03-extracting-and-saving-values",
+          "title": "Lesson 1.3: Extracting And Saving Values",
+          "markdown": "# Lesson 1.3: Extracting And Saving Values\n\nLast updated: 2026-03-23\nStatus: Current lesson.\n\n## Purpose\n\nShow how a Devlish program can find information in input and save it for later\nsteps.\n\n## Learning Goals\n\n- extract a value from a document\n- save it under a name\n- use the saved value later in the same program\n\n## Vocabulary\n\n- extract\n- save\n- name\n- context\n\n## First Example\n\n```text\nLoad docs/course/01-values-and-names/examples/03_review_packet.txt as Document\n\nFind invoice amount and save as invoice_amount\nFind review status and save as review_status\n```\n\nOpen the files here:\n- [03_extract_and_save.dvl](/Users/admin/code/devlish/docs/course/01-values-and-names/examples/03_extract_and_save.dvl#L1)\n- [03_review_packet.txt](/Users/admin/code/devlish/docs/course/01-values-and-names/examples/03_review_packet.txt#L1)\n\n## Big Idea\n\nSometimes the information you need is already inside the input.\n\nExtraction lets the program pull that information out and store it under a\nclear name.\n\n## Run It\n\n```bash\n./bin/devlish run docs/course/01-values-and-names/examples/03_extract_and_save.dvl --debug\n```\n\n## Practice\n\n1. Change the invoice amount in the text file.\n2. Run the file again.\n3. Describe how the extracted value changed.\n",
+          "examples": [
+            {
+              "filename": "03_extract_and_save.dvl",
+              "source": "# Lesson 1.3 example: extract values from input\n\n# Start by loading the packet that contains the values.\nLoad docs/course/01-values-and-names/examples/03_review_packet.txt as Document\n\n# Explicit save names make later code predictable.\nFind invoice amount and save as invoice_amount\nFind review status and save as review_status\n"
+            }
+          ],
+          "fixtures": [
+            {
+              "filename": "03_review_packet.txt",
+              "content": "Review Packet\n\ninvoice amount: 12500\nreview status: pending\n"
+            }
+          ],
+          "exercises": [
+            {
+              "id": "03-extracting-and-saving-values-exercise-1",
+              "title": "Practice",
+              "description": "1. Change the invoice amount in the text file.\n2. Run the file again.\n3. Describe how the extracted value changed.",
+              "starterCode": "# Lesson 1.3 example: extract values from input\n\n# Start by loading the packet that contains the values.\nLoad docs/course/01-values-and-names/examples/03_review_packet.txt as Document\n\n# Explicit save names make later code predictable.\nFind invoice amount and save as invoice_amount\nFind review status and save as review_status\n",
+              "expected": {
+                "outputs": [],
+                "variables": {}
+              },
+              "hints": [
+                "Change the invoice amount in the text file.",
+                "Run the file again.",
+                "Describe how the extracted value changed."
+              ]
+            }
+          ],
+          "dvtScenarios": []
+        },
+        {
+          "id": "04-binding-and-renaming",
+          "title": "Lesson 1.4: Binding And Renaming",
+          "markdown": "# Lesson 1.4: Binding And Renaming\n\nLast updated: 2026-03-23\nStatus: Current lesson.\n\n## Purpose\n\nTeach that a program can give an existing value a clearer name.\n\n## Learning Goals\n\n- explain why readable names matter\n- bind one name to another value for clarity\n\n## Vocabulary\n\n- bind\n- alias\n- rename\n- readability\n\n## First Example\n\n```text\nLoad docs/course/01-values-and-names/examples/03_review_packet.txt as Document\nAlias Document as Packet\n```\n\nOpen the example file here:\n- [04_binding_aliases.dvl](/Users/admin/code/devlish/docs/course/01-values-and-names/examples/04_binding_aliases.dvl#L1)\n\n## Big Idea\n\nSometimes the original name works, but another name makes the next few lines\neasier to read.\n\nAn alias gives the same value another readable name.\n\n## Run It\n\n```bash\n./bin/devlish run docs/course/01-values-and-names/examples/04_binding_aliases.dvl --debug\n```\n\n## Practice\n\n1. Change `Packet` to `WorkingPacket`.\n2. Run the file again.\n3. Check the debug results to confirm the new alias name.\n",
+          "examples": [
+            {
+              "filename": "04_binding_aliases.dvl",
+              "source": "# Lesson 1.4 example: give a value another readable name\n\n# Load the packet with the standard Document name.\nLoad docs/course/01-values-and-names/examples/03_review_packet.txt as Document\n\n# Alias lets later code use a domain-specific name for the same value.\nAlias Document as Packet\n"
+            }
+          ],
+          "fixtures": [],
+          "exercises": [
+            {
+              "id": "04-binding-and-renaming-exercise-1",
+              "title": "Practice",
+              "description": "1. Change `Packet` to `WorkingPacket`.\n2. Run the file again.\n3. Check the debug results to confirm the new alias name.",
+              "starterCode": "# Lesson 1.4 example: give a value another readable name\n\n# Load the packet with the standard Document name.\nLoad docs/course/01-values-and-names/examples/03_review_packet.txt as Document\n\n# Alias lets later code use a domain-specific name for the same value.\nAlias Document as Packet\n",
+              "expected": {
+                "outputs": [],
+                "variables": {}
+              },
+              "hints": [
+                "Change `Packet` to `WorkingPacket`.",
+                "Run the file again.",
+                "Check the debug results to confirm the new alias name."
+              ]
+            }
+          ],
+          "dvtScenarios": []
+        },
+        {
+          "id": "05-working-with-text-and-numbers",
+          "title": "Lesson 1.5: Working With Text And Numbers",
+          "markdown": "# Lesson 1.5: Working With Text And Numbers\n\nLast updated: 2026-03-25\nStatus: Current lesson.\n\n## Purpose\n\nTeach beginners that a program can clean up text and adjust numbers before\nusing them.\n\n## Learning Goals\n\n- turn text into uppercase and lowercase\n- replace one piece of text with another\n- use `absolute value of` for negative numbers\n- use `round` to simplify a number\n\n## Vocabulary\n\n- uppercase\n- lowercase\n- replace\n- absolute value\n- round\n\n## Example Program\n\nFile:\n- [05_text_and_number_helpers.dvl](/Users/admin/code/devlish/docs/course/01-values-and-names/examples/05_text_and_number_helpers.dvl#L1)\n\n```text\nstatus_text equals \" Pending Review \"\nloud_status equals uppercase trim status_text\nquiet_status equals lowercase loud_status\ncleaned_status equals replace \" \" in quiet_status with \"_\"\ndistance equals absolute value of -4.8\nrounded_distance equals round distance\nPrint loud_status\nPrint cleaned_status\nPrint rounded_distance\n```\n\n## How To Run It\n\n```bash\n./bin/devlish run docs/course/01-values-and-names/examples/05_text_and_number_helpers.dvl\n```\n\n## What Each Line Means\n\n`status_text equals \" Pending Review \"`\nStores text with extra spaces around it.\n\n`loud_status equals uppercase trim status_text`\nFirst removes the extra spaces, then changes the text to all capital letters.\n\n`quiet_status equals lowercase loud_status`\nChanges that capital text into all lowercase letters.\n\n`cleaned_status equals replace \" \" in quiet_status with \"_\"`\nReplaces spaces with underscores so the text is easier to use as a label.\n\n`distance equals absolute value of -4.8`\nTurns a negative number into its positive size.\n\n`rounded_distance equals round distance`\nRounds the number to the nearest whole number.\n\n`Print loud_status`\nShows the uppercase version of the text.\n\n`Print cleaned_status`\nShows the cleaned label with underscores.\n\n`Print rounded_distance`\nShows the rounded number.\n\n## Expected Result\n\nThe program prints:\n\n```text\nPENDING REVIEW\npending_review\n5\n```\n\n## Why This Matters\n\nReal programs often need to tidy up messy input before they can use it.\n\nThis lesson shows two very common programming ideas:\n- clean up text\n- reshape a number into the form you need\n\n## Try This\n\n1. Change `Pending Review` to `Needs Approval`.\n2. Replace spaces with `-` instead of `_`.\n3. Change `-4.8` to `-12.2` and rerun the file.\n\n## Check Yourself\n\n1. What is the difference between `uppercase` and `lowercase`?\n2. Why might a program use `replace \" \" in text with \"_\"`?\n3. What does `absolute value of -4.8` return?\n\n## Related Lessons\n\n- [01-values.md](/Users/admin/code/devlish/docs/course/01-values-and-names/01-values.md#L1)\n- [02-names-and-memory.md](/Users/admin/code/devlish/docs/course/01-values-and-names/02-names-and-memory.md#L1)\n",
+          "examples": [
+            {
+              "filename": "05_text_and_number_helpers.dvl",
+              "source": "# Lesson 1.5 example: use built-in helpers for text and numbers\n\n# Keep the original text messy so the helper output is visible.\nstatus_text equals \" Pending Review \"\n\n# Helper calls can be nested: trim runs before uppercase here.\nloud_status equals uppercase trim status_text\nquiet_status equals lowercase loud_status\ncleaned_status equals replace \" \" in quiet_status with \"_\"\n\n# Number helpers normalize a negative decimal into a rounded positive value.\ndistance equals absolute value of -4.8\nrounded_distance equals round distance\n\n# Print emits values so a beginner can see what each helper produced.\nPrint loud_status\nPrint cleaned_status\nPrint rounded_distance\n"
+            }
+          ],
+          "fixtures": [],
+          "exercises": [],
+          "dvtScenarios": []
+        }
+      ]
+    },
+    {
+      "id": "02-decisions-and-logic",
+      "title": "Unit 2: Decisions And Logic",
+      "description": "This unit introduces: - comparisons - true and false - `If` - `Otherwise` - choosing between paths",
+      "lessons": [
+        {
+          "id": "01-comparisons",
+          "title": "Lesson 2.1: Comparisons",
+          "markdown": "# Lesson 2.1: Comparisons\n\nLast updated: 2026-03-23\nStatus: Current lesson.\n\n## Purpose\n\nIntroduce the questions a program can ask about values.\n\n## Learning Goals\n\n- compare whether two values are equal\n- compare whether one number is greater than another\n- understand that comparisons produce true or false\n\n## Vocabulary\n\n- compare\n- equal\n- greater than\n- less than\n- boolean\n\n## First Example\n\n```text\ninvoice_amount equals 1200\nreview_limit equals 1000\nneeds_review equals false\nneeds_review equals true if invoice_amount >= review_limit\n```\n\nOpen the example file here:\n- [01_comparisons.dvl](/Users/admin/code/devlish/docs/course/02-decisions-and-logic/examples/01_comparisons.dvl#L1)\n\n## Big Idea\n\nA comparison asks a question about two values.\n\nIn this lesson, the question is:\n\n\"Is `invoice_amount` greater than or equal to `review_limit`?\"\n\n## Run It\n\n```bash\n./bin/devlish run docs/course/02-decisions-and-logic/examples/01_comparisons.dvl --debug\n```\n\n## Why This Matters\n\nPrograms make decisions by comparing values.\n\nThe result of the comparison is usually:\n- true\n- false\n\n## Practice\n\n1. Change `invoice_amount` to `800`.\n2. Predict the value of `needs_review`.\n3. Run the file and check whether you were right.\n",
+          "examples": [
+            {
+              "filename": "01_comparisons.dvl",
+              "source": "# Lesson 2.1 example: use a comparison to update a value\n\n# Set up the facts that the comparison will use.\ninvoice_amount equals 1200\nreview_limit equals 1000\nneeds_review equals false\n\n# The comparison is true, so this line changes needs_review to true.\nneeds_review equals true if invoice_amount >= review_limit\n"
+            }
+          ],
+          "fixtures": [],
+          "exercises": [
+            {
+              "id": "01-comparisons-exercise-1",
+              "title": "Practice",
+              "description": "1. Change `invoice_amount` to `800`.\n2. Predict the value of `needs_review`.\n3. Run the file and check whether you were right.",
+              "starterCode": "# Lesson 2.1 example: use a comparison to update a value\n\n# Set up the facts that the comparison will use.\ninvoice_amount equals 1200\nreview_limit equals 1000\nneeds_review equals false\n\n# The comparison is true, so this line changes needs_review to true.\nneeds_review equals true if invoice_amount >= review_limit\n",
+              "expected": {
+                "outputs": [],
+                "variables": {}
+              },
+              "hints": [
+                "Change `invoice_amount` to `800`.",
+                "Predict the value of `needs_review`.",
+                "Run the file and check whether you were right."
+              ]
+            }
+          ],
+          "dvtScenarios": []
+        },
+        {
+          "id": "02-if-and-otherwise",
+          "title": "Lesson 2.2: If And Otherwise",
+          "markdown": "# Lesson 2.2: If And Otherwise\n\nLast updated: 2026-03-23\nStatus: Current lesson.\n\n## Purpose\n\nTeach how a program chooses one path or another.\n\n## Learning Goals\n\n- read an `If` block\n- explain when the `Otherwise` block runs\n- predict the outcome of a small branching program\n\n## Vocabulary\n\n- condition\n- branch\n- if\n- otherwise\n\n## First Example\n\n```text\ninvoice_amount equals 1200\ndecision equals \"approved\"\n\nIf invoice_amount >= 1000\n  decision equals \"needs review\"\nOtherwise\n  decision equals \"approved\"\n```\n\nOpen the example file here:\n- [02_if_and_otherwise.dvl](/Users/admin/code/devlish/docs/course/02-decisions-and-logic/examples/02_if_and_otherwise.dvl#L1)\n\n## Big Idea\n\nAn `If` block means:\n\n\"Only do these lines when the condition is true.\"\n\nAn `Otherwise` block means:\n\n\"Do these lines when the condition was not true.\"\n\n## Run It\n\n```bash\n./bin/devlish run docs/course/02-decisions-and-logic/examples/02_if_and_otherwise.dvl --debug\n```\n\n## Line By Line\n\n### `decision equals \"approved\"`\n\nStart with a default answer.\n\n### `If invoice_amount >= 1000`\n\nAsk a question.\n\n### `decision equals \"needs review\"`\n\nUse this answer when the condition is true.\n\n### `Otherwise`\n\nUse a different path when the condition is false.\n\n## Practice\n\n1. Change `invoice_amount` to `900`.\n2. Predict the new decision.\n3. Run the file and compare the result to your prediction.\n",
+          "examples": [
+            {
+              "filename": "02_if_and_otherwise.dvl",
+              "source": "# Lesson 2.2 example: choose one branch or another\n\n# Start with a default decision that the branch can replace.\ninvoice_amount equals 1200\ndecision equals \"approved\"\n\n# Only one branch runs: the If body when true, the Otherwise body when false.\nIf invoice_amount >= 1000\n  decision equals \"needs review\"\nOtherwise\n  decision equals \"approved\"\n"
+            }
+          ],
+          "fixtures": [],
+          "exercises": [
+            {
+              "id": "02-if-and-otherwise-exercise-1",
+              "title": "Practice",
+              "description": "1. Change `invoice_amount` to `900`.\n2. Predict the new decision.\n3. Run the file and compare the result to your prediction.",
+              "starterCode": "# Lesson 2.2 example: choose one branch or another\n\n# Start with a default decision that the branch can replace.\ninvoice_amount equals 1200\ndecision equals \"approved\"\n\n# Only one branch runs: the If body when true, the Otherwise body when false.\nIf invoice_amount >= 1000\n  decision equals \"needs review\"\nOtherwise\n  decision equals \"approved\"\n",
+              "expected": {
+                "outputs": [],
+                "variables": {}
+              },
+              "hints": [
+                "Change `invoice_amount` to `900`.",
+                "Predict the new decision.",
+                "Run the file and compare the result to your prediction."
+              ]
+            }
+          ],
+          "dvtScenarios": []
+        },
+        {
+          "id": "03-routing-decisions",
+          "title": "Lesson 2.3: Routing Decisions",
+          "markdown": "# Lesson 2.3: Routing Decisions\n\nLast updated: 2026-03-23\nStatus: Current lesson.\n\n## Purpose\n\nShow that decisions in code can send work to different destinations.\n\n## Learning Goals\n\n- connect a condition to an outcome\n- route one item to different destinations based on a comparison\n\n## Vocabulary\n\n- route\n- destination\n- decision\n- outcome\n\n## First Example\n\n```text\nLoad docs/course/02-decisions-and-logic/examples/03_review_route_packet.txt as Document\n\nFind review status and save as review_status\n\nIf review_status is \"approved\"\n  Route invoice to approved_queue\nOtherwise\n  Route invoice to manual_review_queue\n```\n\nOpen the files here:\n- [03_routing_decisions.dvl](/Users/admin/code/devlish/docs/course/02-decisions-and-logic/examples/03_routing_decisions.dvl#L1)\n- [03_review_route_packet.txt](/Users/admin/code/devlish/docs/course/02-decisions-and-logic/examples/03_review_route_packet.txt#L1)\n\n## Big Idea\n\nA route is one kind of program output.\n\nAfter the program makes a decision, it can send the work somewhere specific.\n\n## Run It\n\n```bash\n./bin/devlish run docs/course/02-decisions-and-logic/examples/03_routing_decisions.dvl --debug\n```\n\n## What Happens\n\nThe program:\n1. loads the packet\n2. finds the review status\n3. checks whether it is approved\n4. chooses a route\n\n## Practice\n\n1. Change the review status in the text file from `approved` to `pending`.\n2. Run the file again.\n3. Explain why the route changed.\n",
+          "examples": [
+            {
+              "filename": "03_routing_decisions.dvl",
+              "source": "# Lesson 2.3 example: route work after a decision\n\n# Load real text input, then extract the one value that controls routing.\nLoad docs/course/02-decisions-and-logic/examples/03_review_route_packet.txt as Document\n\nFind review status and save as review_status\n\n# Approved work goes straight through; all other statuses go to manual review.\nIf review_status is \"approved\"\n  Route invoice to approved_queue\nOtherwise\n  Route invoice to manual_review_queue\n"
+            }
+          ],
+          "fixtures": [
+            {
+              "filename": "03_review_route_packet.txt",
+              "content": "Review Packet\n\nreview status: approved\ninvoice id: INV-200\n"
+            }
+          ],
+          "exercises": [
+            {
+              "id": "03-routing-decisions-exercise-1",
+              "title": "Practice",
+              "description": "1. Change the review status in the text file from `approved` to `pending`.\n2. Run the file again.\n3. Explain why the route changed.",
+              "starterCode": "# Lesson 2.3 example: route work after a decision\n\n# Load real text input, then extract the one value that controls routing.\nLoad docs/course/02-decisions-and-logic/examples/03_review_route_packet.txt as Document\n\nFind review status and save as review_status\n\n# Approved work goes straight through; all other statuses go to manual review.\nIf review_status is \"approved\"\n  Route invoice to approved_queue\nOtherwise\n  Route invoice to manual_review_queue\n",
+              "expected": {
+                "outputs": [],
+                "variables": {}
+              },
+              "hints": [
+                "Change the review status in the text file from `approved` to `pending`.",
+                "Run the file again.",
+                "Explain why the route changed."
+              ]
+            }
+          ],
+          "dvtScenarios": []
+        }
+      ]
+    },
+    {
+      "id": "03-repetition-and-collections",
+      "title": "Unit 3: Repetition And Collections",
+      "description": "This unit introduces: - the idea of loops - the idea of collections - doing the same work for more than one item - transforming collections into cleaner or smaller results - counting and accumulating over many items",
+      "lessons": [
+        {
+          "id": "01-what-repetition-means",
+          "title": "Lesson 3.1: What Repetition Means",
+          "markdown": "# Lesson 3.1: What Repetition Means\n\nLast updated: 2026-03-23\nStatus: Current lesson.\n\n## Purpose\n\nTeach the idea of doing the same kind of work more than once.\n\n## Learning Goals\n\n- explain repetition in plain language\n- recognize when a task should repeat\n\n## Vocabulary\n\n- repeat\n- loop\n- each\n- item\n\n## Big Idea\n\nRepetition means doing the same kind of work for more than one item.\n\nIn everyday life:\n- check every line on an invoice\n- review every applicant in a list\n- send a reminder to every customer with a missing document\n\nProgramming languages need a way to describe that repeated work clearly.\n\n## Everyday Example\n\nImagine you are checking three forms.\n\nWithout repetition, you might describe the work like this:\n\n1. Check form 1.\n2. Check form 2.\n3. Check form 3.\n\nThat works for three forms, but it does not scale well.\n\nThe better idea is:\n\n\"For each form, do the same check.\"\n\nThat is the mental model behind loops.\n\n## Why Beginners Need This\n\nRepetition is one of the central ideas of programming.\n\nWithout it, programs stay stuck at:\n- one input\n- one decision\n- one result\n\nWith repetition, programs can work across a whole set of items.\n\n## Practice\n\n1. Name one real-world task that repeats over many items.\n2. Describe the repeated step in one sentence.\n3. Explain why repeating the idea is better than writing the same step ten times.\n\n## First Runnable Devlish Example\n\nDevlish can now express a simple loop directly:\n\n```text\nFor each status in approved and pending and rejected:\n  Print status\n```\n\nOpen the example file here:\n- [01_for_each_statuses.dvl](/Users/admin/code/devlish/docs/course/03-repetition-and-collections/examples/01_for_each_statuses.dvl#L1)\n\nRun it with:\n\n```bash\n./bin/devlish run docs/course/03-repetition-and-collections/examples/01_for_each_statuses.dvl\n```\n",
+          "examples": [
+            {
+              "filename": "01_for_each_statuses.dvl",
+              "source": "# Lesson 3.1 example: repeat the same step for each item\n\n# Devlish treats the words after \"in\" as the collection to visit.\nFor each status in approved and pending and rejected:\n  # The loop gives each value the temporary name status.\n  Print status\n"
+            }
+          ],
+          "fixtures": [],
+          "exercises": [
+            {
+              "id": "01-what-repetition-means-exercise-1",
+              "title": "Practice",
+              "description": "1. Name one real-world task that repeats over many items.\n2. Describe the repeated step in one sentence.\n3. Explain why repeating the idea is better than writing the same step ten times.",
+              "starterCode": "# Lesson 3.1 example: repeat the same step for each item\n\n# Devlish treats the words after \"in\" as the collection to visit.\nFor each status in approved and pending and rejected:\n  # The loop gives each value the temporary name status.\n  Print status\n",
+              "expected": {
+                "outputs": [],
+                "variables": {}
+              },
+              "hints": [
+                "Name one real-world task that repeats over many items.",
+                "Describe the repeated step in one sentence.",
+                "Explain why repeating the idea is better than writing the same step ten times."
+              ]
+            }
+          ],
+          "dvtScenarios": []
+        },
+        {
+          "id": "02-collections",
+          "title": "Lesson 3.2: Collections",
+          "markdown": "# Lesson 3.2: Collections\n\nLast updated: 2026-03-24\nStatus: Current lesson.\n\n## Purpose\n\nIntroduce the idea that programs often work with many items, not just one.\n\n## Learning Goals\n\n- explain what a collection is\n- write a simple Devlish list\n- use a few first collection helpers\n\n## Vocabulary\n\n- collection\n- list\n- item\n- group\n\n## Big Idea\n\nA collection is a group of values.\n\nExamples:\n- a list of invoice amounts\n- a list of employees\n- a list of missing documents\n\nCollections matter because many useful programs do not act on one thing. They\nact on many things.\n\n## Example\n\n```text\nstatuses equals list of \" approved \", \"pending\", and \"rejected\"\n\nPrint count of statuses\nPrint first of statuses\nPrint trim first of statuses\nPrint join statuses with \", \"\nPrint split \"A|B|C\" by \"|\"\n```\n\nYou can run this lesson file at:\n\n`docs/course/03-repetition-and-collections/examples/02_named_list_and_helpers.dvl`\n\n## Line By Line\n\n`statuses equals list of \" approved \", \"pending\", and \"rejected\"`\n\nThis creates one list named `statuses`.\nThe list has three items.\n\n`Print count of statuses`\n\nThis asks how many items are in the list.\nThe result is `3`.\n\n`Print first of statuses`\n\nThis asks for the first item in the list.\n\n`Print trim first of statuses`\n\nThis gets the first item, then removes extra spaces from the beginning and end.\n\n`Print join statuses with \", \"`\n\nThis turns the whole list into one string with commas between the items.\n\n`Print split \"A|B|C\" by \"|\"`\n\nThis does the opposite kind of work.\nIt starts with one string and turns it into a list.\n\n## Why This Matters\n\nIf you had three invoice amounts:\n\n```text\n1200\n3000\n450\n```\n\nYou could think of them as one collection instead of three unrelated values.\n\nThen the program could ask:\n\n\"For each invoice amount, should this go to manual review?\"\n\nThat combines two important ideas:\n- collections\n- repetition\n\n## Practice\n\n1. Name three values that naturally belong in one collection.\n2. Describe one repeated operation you would perform on each item.\n3. Change the list items and run the example again.\n4. Change the text used in the `split` example and predict the output first.\n\n## Next Step\n\nOnce plain lists feel comfortable, move to:\n\n`docs/course/03-repetition-and-collections/examples/03_records_and_collection_logic.dvl`\n\nThat lesson example introduces:\n- records with named fields\n- filtering a list\n- sorting a list by a field\n- asking whether any or all items match a rule\n\nAfter that, move to:\n\n`docs/course/03-repetition-and-collections/examples/04_transforming_collections.dvl`\n\nThat lesson example introduces:\n- `map`\n- `reject`\n- `reduce`\n- turning a list into one final answer\n",
+          "examples": [
+            {
+              "filename": "02_named_list_and_helpers.dvl",
+              "source": "# Lesson 3.2 example: name a list and ask helper questions about it\n\n# A list keeps several values together under one name.\nstatuses equals list of \" approved \", \"pending\", and \"rejected\"\n\n# These helpers read from the list without changing it.\nPrint count of statuses\nPrint first of statuses\nPrint trim first of statuses\n\n# Join turns a list into text; split turns text back into a list.\nPrint join statuses with \", \"\nPrint split \"A|B|C\" by \"|\"\n"
+            }
+          ],
+          "fixtures": [],
+          "exercises": [
+            {
+              "id": "02-collections-exercise-1",
+              "title": "Practice",
+              "description": "1. Name three values that naturally belong in one collection.\n2. Describe one repeated operation you would perform on each item.\n3. Change the list items and run the example again.\n4. Change the text used in the `split` example and predict the output first.",
+              "starterCode": "# Lesson 3.2 example: name a list and ask helper questions about it\n\n# A list keeps several values together under one name.\nstatuses equals list of \" approved \", \"pending\", and \"rejected\"\n\n# These helpers read from the list without changing it.\nPrint count of statuses\nPrint first of statuses\nPrint trim first of statuses\n\n# Join turns a list into text; split turns text back into a list.\nPrint join statuses with \", \"\nPrint split \"A|B|C\" by \"|\"\n",
+              "expected": {
+                "outputs": [],
+                "variables": {}
+              },
+              "hints": [
+                "Name three values that naturally belong in one collection.",
+                "Describe one repeated operation you would perform on each item.",
+                "Change the list items and run the example again.",
+                "Change the text used in the `split` example and predict the output first."
+              ]
+            }
+          ],
+          "dvtScenarios": []
+        },
+        {
+          "id": "03-transforming-collections",
+          "title": "Lesson 3.3: Transforming Collections",
+          "markdown": "# Lesson 3.3: Transforming Collections\n\nLast updated: 2026-03-24\nStatus: Current lesson.\n\n## Purpose\n\nTeach how to change a collection, remove unwanted items, and combine many items\ninto one result.\n\n## Learning Goals\n\n- explain what it means to transform a collection\n- use `map` to change every item\n- use `reject` to remove items you do not want\n- use `reduce` to build one final answer from many items\n\n## Vocabulary\n\n- transform\n- map\n- reject\n- reduce\n- accumulator\n\n## Big Idea\n\nCollections are useful because they let one program work on many values.\n\nBut programs do more than loop through a list.\nThey often need to:\n- clean every item\n- keep only some items\n- count or total the final result\n\nDevlish now supports all three of these ideas directly.\n\n## Example\n\n```text\nstatuses equals list of \" approved \", \"pending\", and \"rejected\"\ncleaned_statuses equals map statuses to trim item\nkept_statuses equals reject cleaned_statuses where item is \"pending\"\nstatus_count equals reduce kept_statuses starting at 0 with total and item to total plus 1\n\nPrint first of cleaned_statuses\nPrint status_count\n```\n\nYou can run this lesson file at:\n\n`docs/course/03-repetition-and-collections/examples/04_transforming_collections.dvl`\n\n## Line By Line\n\n`statuses equals list of \" approved \", \"pending\", and \"rejected\"`\n\nThis creates a starting list.\n\n`cleaned_statuses equals map statuses to trim item`\n\n`map` goes through the list one item at a time.\nFor each item, it runs the expression after `to`.\nHere, it trims extra spaces from each status.\n\n`kept_statuses equals reject cleaned_statuses where item is \"pending\"`\n\n`reject` removes items that match the rule after `where`.\nHere, the program throws away `\"pending\"`.\n\n`status_count equals reduce kept_statuses starting at 0 with total and item to total plus 1`\n\n`reduce` combines many items into one final value.\nIt starts with `0`.\nThen for each item, it calculates the next `total`.\nBecause the expression says `total plus 1`, this program counts the kept items.\n\n`Print first of cleaned_statuses`\n\nThis shows the first cleaned value.\n\n`Print status_count`\n\nThis shows the final count.\n\n## Why This Matters\n\nMany useful programs follow this pattern:\n\n1. start with a list\n2. clean it\n3. remove items you do not want\n4. compute one final answer\n\nThat is a real programming pattern, not just a Devlish pattern.\n\n## Practice\n\n1. Change the item rejected by the program.\n2. Replace `trim item` with another expression that changes each item.\n3. Predict the final count before you run the file.\n4. Change the starting list so only one item remains after `reject`.\n\n## Related Reference\n\n- [DEVLISH_LANGUAGE_GAPS.md](/Users/admin/code/devlish/docs/DEVLISH_LANGUAGE_GAPS.md#L1)\n",
+          "examples": [
+            {
+              "filename": "03_records_and_collection_logic.dvl",
+              "source": "# Lesson 3.3 example: records, field access, and collection tests\n\n# Records keep named fields together.\ninvoice_one equals record with 1200 as amount and \"pending\" as status\ninvoice_two equals record with 300 as amount and \"approved\" as status\n\n# Lists can contain records, not only plain text or numbers.\ninvoices equals list of invoice_one and invoice_two\n\n# Current runtime helpers can sort and inspect the list.\nsorted_invoices equals sort invoices\nfirst_invoice equals first of sorted_invoices\nlast_invoice equals last of sorted_invoices\n\n# Field access can be combined with first of and last of.\nfirst_amount equals amount of first_invoice\nlast_status equals status of last_invoice\n\nPrint first_amount\nPrint last_status\n"
+            }
+          ],
+          "fixtures": [],
+          "exercises": [
+            {
+              "id": "03-transforming-collections-exercise-1",
+              "title": "Practice",
+              "description": "1. Change the item rejected by the program.\n2. Replace `trim item` with another expression that changes each item.\n3. Predict the final count before you run the file.\n4. Change the starting list so only one item remains after `reject`.",
+              "starterCode": "# Lesson 3.3 example: records, field access, and collection tests\n\n# Records keep named fields together.\ninvoice_one equals record with 1200 as amount and \"pending\" as status\ninvoice_two equals record with 300 as amount and \"approved\" as status\n\n# Lists can contain records, not only plain text or numbers.\ninvoices equals list of invoice_one and invoice_two\n\n# Current runtime helpers can sort and inspect the list.\nsorted_invoices equals sort invoices\nfirst_invoice equals first of sorted_invoices\nlast_invoice equals last of sorted_invoices\n\n# Field access can be combined with first of and last of.\nfirst_amount equals amount of first_invoice\nlast_status equals status of last_invoice\n\nPrint first_amount\nPrint last_status\n",
+              "expected": {
+                "outputs": [],
+                "variables": {}
+              },
+              "hints": [
+                "Change the item rejected by the program.",
+                "Replace `trim item` with another expression that changes each item.",
+                "Predict the final count before you run the file.",
+                "Change the starting list so only one item remains after `reject`."
+              ]
+            }
+          ],
+          "dvtScenarios": []
+        },
+        {
+          "id": "04-record-keys-values-and-entries",
+          "title": "Lesson 3.4: Record Keys, Values, And Entries",
+          "markdown": "# Lesson 3.4: Record Keys, Values, And Entries\n\nLast updated: 2026-03-25\nStatus: Current lesson.\n\n## Purpose\n\nTeach how to inspect a record the way beginner Python courses teach dictionary\nkeys, values, and items.\n\n## Learning Goals\n\n- explain the difference between a key and a value\n- use `keys of`, `values of`, and `entries of`\n- loop through record entries\n- read a nested value from a record inside another record\n\n## Vocabulary\n\n- record\n- key\n- value\n- entry\n- nested data\n\n## Big Idea\n\nA record groups related values under names.\n\nThat means a program can ask:\n- what fields does this record have?\n- what values are stored in it?\n- how can I loop over each field and value?\n\nDevlish now supports those ideas directly.\n\n## Example\n\n```text\ninvoice equals record with 1200 as amount and \"pending\" as status\nreview_packet equals record with invoice as invoice and \"Ada\" as reviewer\npacket_keys equals keys of review_packet\npacket_entries equals entries of review_packet\nreview_amount equals amount of invoice of review_packet\n\nPrint packet_keys\nPrint review_amount\n\nFor each entry in packet_entries:\n  Print key of entry\n```\n\nYou can run this lesson file at:\n\n`docs/course/03-repetition-and-collections/examples/05_record_keys_values_entries.dvl`\n\n## Line By Line\n\n`invoice equals record with 1200 as amount and \"pending\" as status`\n\nThis creates one record named `invoice`.\n\n`review_packet equals record with invoice as invoice and \"Ada\" as reviewer`\n\nThis creates one record named `review_packet`.\nInside it, the `invoice` field stores the invoice record.\nThat means the data is nested.\n\n`packet_keys equals keys of review_packet`\n\nThis asks for the names of the fields in the record.\n\n`packet_entries equals entries of review_packet`\n\nThis builds a collection where each item has a `key` and a `value`.\nThat makes it easier to loop through the record.\n\n`review_amount equals amount of invoice of review_packet`\n\nThis reads a nested field.\nThe program first gets `invoice` from `review_packet`.\nThen it gets `amount` from that invoice record.\n\n`Print packet_keys`\n\nThis shows the field names.\n\n`Print review_amount`\n\nThis shows the nested invoice amount.\n\n`For each entry in packet_entries:`\n\nThis loops through the record entries one by one.\n\n`Print key of entry`\n\nThis prints the field name for the current entry.\n\n## Why This Matters\n\nMany real programs use grouped data:\n- an invoice with amount and status\n- a person with name and role\n- a review packet with several related fields\n\nKeys, values, and entries make those records easier to inspect and process.\n\n## Practice\n\n1. Add another field to `review_packet` and predict the new keys first.\n2. Print `values of review_packet`.\n3. Add another nested field inside `invoice`.\n4. Change the loop so it prints `value of entry` instead of `key of entry`.\n\n## Related Reference\n\n- [DEVLISH_LANGUAGE_GAPS.md](/Users/admin/code/devlish/docs/DEVLISH_LANGUAGE_GAPS.md#L1)\n",
+          "examples": [
+            {
+              "filename": "04_transforming_collections.dvl",
+              "source": "# Lesson 3.4 example: transform a collection into new values\n\n# Start with intentionally messy text so map has useful work to do.\nstatuses equals list of \" approved \", \"pending\", and \"rejected\"\n\n# Map changes each item; reject removes items that match the condition.\ncleaned_statuses equals map statuses to trim item\nkept_statuses equals reject cleaned_statuses where item is \"pending\"\n\n# Reduce combines the remaining values into one final count.\nstatus_count equals reduce kept_statuses starting at 0 with total and item to total plus 1\n\nPrint first of cleaned_statuses\nPrint status_count\n"
+            }
+          ],
+          "fixtures": [],
+          "exercises": [
+            {
+              "id": "04-record-keys-values-and-entries-exercise-1",
+              "title": "Practice",
+              "description": "1. Add another field to `review_packet` and predict the new keys first.\n2. Print `values of review_packet`.\n3. Add another nested field inside `invoice`.\n4. Change the loop so it prints `value of entry` instead of `key of entry`.",
+              "starterCode": "# Lesson 3.4 example: transform a collection into new values\n\n# Start with intentionally messy text so map has useful work to do.\nstatuses equals list of \" approved \", \"pending\", and \"rejected\"\n\n# Map changes each item; reject removes items that match the condition.\ncleaned_statuses equals map statuses to trim item\nkept_statuses equals reject cleaned_statuses where item is \"pending\"\n\n# Reduce combines the remaining values into one final count.\nstatus_count equals reduce kept_statuses starting at 0 with total and item to total plus 1\n\nPrint first of cleaned_statuses\nPrint status_count\n",
+              "expected": {
+                "outputs": [],
+                "variables": {}
+              },
+              "hints": [
+                "Add another field to `review_packet` and predict the new keys first.",
+                "Print `values of review_packet`.",
+                "Add another nested field inside `invoice`.",
+                "Change the loop so it prints `value of entry` instead of `key of entry`."
+              ]
+            }
+          ],
+          "dvtScenarios": []
+        },
+        {
+          "id": "05-changing-lists",
+          "title": "Lesson 3.5: Changing Lists",
+          "markdown": "# Lesson 3.5: Changing Lists\n\nLast updated: 2026-03-25\nStatus: Current lesson.\n\n## Purpose\n\nTeach beginners how to look at one item in a list, take part of a list, add a\nnew item, and remove the last item.\n\n## Learning Goals\n\n- read one item from a list with `item`\n- take part of a list with `slice`\n- add a new value with `Append`\n- remove the last value with `Pop`\n- notice how a list changes over time\n\n## Vocabulary\n\n- item\n- slice\n- append\n- pop\n- mutation\n\n## Big Idea\n\nSome programs do not just read data. They change data.\n\nWhen we add something to a list or remove something from a list, we are\nchanging the state of the program.\n\nIn Devlish, list positions are taught in a natural beginner way:\n- `item 1 of statuses` means the first item\n- `item 2 of statuses` means the second item\n- `slice statuses from 2 to 3` means the second and third items\n\n## Example Program\n\nFile:\n- [06_list_access_and_updates.dvl](/Users/admin/code/devlish/docs/course/03-repetition-and-collections/examples/06_list_access_and_updates.dvl#L1)\n\n```text\nstatuses equals list of approved, pending, and rejected\nsecond_status equals item 2 of statuses\nmiddle_statuses equals slice statuses from 2 to 3\nAppend needs_review to statuses\nPop from statuses and save as removed_status\nPrint second_status\nPrint removed_status\n```\n\n## How To Run It\n\n```bash\n./bin/devlish run docs/course/03-repetition-and-collections/examples/06_list_access_and_updates.dvl\n```\n\n## What Each Line Means\n\n`statuses equals list of approved, pending, and rejected`\nCreates a list with three values.\n\n`second_status equals item 2 of statuses`\nReads the second value from the list and saves it as `second_status`.\n\n`middle_statuses equals slice statuses from 2 to 3`\nBuilds a smaller list from the second item through the third item.\n\n`Append needs_review to statuses`\nAdds `needs_review` to the end of the list.\n\n`Pop from statuses and save as removed_status`\nRemoves the last item from the list and saves that removed value.\n\n`Print second_status`\nShows the value we read earlier from the list.\n\n`Print removed_status`\nShows the value that was removed from the list.\n\n## Expected Result\n\nThe program prints:\n\n```text\npending\nneeds_review\n```\n\nAfter the `Pop`, the list returns to:\n\n```text\napproved\npending\nrejected\n```\n\n## Why This Matters\n\nThis is an important programming idea:\n- programs can remember data\n- programs can inspect part of that data\n- programs can change that data\n\nThis is one of the first places where a program starts to feel active rather\nthan only descriptive.\n\n## Try This\n\n1. Change `item 2 of statuses` to `item 1 of statuses`. What prints now?\n2. Change `slice statuses from 2 to 3` to `slice statuses from 1 to 2`.\n3. Append a different final status and see what `removed_status` becomes.\n\n## Check Yourself\n\n1. What does `item 1 of statuses` mean?\n2. Does `slice statuses from 2 to 3` return one item or two items?\n3. What is the difference between `Append` and `Pop`?\n\n## Related Lessons\n\n- [02-collections.md](/Users/admin/code/devlish/docs/course/03-repetition-and-collections/02-collections.md#L1)\n- [03-transforming-collections.md](/Users/admin/code/devlish/docs/course/03-repetition-and-collections/03-transforming-collections.md#L1)\n- [04-record-keys-values-and-entries.md](/Users/admin/code/devlish/docs/course/03-repetition-and-collections/04-record-keys-values-and-entries.md#L1)\n",
+          "examples": [
+            {
+              "filename": "05_record_keys_values_entries.dvl",
+              "source": "# Lesson 3.5 example: inspect record fields and nested records\n\n# The invoice field is itself a record, so this example has nested data.\ninvoice equals record with 1200 as amount and \"pending\" as status\nreview_packet equals record with invoice as invoice and \"Ada\" as reviewer\n\n# Keys, values, and entries expose a record in three different shapes.\npacket_keys equals keys of review_packet\npacket_values equals values of review_packet\npacket_entries equals entries of review_packet\n\n# Read through nested records from right to left: invoice of review_packet, then amount of invoice.\nreview_amount equals amount of invoice of review_packet\n\nPrint packet_keys\nPrint review_amount\n\n# Entries are records with key and value fields.\nFor each entry in packet_entries:\n  Print key of entry\n"
+            }
+          ],
+          "fixtures": [],
+          "exercises": [],
+          "dvtScenarios": []
+        },
+        {
+          "id": "06-controlling-loops",
+          "title": "Lesson 3.6: Controlling Loops",
+          "markdown": "# Lesson 3.6: Controlling Loops\n\nLast updated: 2026-03-25\nStatus: Current lesson.\n\n## Purpose\n\nTeach beginners how a loop can skip one item or stop early.\n\n## Learning Goals\n\n- use `Continue` to skip the rest of one loop pass\n- use `Break` to stop a loop completely\n- explain why some items are processed and others are not\n\n## Vocabulary\n\n- loop\n- continue\n- break\n- skip\n- stop\n\n## Example Program\n\nFile:\n- [07_loop_control.dvl](/Users/admin/code/devlish/docs/course/03-repetition-and-collections/examples/07_loop_control.dvl#L1)\n\n```text\nstatuses equals list of approved, pending, rejected, and archived\n\nFor each status in statuses:\n  If status is \"pending\"\n    Continue\n  If status is \"rejected\"\n    Break\n  Print status\n```\n\n## How To Run It\n\n```bash\n./bin/devlish run docs/course/03-repetition-and-collections/examples/07_loop_control.dvl\n```\n\n## What Each Line Means\n\n`statuses equals list of approved, pending, rejected, and archived`\nCreates a list of four values.\n\n`For each status in statuses:`\nStarts a loop that will look at each status one at a time.\n\n`If status is \"pending\"`\nChecks whether the current status is `pending`.\n\n`Continue`\nSkips the rest of this loop pass and moves to the next status.\n\n`If status is \"rejected\"`\nChecks whether the current status is `rejected`.\n\n`Break`\nStops the loop completely. Nothing after that item is processed.\n\n`Print status`\nShows the current status if it was not skipped and did not stop the loop first.\n\n## Expected Result\n\nThe program prints:\n\n```text\napproved\n```\n\nWhy only `approved` prints:\n- `approved` is printed\n- `pending` is skipped by `Continue`\n- `rejected` stops the loop with `Break`\n- `archived` is never reached\n\n## Why This Matters\n\nSome programs need more than a simple loop.\n\nThey may need to:\n- ignore one item\n- stop once they have found what they need\n\nThat is what `Continue` and `Break` let you express clearly.\n\n## Try This\n\n1. Change `pending` to `archived` in the first condition. What changes?\n2. Remove the `Break` line and run the file again.\n3. Add another `Print \"done checking\"` after the loop and notice when it runs.\n\n## Check Yourself\n\n1. What is the difference between `Continue` and `Break`?\n2. Does `Continue` stop the whole loop?\n3. Why does `archived` never print in this example?\n\n## Related Lessons\n\n- [01-what-repetition-means.md](/Users/admin/code/devlish/docs/course/03-repetition-and-collections/01-what-repetition-means.md#L1)\n- [03-transforming-collections.md](/Users/admin/code/devlish/docs/course/03-repetition-and-collections/03-transforming-collections.md#L1)\n- [05-changing-lists.md](/Users/admin/code/devlish/docs/course/03-repetition-and-collections/05-changing-lists.md#L1)\n",
+          "examples": [
+            {
+              "filename": "06_list_access_and_updates.dvl",
+              "source": "# Lesson 3.6 example: access and change list contents\n\n# The list starts with three statuses.\nstatuses equals list of approved, pending, and rejected\n\n# Item positions are one-based for beginner-friendly reading.\nsecond_status equals item 2 of statuses\nmiddle_statuses equals slice statuses from 2 to 3\n\n# Append changes the list, and Pop removes the last value into a name.\nAppend needs_review to statuses\nPop from statuses and save as removed_status\n\nPrint second_status\nPrint removed_status\n"
+            }
+          ],
+          "fixtures": [],
+          "exercises": [],
+          "dvtScenarios": []
+        },
+        {
+          "id": "07-updating-records",
+          "title": "Lesson 3.7: Updating Records",
+          "markdown": "# Lesson 3.7: Updating Records\n\nLast updated: 2026-03-26\nStatus: Current lesson.\n\n## Purpose\n\nTeach how to change a value inside a record, including a value inside a nested\nrecord.\n\n## Learning Goals\n\n- update one field in a record with `Set ... to ...`\n- update a nested field such as `amount of invoice of review_packet`\n- see that records can be created gradually, not only all at once\n- connect record updates to the idea of program state changing over time\n\n## Vocabulary\n\n- update\n- nested field\n- state\n- mutation\n\n## Big Idea\n\nReading data is only half of programming.\n\nUseful programs also change data.\n\nWith records, that means a program should be able to:\n- create a record\n- read fields from that record\n- update fields later\n\nDevlish now supports that with a readable form:\n\n`Set amount of invoice of review_packet to 1300`\n\nThat reads almost like spoken instructions:\n- go to `review_packet`\n- inside it, go to `invoice`\n- inside that, set `amount`\n\n## Example Program\n\nFile:\n- [08_updating_records.dvl](/Users/admin/code/devlish/docs/course/03-repetition-and-collections/examples/08_updating_records.dvl#L1)\n\n```text\nSet amount of invoice of review_packet to 1300\nSet reviewer of review_packet to \"Ada\"\nPrint amount of invoice of review_packet\nPrint reviewer of review_packet\n```\n\n## How To Run It\n\n```bash\n./bin/devlish run docs/course/03-repetition-and-collections/examples/08_updating_records.dvl\n```\n\n## What Each Line Means\n\n`Set amount of invoice of review_packet to 1300`\nIf `review_packet` does not exist yet, Devlish creates it.\nIf `invoice` does not exist yet, Devlish creates that nested record too.\nThen it stores `1300` in the `amount` field.\n\n`Set reviewer of review_packet to \"Ada\"`\nThis adds another field to the same outer record.\n\n`Print amount of invoice of review_packet`\nThis reads back the nested value we just stored.\n\n`Print reviewer of review_packet`\nThis reads back the outer record field.\n\n## Expected Result\n\nThe program prints:\n\n```text\n1300\nAda\n```\n\nAfter both updates, the record behaves like:\n\n```text\nreview_packet = {\n  invoice: {\n    amount: 1300\n  },\n  reviewer: \"Ada\"\n}\n```\n\n## Why This Matters\n\nThis is a major programming idea:\n- programs can build structured data over time\n- programs can change one part of a larger structure\n- nested data can model real things such as invoices, packets, and reports\n\nWithout update operations, records are mostly static.\nWith update operations, they become useful working data.\n\n## Try This\n\n1. Add `Set status of invoice of review_packet to \"pending\"`.\n2. Print `status of invoice of review_packet`.\n3. Change the amount from `1300` to `1500`.\n4. Add another top-level field such as `priority`.\n\n## Check Yourself\n\n1. What part of the record changes in `Set amount of invoice of review_packet to 1300`?\n2. Does Devlish need the full record to exist first?\n3. What is the difference between reading `amount of invoice of review_packet` and setting it?\n\n## Related Lessons\n\n- [04-record-keys-values-and-entries.md](/Users/admin/code/devlish/docs/course/03-repetition-and-collections/04-record-keys-values-and-entries.md#L1)\n- [05-changing-lists.md](/Users/admin/code/devlish/docs/course/03-repetition-and-collections/05-changing-lists.md#L1)\n- [06-controlling-loops.md](/Users/admin/code/devlish/docs/course/03-repetition-and-collections/06-controlling-loops.md#L1)\n",
+          "examples": [
+            {
+              "filename": "07_loop_control.dvl",
+              "source": "# Lesson 3.7 example: skip or stop a loop\n\nstatuses equals list of approved, pending, rejected, and archived\n\nFor each status in statuses:\n  # Continue skips printing pending and moves to the next status.\n  If status is \"pending\"\n    Continue\n  # Break stops the whole loop when rejected appears.\n  If status is \"rejected\"\n    Break\n  Print status\n"
+            }
+          ],
+          "fixtures": [],
+          "exercises": [],
+          "dvtScenarios": []
+        },
+        {
+          "id": "08-collection-summary-helpers",
+          "title": "Lesson 3.8: Collection Summary Helpers",
+          "markdown": "# Lesson 3.8: Collection Summary Helpers\n\nLast updated: 2026-03-26\nStatus: Current lesson.\n\n## Purpose\n\nTeach how to clean up a collection and then ask simple summary questions about\nit.\n\n## Learning Goals\n\n- flatten a nested list into one list\n- remove duplicates with `unique of ...`\n- find the smallest and largest value in a list\n- explain when summary helpers are easier than writing a loop yourself\n\n## Vocabulary\n\n- nested list\n- flatten\n- unique\n- minimum\n- maximum\n\n## Big Idea\n\nSometimes a program already has the data it needs, but the data is in the wrong\nshape.\n\nOne list may contain smaller lists.\nOne list may repeat the same value more than once.\nOne list may need a smallest or largest value.\n\nDevlish now includes a few helpers for those jobs:\n- `flatten ...`\n- `unique of ...`\n- `minimum of ...`\n- `maximum of ...`\n\n## Example File\n\n- [09_collection_summary_helpers.dvl](/Users/admin/code/devlish/docs/course/03-repetition-and-collections/examples/09_collection_summary_helpers.dvl#L1)\n\n## Example\n\n```text\nnested_statuses equals list of list of \"approved\" and \"pending\", and list of \"approved\" and \"rejected\"\nflattened_statuses equals flatten nested_statuses\nunique_statuses equals unique of flattened_statuses\nsmallest_amount equals minimum of list of 1200, 300, and 800\nlargest_amount equals maximum of list of 1200, 300, and 800\nPrint count of unique_statuses\nPrint smallest_amount\nPrint largest_amount\n```\n\n## How To Run It\n\n```bash\n./bin/devlish run docs/course/03-repetition-and-collections/examples/09_collection_summary_helpers.dvl\n```\n\n## What Happens\n\n1. `nested_statuses` starts as a list that contains smaller lists.\n2. `flatten nested_statuses` turns it into one flat list.\n3. `unique of flattened_statuses` removes repeated values.\n4. `minimum of ...` finds the smallest number.\n5. `maximum of ...` finds the largest number.\n\n## Expected Output\n\n```text\n3\n300\n1200\n```\n\n## Why This Matters\n\nThese helpers let beginners solve common problems directly:\n- clean up repeated values\n- work with nested lists\n- summarize numeric data\n\nYou could write loops for these jobs later.\n\nAt the start, direct helpers make the idea easier to see.\n\n## Try This\n\n1. Add another `\"pending\"` value to the nested list and run the file again.\n2. Change one of the amounts to `50` and see how `minimum of ...` changes.\n3. Replace `count of unique_statuses` with `first of unique_statuses`.\n\n## Check Yourself\n\n1. What does `flatten` change about the shape of the data?\n2. Why does `unique of ...` not change the count in the output if there are no duplicates?\n3. When would `maximum of ...` be useful in a real program?\n",
+          "examples": [
+            {
+              "filename": "08_updating_records.dvl",
+              "source": "# Lesson 3.8 example: update fields inside a record\n\n# Set can write to nested fields when the surrounding record already exists.\nSet amount of invoice of review_packet to 1300\nSet reviewer of review_packet to \"Ada\"\n\n# Print the changed fields so the result is visible.\nPrint amount of invoice of review_packet\nPrint reviewer of review_packet\n"
+            }
+          ],
+          "fixtures": [],
+          "exercises": [],
+          "dvtScenarios": []
+        },
+        {
+          "id": "09-current-language-gaps",
+          "title": "Lesson 3.9: Current Devlish Strengths And Remaining Gaps",
+          "markdown": "# Lesson 3.9: Current Devlish Strengths And Remaining Gaps\n\nLast updated: 2026-06-30\nStatus: Current lesson.\n\n## Purpose\n\nShow what Devlish now supports for repetition and be honest about the remaining\nrough edges.\n\n## Learning Goals\n\n- distinguish between a programming idea and a current language limitation\n- understand which repetition ideas are now supported\n- understand which repetition ideas still need more language work\n\n## Vocabulary\n\n- language gap\n- first-class support\n- workaround\n\n## Big Idea\n\nA course should not pretend the language can do something well when it cannot.\n\nRight now, Devlish is strong for:\n- workflows over one input\n- extraction\n- decisions\n- class-style methods\n\nRight now, Devlish can already do:\n- `For each`\n- `While`\n- `Until`\n- helpers such as `count`, `first`, `last`, `sort`, `item`, and `slice`\n- predicate helpers such as `find`, `filter`, `reject`, `any`, and `all`\n- grouping helpers such as `group by`, `index by`, and `partition`\n- set-style helpers such as `union`, `intersection`, and `difference`\n- list and record work for beginner examples\n- `Append`\n- `Pop`\n- nested field updates with `Set`\n- record field and shape checks\n\nRight now, Devlish is still weaker for:\n- very complex nested structured data\n- deeply nested collection transforms that stay easy for beginners to read\n- richer diagnostics when a transform expression is wrong\n- more advanced loop debugging and tracing\n\n## Why This Matters\n\nThis does not make the earlier lessons useless.\n\nIt means the course needs to do two things honestly:\n- teach the programming idea\n- say where the language still needs to grow\n\n## What A Future Lesson Could Look Like\n\nA stronger future Devlish lesson might say:\n\n```text\nFor each invoice in invoices\n  If invoice amount >= 1000\n    Route invoice to manual_review_queue\n```\n\nThat is readable and beginner-friendly.\n\nDevlish has moved a lot further in this direction with `For each`, `While`,\n`Until`, list literals, record-style data, `keys`, `values`, `entries`, `item`,\n`slice`, `Append`, `Pop`, nested `Set`, record shape checks, predicate helpers\nsuch as `find` and `filter`, grouping helpers, and set-style helpers. The next\ngaps are less about basic loop syntax and more about depth: richer transform\nexpressions, complex nested data, stronger transform diagnostics, and clearer\nteaching/debugging support.\n\n## Related Reference\n\n- [DEVLISH_LANGUAGE_GAPS.md](/Users/admin/code/devlish/docs/DEVLISH_LANGUAGE_GAPS.md#L1)\n\n## Practice\n\n1. Which part of the example above is the repeated step?\n2. Which part assumes collection support with named fields?\n3. Which remaining gap would most improve real programs?\n",
+          "examples": [
+            {
+              "filename": "09_collection_summary_helpers.dvl",
+              "source": "# Lesson 3.8 example: flattening, deduplicating, and summarizing collections\n\n# Flatten removes one level of nesting from a list of lists.\nnested_statuses equals list of list of \"approved\" and \"pending\", and list of \"approved\" and \"rejected\"\nflattened_statuses equals flatten nested_statuses\n\n# Unique keeps one copy of each value.\nunique_statuses equals unique of flattened_statuses\n\n# Minimum and maximum summarize numeric lists.\nsmallest_amount equals minimum of list of 1200, 300, and 800\nlargest_amount equals maximum of list of 1200, 300, and 800\n\nPrint count of unique_statuses\nPrint smallest_amount\nPrint largest_amount\n"
+            }
+          ],
+          "fixtures": [],
+          "exercises": [
+            {
+              "id": "09-current-language-gaps-exercise-1",
+              "title": "Practice",
+              "description": "1. Which part of the example above is the repeated step?\n2. Which part assumes collection support with named fields?\n3. Which remaining gap would most improve real programs?",
+              "starterCode": "# Lesson 3.8 example: flattening, deduplicating, and summarizing collections\n\n# Flatten removes one level of nesting from a list of lists.\nnested_statuses equals list of list of \"approved\" and \"pending\", and list of \"approved\" and \"rejected\"\nflattened_statuses equals flatten nested_statuses\n\n# Unique keeps one copy of each value.\nunique_statuses equals unique of flattened_statuses\n\n# Minimum and maximum summarize numeric lists.\nsmallest_amount equals minimum of list of 1200, 300, and 800\nlargest_amount equals maximum of list of 1200, 300, and 800\n\nPrint count of unique_statuses\nPrint smallest_amount\nPrint largest_amount\n",
+              "expected": {
+                "outputs": [],
+                "variables": {}
+              },
+              "hints": [
+                "Which part of the example above is the repeated step?",
+                "Which part assumes collection support with named fields?",
+                "Which remaining gap would most improve real programs?"
+              ]
+            }
+          ],
+          "dvtScenarios": []
+        }
+      ]
+    },
+    {
+      "id": "04-methods-and-classes",
+      "title": "Unit 4: Methods And Classes",
+      "description": "This unit introduces: - reusable logic - method inputs - return values - helper methods - class-style Devlish",
+      "lessons": [
+        {
+          "id": "01-what-a-method-is",
+          "title": "Lesson 4.1: What A Method Is",
+          "markdown": "# Lesson 4.1: What A Method Is\n\nLast updated: 2026-03-23\nStatus: Current lesson.\n\n## Purpose\n\nTeach that a method is a named piece of reusable work.\n\n## Learning Goals\n\n- explain what a method does\n- recognize that methods help avoid repeated logic\n\n## Vocabulary\n\n- method\n- reusable\n- input\n- output\n\n## First Example\n\n```text\nOperations's Review Decider:\n  decide review using invoice amount:\n    review_needed equals false\n    review_needed equals true if invoice amount >= 10000\n    respond with review_needed\n```\n\nOpen the example file here:\n- [01_review_decider.dvl](/Users/admin/code/devlish/docs/course/04-methods-and-classes/examples/01_review_decider.dvl#L1)\n\n## Big Idea\n\nA method is a named piece of work you can run more than once.\n\nInstead of rewriting the review rule again and again, the method gives that\nlogic one home and one name.\n\n## Run It\n\n```bash\n./bin/devlish run docs/course/04-methods-and-classes/examples/01_review_decider.dvl --method decide_review --args '[12000]'\n```\n\n## Practice\n\n1. Run the same method with `[9000]`.\n2. Compare the returned value.\n3. Explain what job the method performs.\n",
+          "examples": [
+            {
+              "filename": "01_review_decider.dvl",
+              "source": "# Lesson 4.1 example: a reusable decision method\n\n# Class-style Devlish groups related methods under a module and class name.\nOperations's Review Decider:\n  decide review using invoice amount:\n    # The parameter invoice amount is available inside this method.\n    review_needed equals false\n    review_needed equals true if invoice amount >= 10000\n    respond with review_needed\n"
+            }
+          ],
+          "fixtures": [],
+          "exercises": [
+            {
+              "id": "01-what-a-method-is-exercise-1",
+              "title": "Practice",
+              "description": "1. Run the same method with `[9000]`.\n2. Compare the returned value.\n3. Explain what job the method performs.",
+              "starterCode": "# Lesson 4.1 example: a reusable decision method\n\n# Class-style Devlish groups related methods under a module and class name.\nOperations's Review Decider:\n  decide review using invoice amount:\n    # The parameter invoice amount is available inside this method.\n    review_needed equals false\n    review_needed equals true if invoice amount >= 10000\n    respond with review_needed\n",
+              "expected": {
+                "outputs": [],
+                "variables": {}
+              },
+              "hints": [
+                "Run the same method with `[9000]`.",
+                "Compare the returned value.",
+                "Explain what job the method performs."
+              ]
+            }
+          ],
+          "dvtScenarios": [
+            {
+              "description": "review decider returns false for small invoices",
+              "file": "../examples/01_review_decider.dvl",
+              "method": "decide_review",
+              "args": [
+                8000
+              ],
+              "expected": {
+                "variables": {
+                  "__return__": false,
+                  "review_needed": false
+                }
+              }
+            }
+          ]
+        },
+        {
+          "id": "02-parameters-and-return-values",
+          "title": "Lesson 4.2: Parameters And Return Values",
+          "markdown": "# Lesson 4.2: Parameters And Return Values\n\nLast updated: 2026-03-23\nStatus: Current lesson.\n\n## Purpose\n\nShow how a method receives information and gives back a result.\n\n## Learning Goals\n\n- identify a method parameter\n- explain what `respond with` returns\n- run one method with two different inputs\n\n## Vocabulary\n\n- parameter\n- argument\n- return value\n- respond with\n\n## First Example\n\n```text\nHR's Payroll Calculator:\n  calculate wages using hours worked and hourly rate:\n    wages equals hours worked times hourly rate\n    respond with wages\n```\n\nOpen the example file here:\n- [02_payroll_calculator.dvl](/Users/admin/code/devlish/docs/course/04-methods-and-classes/examples/02_payroll_calculator.dvl#L1)\n\n## Run It\n\n```bash\n./bin/devlish run docs/course/04-methods-and-classes/examples/02_payroll_calculator.dvl --method calculate_wages --args '[40,25]'\n```\n\n## Big Idea\n\nParameters are the inputs to a method.\n\nIn this example:\n- `hours worked` is one parameter\n- `hourly rate` is another parameter\n\n`respond with wages` means the method returns the final value of `wages`.\n\n## Practice\n\n1. Run the method with `[10,30]`.\n2. Predict the new return value before you run it.\n",
+          "examples": [
+            {
+              "filename": "02_payroll_calculator.dvl",
+              "source": "# Lesson 4.2 example: parameters in a class-style method\n\nHR's Payroll Calculator:\n  calculate wages using hours worked and hourly rate:\n    # Method parameters can participate in normal arithmetic.\n    wages equals hours worked times hourly rate\n    respond with wages\n"
+            }
+          ],
+          "fixtures": [],
+          "exercises": [
+            {
+              "id": "02-parameters-and-return-values-exercise-1",
+              "title": "Practice",
+              "description": "1. Run the method with `[10,30]`.\n2. Predict the new return value before you run it.",
+              "starterCode": "# Lesson 4.2 example: parameters in a class-style method\n\nHR's Payroll Calculator:\n  calculate wages using hours worked and hourly rate:\n    # Method parameters can participate in normal arithmetic.\n    wages equals hours worked times hourly rate\n    respond with wages\n",
+              "expected": {
+                "outputs": [],
+                "variables": {}
+              },
+              "hints": [
+                "Run the method with `[10,30]`.",
+                "Predict the new return value before you run it."
+              ]
+            }
+          ],
+          "dvtScenarios": [
+            {
+              "description": "payroll calculator multiplies hours by rate",
+              "file": "../examples/02_payroll_calculator.dvl",
+              "method": "calculate_wages",
+              "args": [
+                40,
+                25
+              ],
+              "expected": {
+                "variables": {
+                  "__return__": 1000,
+                  "wages": 1000
+                }
+              }
+            }
+          ]
+        },
+        {
+          "id": "03-private-helpers",
+          "title": "Lesson 4.3: Private Helpers",
+          "markdown": "# Lesson 4.3: Private Helpers\n\nLast updated: 2026-03-23\nStatus: Current lesson.\n\n## Purpose\n\nTeach that some methods are internal helpers and not part of the public entry\npoints.\n\n## Learning Goals\n\n- distinguish public methods from private helpers\n- explain why a helper can make a class easier to read\n\n## Vocabulary\n\n- public\n- private\n- helper\n- internal logic\n\n## First Example\n\nOpen the example file here:\n- [03_private_helper.dvl](/Users/admin/code/devlish/docs/course/04-methods-and-classes/examples/03_private_helper.dvl#L1)\n\n## Big Idea\n\nA private helper is a method the class uses internally.\n\nIt helps organize the work, but it is not meant to be the main entry point\nsomeone calls from the outside.\n\n## What To Notice\n\nIn this example:\n- `review invoice` is the public method\n- `escalation label` is the private helper\n\nThat structure makes the class easier to read because each method has one job.\n\n## Practice\n\n1. Read both methods and describe each job in one sentence.\n2. Explain why `escalation label` is a helper instead of the main method.\n",
+          "examples": [
+            {
+              "filename": "03_private_helper.dvl",
+              "source": "# Lesson 4.3 example: public method plus private helper\n\nOperations's Invoice Reviewer:\n  review invoice using invoice amount:\n    # Public methods are the entry points callers are expected to use.\n    review_needed equals false\n    review_needed equals true if invoice amount >= 10000\n    respond with review_needed\n\n  privately escalation label using review needed:\n    # Private helpers keep supporting logic near the public method.\n    escalation_label equals \"standard\"\n    escalation_label equals \"priority\" if review needed == true\n    respond with escalation_label\n"
+            }
+          ],
+          "fixtures": [],
+          "exercises": [
+            {
+              "id": "03-private-helpers-exercise-1",
+              "title": "Practice",
+              "description": "1. Read both methods and describe each job in one sentence.\n2. Explain why `escalation label` is a helper instead of the main method.",
+              "starterCode": "# Lesson 4.3 example: public method plus private helper\n\nOperations's Invoice Reviewer:\n  review invoice using invoice amount:\n    # Public methods are the entry points callers are expected to use.\n    review_needed equals false\n    review_needed equals true if invoice amount >= 10000\n    respond with review_needed\n\n  privately escalation label using review needed:\n    # Private helpers keep supporting logic near the public method.\n    escalation_label equals \"standard\"\n    escalation_label equals \"priority\" if review needed == true\n    respond with escalation_label\n",
+              "expected": {
+                "outputs": [],
+                "variables": {}
+              },
+              "hints": [
+                "Read both methods and describe each job in one sentence.",
+                "Explain why `escalation label` is a helper instead of the main method."
+              ]
+            }
+          ],
+          "dvtScenarios": []
+        },
+        {
+          "id": "04-class-style-devlish",
+          "title": "Lesson 4.4: Class-Style Devlish",
+          "markdown": "# Lesson 4.4: Class-Style Devlish\n\nLast updated: 2026-03-23\nStatus: Current lesson.\n\n## Purpose\n\nIntroduce the class-style form of Devlish as a way to group related methods.\n\n## Learning Goals\n\n- read a class header\n- identify the class name, method names, and parameters\n- explain the difference between workflow-style and class-style Devlish\n\n## Vocabulary\n\n- class\n- module\n- method\n- helper\n\n## First Example\n\nOpen the example file here:\n- [04_invoice_reviewer.dvl](/Users/admin/code/devlish/docs/course/04-methods-and-classes/examples/04_invoice_reviewer.dvl#L1)\n\n## Big Idea\n\nWorkflow-style Devlish is good for step-by-step processes.\n\nClass-style Devlish is good for reusable logic grouped into named methods.\n\n## Run It\n\n```bash\n./bin/devlish run docs/course/04-methods-and-classes/examples/04_invoice_reviewer.dvl --method review_invoice --args '[12000]'\n```\n\n## What To Notice\n\nThe class has:\n- a module name: `Operations`\n- a class name: `Invoice Reviewer`\n- a public method: `review invoice`\n- a private helper: `escalation label`\n\n## Practice\n\n1. Run the method with `[8000]`.\n2. Compare the returned label to the result for `[12000]`.\n",
+          "examples": [
+            {
+              "filename": "04_invoice_reviewer.dvl",
+              "source": "# Lesson 4.4 example: class-style Devlish with helper invocation\n\nOperations's Invoice Reviewer:\n  review invoice using invoice amount:\n    review_needed equals false\n    review_needed equals true if invoice amount >= 10000\n    # Method calls read like the helper name followed by using arguments.\n    escalation_label equals escalation label using review_needed\n    respond with escalation_label\n\n  privately escalation label using review_needed:\n    # This helper turns the boolean decision into a label for the caller.\n    escalation_label equals \"standard\"\n    escalation_label equals \"priority\" if review_needed == true\n    respond with escalation_label\n"
+            }
+          ],
+          "fixtures": [],
+          "exercises": [
+            {
+              "id": "04-class-style-devlish-exercise-1",
+              "title": "Practice",
+              "description": "1. Run the method with `[8000]`.\n2. Compare the returned label to the result for `[12000]`.",
+              "starterCode": "# Lesson 4.4 example: class-style Devlish with helper invocation\n\nOperations's Invoice Reviewer:\n  review invoice using invoice amount:\n    review_needed equals false\n    review_needed equals true if invoice amount >= 10000\n    # Method calls read like the helper name followed by using arguments.\n    escalation_label equals escalation label using review_needed\n    respond with escalation_label\n\n  privately escalation label using review_needed:\n    # This helper turns the boolean decision into a label for the caller.\n    escalation_label equals \"standard\"\n    escalation_label equals \"priority\" if review_needed == true\n    respond with escalation_label\n",
+              "expected": {
+                "outputs": [],
+                "variables": {}
+              },
+              "hints": [
+                "Run the method with `[8000]`.",
+                "Compare the returned label to the result for `[12000]`."
+              ]
+            }
+          ],
+          "dvtScenarios": [
+            {
+              "description": "invoice reviewer escalates large invoices",
+              "file": "../examples/04_invoice_reviewer.dvl",
+              "method": "review_invoice",
+              "args": [
+                12000
+              ],
+              "expected": {
+                "variables": {
+                  "__return__": "priority",
+                  "review_needed": true,
+                  "escalation_label": "priority"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "id": "05-reusing-files-in-class-style",
+          "title": "Lesson 4.5: Reusing Files In Class-Style Devlish",
+          "markdown": "# Lesson 4.5: Reusing Files In Class-Style Devlish\n\nLast updated: 2026-03-26\nStatus: Current lesson.\n\n## Purpose\n\nTeach that class-style Devlish can reuse code from other files too.\n\n## Learning Goals\n\n- import a shared workflow fragment into a class method\n- explain the difference between importing shared logic and importing a whole class file\n- recognize that multi-file reuse works in both workflow-style and class-style Devlish\n\n## Vocabulary\n\n- import\n- shared logic\n- reusable fragment\n- base class\n\n## Big Idea\n\nAs programs grow, methods should not have to repeat the same setup logic over\nand over.\n\nClass-style Devlish now supports two useful reuse patterns:\n- import a workflow-style fragment inside a method\n- import another class-style file at the top of a class file\n\nThe first pattern is the most practical one to learn first.\n\n## Example 1: Shared Workflow Logic Inside A Method\n\nShared file:\n- [05_shared_review_logic.dvl](/Users/admin/code/devlish/docs/course/04-methods-and-classes/examples/05_shared_review_logic.dvl#L1)\n\nClass file:\n- [05_reusing_workflow_fragments_in_class.dvl](/Users/admin/code/devlish/docs/course/04-methods-and-classes/examples/05_reusing_workflow_fragments_in_class.dvl#L1)\n\nClass file contents:\n\n```text\nOperations's Invoice Reviewer:\n  review invoice:\n    Import 05_shared_review_logic.dvl\n    respond with final_label\n```\n\nShared file contents:\n\n```text\nreview_threshold equals 1000\nfinal_label equals \"needs_review\"\n```\n\n## How To Run It\n\n```bash\n./bin/devlish run docs/course/04-methods-and-classes/examples/05_reusing_workflow_fragments_in_class.dvl --method review_invoice --args '[]'\n```\n\n## What Happens\n\n1. The method imports the shared logic file.\n2. The shared file creates values like `review_threshold` and `final_label`.\n3. The method then responds with one of those imported values.\n\nThis is useful when several methods need the same setup logic.\n\n## Example 2: Importing A Class File\n\nBase class:\n- [06_review_base.dvl](/Users/admin/code/devlish/docs/course/04-methods-and-classes/examples/06_review_base.dvl#L1)\n\nChild class:\n- [06_importing_class_files.dvl](/Users/admin/code/devlish/docs/course/04-methods-and-classes/examples/06_importing_class_files.dvl#L1)\n\nChild class contents:\n\n```text\nImport 06_review_base.dvl\n\nOperations's Invoice Reviewer based on Operations's Review Base:\n  review invoice:\n    respond with \"ready\"\n```\n\nThis second pattern is about organization:\n- the base class lives in one file\n- the child class lives in another\n- the child file can import the base file before its own class declaration\n\n## Why This Matters\n\nThis is the beginning of real code reuse in larger Devlish programs.\n\nIt means you can:\n- keep shared setup logic in one file\n- split class hierarchies across files\n- organize class-style code without copying and pasting everything\n\n## Try This\n\n1. Change `final_label` in the shared workflow fragment and run the method again.\n2. Add another shared value to the fragment and print it before the response.\n3. Rename the imported class file and update the import path.\n\n## Check Yourself\n\n1. What is the difference between importing a workflow fragment and importing a class file?\n2. Which reuse pattern is easier for beginners to start with?\n3. Why might a larger project need more than one file?\n",
+          "examples": [
+            {
+              "filename": "05_reusing_workflow_fragments_in_class.dvl",
+              "source": "# Lesson 4.5 example: reuse shared workflow lines inside a method\n\nOperations's Invoice Reviewer:\n  review invoice:\n    # Import inserts statements from the shared file during compilation.\n    Import 05_shared_review_logic.dvl\n    respond with final_label\n"
+            },
+            {
+              "filename": "05_shared_review_logic.dvl",
+              "source": "# Shared review values imported by the lesson 4.5 class example.\n\nreview_threshold equals 1000\nfinal_label equals \"needs_review\"\n"
+            }
+          ],
+          "fixtures": [],
+          "exercises": [],
+          "dvtScenarios": [
+            {
+              "description": "class method can import a workflow fragment",
+              "file": "../examples/05_reusing_workflow_fragments_in_class.dvl",
+              "method": "review_invoice",
+              "expected": {
+                "variables": {
+                  "__return__": "needs_review",
+                  "final_label": "needs_review"
+                }
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "05-real-programs",
+      "title": "Unit 5: Real Programs",
+      "description": "This unit introduces: - complete workflows - document-driven programs - validation - routing - service-style outputs",
+      "lessons": [
+        {
+          "id": "01-document-review-programs",
+          "title": "Lesson 5.1: Document Review Programs",
+          "markdown": "# Lesson 5.1: Document Review Programs\n\nLast updated: 2026-03-23\nStatus: Current lesson.\n\n## Purpose\n\nCombine extraction, naming, and decisions into one useful program.\n\n## Learning Goals\n\n- explain a complete document-review workflow\n- identify where information is extracted\n- describe how the final decision is made\n\n## Vocabulary\n\n- workflow\n- review\n- extract\n- validate\n\n## First Example\n\nOpen the files here:\n- [01_document_review.dvl](/Users/admin/code/devlish/docs/course/05-real-programs/examples/01_document_review.dvl#L1)\n- [01_document_review_packet.txt](/Users/admin/code/devlish/docs/course/05-real-programs/examples/01_document_review_packet.txt#L1)\n\n## Run It\n\n```bash\n./bin/devlish run docs/course/05-real-programs/examples/01_document_review.dvl --debug\n```\n\n## Big Idea\n\nA real program usually combines several smaller ideas:\n- read input\n- extract useful values\n- make a decision\n- produce an output\n\nThat full chain is a workflow.\n\n## Practice\n\n1. Change the review status in the packet.\n2. Change the invoice amount in the packet.\n3. Run the workflow after each change and explain the result.\n",
+          "examples": [
+            {
+              "filename": "01_document_review.dvl",
+              "source": "# Lesson 5.1 example: combine extraction and decisions in one workflow\n\n# Load the packet, then extract the fields used by the business rule.\nLoad docs/course/05-real-programs/examples/01_document_review_packet.txt as Document\n\nFind review status and save as review_status\nFind invoice amount and save as invoice_amount\n\n# Build the review decision from multiple facts.\nmanual_review equals false\nmanual_review equals true if review_status == \"pending\"\nmanual_review equals true if invoice_amount >= 10000\n\n# Route the invoice based on the final decision.\nIf manual_review == true\n  Route invoice to finance_review_queue\nOtherwise\n  Route invoice to finance_ready_queue\n"
+            }
+          ],
+          "fixtures": [
+            {
+              "filename": "01_document_review_packet.txt",
+              "content": "Review Packet\n\nreview status: pending\ninvoice amount: 12500\n"
+            }
+          ],
+          "exercises": [
+            {
+              "id": "01-document-review-programs-exercise-1",
+              "title": "Practice",
+              "description": "1. Change the review status in the packet.\n2. Change the invoice amount in the packet.\n3. Run the workflow after each change and explain the result.",
+              "starterCode": "# Lesson 5.1 example: combine extraction and decisions in one workflow\n\n# Load the packet, then extract the fields used by the business rule.\nLoad docs/course/05-real-programs/examples/01_document_review_packet.txt as Document\n\nFind review status and save as review_status\nFind invoice amount and save as invoice_amount\n\n# Build the review decision from multiple facts.\nmanual_review equals false\nmanual_review equals true if review_status == \"pending\"\nmanual_review equals true if invoice_amount >= 10000\n\n# Route the invoice based on the final decision.\nIf manual_review == true\n  Route invoice to finance_review_queue\nOtherwise\n  Route invoice to finance_ready_queue\n",
+              "expected": {
+                "outputs": [],
+                "variables": {}
+              },
+              "hints": [
+                "Change the review status in the packet.",
+                "Change the invoice amount in the packet.",
+                "Run the workflow after each change and explain the result."
+              ]
+            }
+          ],
+          "dvtScenarios": []
+        },
+        {
+          "id": "02-notifications-and-messages",
+          "title": "Lesson 5.2: Notifications And Messages",
+          "markdown": "# Lesson 5.2: Notifications And Messages\n\nLast updated: 2026-03-23\nStatus: Current lesson.\n\n## Purpose\n\nTeach how a program can communicate a result to another person or system.\n\n## Learning Goals\n\n- understand when a workflow sends a message\n- connect a decision to a notification\n\n## Vocabulary\n\n- notify\n- email\n- message\n- output\n\n## First Example\n\nOpen the files here:\n- [02_notifications.dvl](/Users/admin/code/devlish/docs/course/05-real-programs/examples/02_notifications.dvl#L1)\n- [02_notification_packet.txt](/Users/admin/code/devlish/docs/course/05-real-programs/examples/02_notification_packet.txt#L1)\n\n## Run It\n\n```bash\n./bin/devlish run docs/course/05-real-programs/examples/02_notifications.dvl --debug\n```\n\n## Big Idea\n\nNot every output is a number or a route.\n\nSometimes the result of a program is that it sends:\n- an email\n- a message\n- another service action\n\n## Practice\n\n1. Change the review mailbox in the packet.\n2. Run the workflow again.\n3. Check the debug output to see the new service arguments.\n",
+          "examples": [
+            {
+              "filename": "02_notifications.dvl",
+              "source": "# Lesson 5.2 example: communicate a result with service outputs\n\n# The packet contains destinations for the outbound service calls.\nLoad docs/course/05-real-programs/examples/02_notification_packet.txt as Document\n\nFind review mailbox and save as review_mailbox\nFind claims queue and save as claims_queue\n\n# Service calls are effects supplied by the host runtime.\nSend Email via NotificationService to review_mailbox with template \"review_complete\"\nSend Message via MessagingService to claims_queue with template \"review_complete\"\n"
+            }
+          ],
+          "fixtures": [
+            {
+              "filename": "02_notification_packet.txt",
+              "content": "Notification Packet\n\nreview mailbox: approvals_team\nclaims queue: claims_review_queue\n"
+            }
+          ],
+          "exercises": [
+            {
+              "id": "02-notifications-and-messages-exercise-1",
+              "title": "Practice",
+              "description": "1. Change the review mailbox in the packet.\n2. Run the workflow again.\n3. Check the debug output to see the new service arguments.",
+              "starterCode": "# Lesson 5.2 example: communicate a result with service outputs\n\n# The packet contains destinations for the outbound service calls.\nLoad docs/course/05-real-programs/examples/02_notification_packet.txt as Document\n\nFind review mailbox and save as review_mailbox\nFind claims queue and save as claims_queue\n\n# Service calls are effects supplied by the host runtime.\nSend Email via NotificationService to review_mailbox with template \"review_complete\"\nSend Message via MessagingService to claims_queue with template \"review_complete\"\n",
+              "expected": {
+                "outputs": [],
+                "variables": {}
+              },
+              "hints": [
+                "Change the review mailbox in the packet.",
+                "Run the workflow again.",
+                "Check the debug output to see the new service arguments."
+              ]
+            }
+          ],
+          "dvtScenarios": []
+        },
+        {
+          "id": "03-domain-workflows",
+          "title": "Lesson 5.3: Domain Workflows",
+          "markdown": "# Lesson 5.3: Domain Workflows\n\nLast updated: 2026-03-23\nStatus: Current lesson.\n\n## Purpose\n\nShow that the same programming ideas can be applied to different kinds of\nreal-world work.\n\n## Learning Goals\n\n- recognize shared logic across different domains\n- explain how one workflow pattern can solve many business problems\n\n## Vocabulary\n\n- domain\n- workflow\n- rule\n- process\n\n## First Example\n\nCompare these three files:\n- [03_finance_workflow.dvl](/Users/admin/code/devlish/docs/course/05-real-programs/examples/03_finance_workflow.dvl#L1)\n- [03_hr_workflow.dvl](/Users/admin/code/devlish/docs/course/05-real-programs/examples/03_hr_workflow.dvl#L1)\n- [03_operations_workflow.dvl](/Users/admin/code/devlish/docs/course/05-real-programs/examples/03_operations_workflow.dvl#L1)\n\n## Big Idea\n\nThe domain changes, but the programming pattern often stays the same:\n- store values\n- compare them\n- decide what to do next\n- produce a result\n\nThat is why learning programming ideas is more powerful than memorizing one\nspecific example.\n\n## Practice\n\n1. Read all three examples.\n2. Identify the decision point in each one.\n3. Describe one new workflow from your own domain.\n",
+          "examples": [
+            {
+              "filename": "03_finance_workflow.dvl",
+              "source": "# Lesson 5.3 example: the same pattern in finance\n\n# Compute a domain decision, then route it to the finance queue.\ntotal_amount equals 1800\nmanual_review equals false\nmanual_review equals true if total_amount >= 1000\nRoute manual_review to finance_expense_queue\n"
+            },
+            {
+              "filename": "03_hr_workflow.dvl",
+              "source": "# Lesson 5.3 example: the same pattern in HR\n\n# The same route pattern works with HR-specific names.\npacket_complete equals false\nRoute packet_complete to hr_onboarding_queue\n"
+            },
+            {
+              "filename": "03_operations_workflow.dvl",
+              "source": "# Lesson 5.3 example: the same pattern in operations\n\n# A conditional assignment can classify an operations incident.\nincident_priority equals \"normal\"\nincident_priority equals \"urgent\" if 5 >= 3\nRoute incident_priority to operations_incident_queue\n"
+            }
+          ],
+          "fixtures": [],
+          "exercises": [
+            {
+              "id": "03-domain-workflows-exercise-1",
+              "title": "Practice",
+              "description": "1. Read all three examples.\n2. Identify the decision point in each one.\n3. Describe one new workflow from your own domain.",
+              "starterCode": "# Lesson 5.3 example: the same pattern in finance\n\n# Compute a domain decision, then route it to the finance queue.\ntotal_amount equals 1800\nmanual_review equals false\nmanual_review equals true if total_amount >= 1000\nRoute manual_review to finance_expense_queue\n",
+              "expected": {
+                "outputs": [],
+                "variables": {}
+              },
+              "hints": [
+                "Read all three examples.",
+                "Identify the decision point in each one.",
+                "Describe one new workflow from your own domain."
+              ]
+            }
+          ],
+          "dvtScenarios": []
+        },
+        {
+          "id": "04-using-more-than-one-file",
+          "title": "Lesson 5.4: Using More Than One File",
+          "markdown": "# Lesson 5.4: Using More Than One File\n\nLast updated: 2026-03-25\nStatus: Current lesson.\n\n## Purpose\n\nTeach the beginner idea that one program can reuse work from another file.\n\n## Learning Goals\n\n- explain what `Import` does\n- run a Devlish program that depends on another file\n- recognize why breaking a program into smaller files can help\n\n## Vocabulary\n\n- import\n- reuse\n- shared rules\n- source file\n\n## Big Idea\n\nAs programs grow, it helps to split them into smaller pieces.\n\nOne file can hold shared rules.\nAnother file can use those rules.\n\nIn Devlish, the first simple way to do that is:\n\n```text\nImport another_file.dvl\n```\n\n## Example Files\n\n- [04_shared_review_rules.dvl](/Users/admin/code/devlish/docs/course/05-real-programs/examples/04_shared_review_rules.dvl#L1)\n- [04_using_more_than_one_file.dvl](/Users/admin/code/devlish/docs/course/05-real-programs/examples/04_using_more_than_one_file.dvl#L1)\n\n## Main Program\n\n```text\nImport 04_shared_review_rules.dvl\n\ninvoice_amount equals 1200\n\nIf invoice_amount >= review_threshold\n  final_label equals review_label\nOtherwise\n  final_label equals safe_label\n\nPrint final_label\n```\n\n## Imported File\n\n```text\nreview_threshold equals 1000\nreview_label equals \"needs_review\"\nsafe_label equals \"approved\"\n```\n\n## How To Run It\n\n```bash\n./bin/devlish run docs/course/05-real-programs/examples/04_using_more_than_one_file.dvl\n```\n\n## What Happens\n\n1. Devlish reads the imported file first.\n2. It learns the shared values from that file.\n3. Then it runs the main file.\n4. The main file can use names from the imported file.\n\n## Expected Output\n\n```text\nneeds_review\n```\n\n## Why This Matters\n\nThis is the beginning of code organization.\n\nIt means you can:\n- keep shared rules in one place\n- reuse them in more than one program\n- change one rule file instead of editing many copies\n\n## Try This\n\n1. Change `review_threshold` in the imported file to `1500`.\n2. Run the main file again.\n3. Explain why the output changed.\n\n## Check Yourself\n\n1. Which file holds the shared rule values?\n2. Which file makes the decision?\n3. Why is `Import` useful in larger programs?\n",
+          "examples": [
+            {
+              "filename": "04_shared_review_rules.dvl",
+              "source": "# Shared labels and limits imported by the multi-file workflow.\n\nreview_threshold equals 1000\nreview_label equals \"needs_review\"\nsafe_label equals \"approved\"\n"
+            },
+            {
+              "filename": "04_using_more_than_one_file.dvl",
+              "source": "# Lesson 5.4 example: combine this workflow with shared rules\n\n# Import resolves relative to this file before falling back to search paths.\nImport 04_shared_review_rules.dvl\n\ninvoice_amount equals 1200\n\n# The imported names are available after the Import line.\nIf invoice_amount >= review_threshold\n  final_label equals review_label\nOtherwise\n  final_label equals safe_label\n\nPrint final_label\n"
+            }
+          ],
+          "fixtures": [],
+          "exercises": [],
+          "dvtScenarios": []
+        }
+      ]
+    },
+    {
+      "id": "06-testing-and-debugging",
+      "title": "Unit 6: Testing And Debugging",
+      "description": "This unit introduces: - what a test is - how to check expected behavior - how to read a trace - how to fix a wrong result",
+      "lessons": [
+        {
+          "id": "01-what-is-a-test",
+          "title": "Lesson 6.1: What Is A Test?",
+          "markdown": "# Lesson 6.1: What Is A Test?\n\nLast updated: 2026-03-23\nStatus: Current lesson.\n\n## Purpose\n\nTeach that a test is a small check that compares expected behavior with actual\nbehavior.\n\n## Learning Goals\n\n- explain why tests matter\n- read a simple Devlish-native test\n- connect a test to the program behavior it protects\n\n## Vocabulary\n\n- test\n- expected\n- actual\n- scenario\n\n## First Example\n\nOpen the files here:\n- [01_branching_workflow.dvl](/Users/admin/code/devlish/docs/course/06-testing-and-debugging/examples/01_branching_workflow.dvl#L1)\n- [01_branching_workflow.dvt](/Users/admin/code/devlish/docs/course/06-testing-and-debugging/checks/01_branching_workflow.dvt#L1)\n\n## Run It\n\n```bash\n./bin/devlish test docs/course/06-testing-and-debugging/checks/01_branching_workflow.dvt\n```\n\n## Big Idea\n\nA test is a promise about behavior.\n\nIn this lesson, the promise is:\n\n\"When the review status is approved, the program should route the work to the\napproved queue.\"\n\n## Practice\n\n1. Read the scenario line by line.\n2. Explain what behavior it is protecting.\n",
+          "examples": [
+            {
+              "filename": "01_branching_workflow.dvl",
+              "source": "# Lesson 6.1 example: a small workflow protected by a test\n\n# Load a known packet so the branch behavior is repeatable.\nLoad docs/course/06-testing-and-debugging/examples/01_branch_packet.txt as Document\n\nFind review status and save as review_status\n\n# This branch is the behavior the matching check file verifies.\nIf review_status is \"approved\"\n  Route invoice to approved_queue\nOtherwise\n  Route invoice to manual_review_queue\n"
+            }
+          ],
+          "fixtures": [
+            {
+              "filename": "01_branch_packet.txt",
+              "content": "Review Packet\n\nreview status: approved\n"
+            }
+          ],
+          "exercises": [
+            {
+              "id": "01-what-is-a-test-exercise-1",
+              "title": "Practice",
+              "description": "1. Read the scenario line by line.\n2. Explain what behavior it is protecting.",
+              "starterCode": "# Lesson 6.1 example: a small workflow protected by a test\n\n# Load a known packet so the branch behavior is repeatable.\nLoad docs/course/06-testing-and-debugging/examples/01_branch_packet.txt as Document\n\nFind review status and save as review_status\n\n# This branch is the behavior the matching check file verifies.\nIf review_status is \"approved\"\n  Route invoice to approved_queue\nOtherwise\n  Route invoice to manual_review_queue\n",
+              "expected": {
+                "outputs": [],
+                "variables": {}
+              },
+              "hints": [
+                "Read the scenario line by line.",
+                "Explain what behavior it is protecting."
+              ]
+            }
+          ],
+          "dvtScenarios": [
+            {
+              "description": "routes approved reviews",
+              "file": "../examples/01_branching_workflow.dvl",
+              "expected": {
+                "variables": {
+                  "review_status": "approved",
+                  "route": "approved_queue"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "id": "02-reading-trace-output",
+          "title": "Lesson 6.2: Reading Trace Output",
+          "markdown": "# Lesson 6.2: Reading Trace Output\n\nLast updated: 2026-03-23\nStatus: Current lesson.\n\n## Purpose\n\nShow how a trace helps a beginner understand what the program actually did.\n\n## Learning Goals\n\n- recognize the major parts of trace output\n- use a trace to explain a program result\n\n## Vocabulary\n\n- trace\n- step\n- context\n- result\n\n## First Example\n\nUse this workflow:\n- [01_branching_workflow.dvl](/Users/admin/code/devlish/docs/course/06-testing-and-debugging/examples/01_branching_workflow.dvl#L1)\n\nRun:\n\n```bash\n./bin/devlish trace docs/course/06-testing-and-debugging/examples/01_branching_workflow.dvl\n```\n\n## Big Idea\n\nA trace shows how the program was understood and what it was prepared to do.\n\nFor a beginner, that is helpful because it makes the invisible parts of\nprogramming more visible.\n\n## Practice\n\n1. Find the extracted value in the trace.\n2. Find the branch in the trace.\n3. Explain why the route is the one it is.\n",
+          "examples": [],
+          "fixtures": [],
+          "exercises": [
+            {
+              "id": "02-reading-trace-output-exercise-1",
+              "title": "Practice",
+              "description": "1. Find the extracted value in the trace.\n2. Find the branch in the trace.\n3. Explain why the route is the one it is.",
+              "starterCode": "",
+              "expected": {
+                "outputs": [],
+                "variables": {}
+              },
+              "hints": [
+                "Find the extracted value in the trace.",
+                "Find the branch in the trace.",
+                "Explain why the route is the one it is."
+              ]
+            }
+          ],
+          "dvtScenarios": []
+        },
+        {
+          "id": "03-fixing-a-bug",
+          "title": "Lesson 6.3: Fixing A Bug",
+          "markdown": "# Lesson 6.3: Fixing A Bug\n\nLast updated: 2026-03-23\nStatus: Current lesson.\n\n## Purpose\n\nTeach a beginner-friendly process for changing a wrong program into a correct\none.\n\n## Learning Goals\n\n- spot a simple bug\n- use a test and trace to explain the problem\n- change one line and verify the fix\n\n## Vocabulary\n\n- bug\n- fix\n- verify\n- regression\n\n## First Example\n\nCompare these files:\n- [03_buggy_review.dvl](/Users/admin/code/devlish/docs/course/06-testing-and-debugging/examples/03_buggy_review.dvl#L1)\n- [03_fixed_review.dvl](/Users/admin/code/devlish/docs/course/06-testing-and-debugging/examples/03_fixed_review.dvl#L1)\n- [03_fixed_review.dvt](/Users/admin/code/devlish/docs/course/06-testing-and-debugging/checks/03_fixed_review.dvt#L1)\n\n## Big Idea\n\nA bug is a program doing the wrong thing.\n\nThe beginner-friendly repair loop is:\n1. notice the wrong behavior\n2. isolate the bad rule\n3. change the rule\n4. rerun the check\n\n## Run The Passing Check\n\n```bash\n./bin/devlish test docs/course/06-testing-and-debugging/checks/03_fixed_review.dvt\n```\n\n## Practice\n\n1. Compare the threshold in the buggy file to the threshold in the fixed file.\n2. Explain why the buggy one is wrong.\n3. Explain how the test protects the repaired version.\n",
+          "examples": [
+            {
+              "filename": "03_buggy_review.dvl",
+              "source": "# Lesson 6.3 example: buggy threshold\n\n# This limit is intentionally too low for the lesson.\ninvoice_amount equals 900\nreview_limit equals 500\nneeds_review equals false\nneeds_review equals true if invoice_amount >= review_limit\n"
+            },
+            {
+              "filename": "03_fixed_review.dvl",
+              "source": "# Lesson 6.3 example: corrected threshold\n\n# The corrected limit makes a 900 invoice stay below manual review.\ninvoice_amount equals 900\nreview_limit equals 1000\nneeds_review equals false\nneeds_review equals true if invoice_amount >= review_limit\n"
+            }
+          ],
+          "fixtures": [],
+          "exercises": [
+            {
+              "id": "03-fixing-a-bug-exercise-1",
+              "title": "Practice",
+              "description": "1. Compare the threshold in the buggy file to the threshold in the fixed file.\n2. Explain why the buggy one is wrong.\n3. Explain how the test protects the repaired version.",
+              "starterCode": "# Lesson 6.3 example: buggy threshold\n\n# This limit is intentionally too low for the lesson.\ninvoice_amount equals 900\nreview_limit equals 500\nneeds_review equals false\nneeds_review equals true if invoice_amount >= review_limit\n",
+              "expected": {
+                "outputs": [],
+                "variables": {}
+              },
+              "hints": [
+                "Compare the threshold in the buggy file to the threshold in the fixed file.",
+                "Explain why the buggy one is wrong.",
+                "Explain how the test protects the repaired version."
+              ]
+            }
+          ],
+          "dvtScenarios": [
+            {
+              "description": "small invoices do not need review",
+              "file": "../examples/03_fixed_review.dvl",
+              "expected": {
+                "variables": {
+                  "needs_review": false
+                }
+              }
+            }
+          ]
+        },
+        {
+          "id": "04-failing-with-a-clear-message",
+          "title": "Lesson 6.4: Failing With A Clear Message",
+          "markdown": "# Lesson 6.4: Failing With A Clear Message\n\nLast updated: 2026-03-25\nStatus: Current lesson.\n\n## Purpose\n\nTeach the beginner idea that a program can stop on purpose and explain why.\n\n## Learning Goals\n\n- explain what `Fail with ...` means\n- stop a Devlish program with a clear message\n- understand the difference between normal output and a failure\n\n## Vocabulary\n\n- fail\n- error message\n- stop\n- reason\n\n## Big Idea\n\nSometimes a program should not keep going.\n\nIf an important condition is wrong, the program can stop and say why.\n\nIn Devlish, one simple way to do that is:\n\n```text\nFail with \"Contact email is required\"\n```\n\n## Example File\n\n- [04_failing_with_message.dvl](/Users/admin/code/devlish/docs/course/06-testing-and-debugging/examples/04_failing_with_message.dvl#L1)\n\n## Example Program\n\n```text\ncontact_email equals \"\"\n\nIf contact_email is \"\"\n  Fail with \"Contact email is required\"\n\nPrint \"This line will not run\"\n```\n\n## How To Run It\n\n```bash\n./bin/devlish run docs/course/06-testing-and-debugging/examples/04_failing_with_message.dvl\n```\n\n## What Happens\n\n1. The program stores an empty contact email.\n2. The `If` condition is true.\n3. `Fail with ...` stops the program.\n4. The final `Print` line never runs.\n\n## Why This Matters\n\nUseful programs should explain failure clearly.\n\nThis helps the learner see that:\n- not every run is supposed to succeed\n- some failures are intentional and correct\n- a clear message is better than a vague crash\n\n## Try This\n\n1. Replace the empty string with `\"team@example.com\"`.\n2. Run the file again.\n3. What changes?\n\n## Check Yourself\n\n1. What is the difference between `Print` and `Fail with`?\n2. Does the program keep running after `Fail with`?\n3. Why is a clear failure message useful?\n",
+          "examples": [
+            {
+              "filename": "04_failing_with_message.dvl",
+              "source": "# Lesson 6.4 example: stop with a clear message\n\ncontact_email equals \"\"\n\n# Fail ends the program immediately with the supplied message.\nIf contact_email is \"\"\n  Fail with \"Contact email is required\"\n\n# This line demonstrates that execution stops after Fail.\nPrint \"This line will not run\"\n"
+            }
+          ],
+          "fixtures": [],
+          "exercises": [],
+          "dvtScenarios": []
+        },
+        {
+          "id": "05-requiring-a-condition",
+          "title": "Lesson 6.5: Requiring A Condition",
+          "markdown": "# Lesson 6.5: Requiring A Condition\n\nLast updated: 2026-03-25\nStatus: Current lesson.\n\n## Purpose\n\nTeach a beginner-friendly way to stop a program when an important condition is\nnot true.\n\n## Learning Goals\n\n- read a `Require ... otherwise fail with ...` line\n- explain the difference between a condition and an error message\n- use `Require` to protect a program from bad state\n\n## Vocabulary\n\n- require\n- condition\n- fail\n- message\n\n## Example Program\n\nFile:\n- [05_require_review_status.dvl](/Users/admin/code/devlish/docs/course/06-testing-and-debugging/examples/05_require_review_status.dvl#L1)\n\n```text\nreview_status equals \"pending\"\nRequire review_status is \"approved\" otherwise fail with \"Review must be approved\"\nPrint \"ready to continue\"\n```\n\n## How To Run It\n\n```bash\n./bin/devlish run docs/course/06-testing-and-debugging/examples/05_require_review_status.dvl\n```\n\n## What Each Line Means\n\n`review_status equals \"pending\"`\nStores the current review status.\n\n`Require review_status is \"approved\" otherwise fail with \"Review must be approved\"`\nChecks whether the status is `approved`.\n\nIf it is not, the program stops and shows the message `Review must be approved`.\n\n`Print \"ready to continue\"`\nWould only run if the requirement passed.\n\n## Expected Result\n\nThis program fails with:\n\n```text\nReview must be approved\n```\n\nThe final `Print` line does not run.\n\n## Why This Matters\n\nPrograms often depend on something being true before they continue.\n\n`Require` gives you a clear way to say:\n- this must be true\n- otherwise stop\n- show this message\n\nThat is easier for beginners to read than building the same idea from a larger\n`If` block every time.\n\n## Try This\n\n1. Change `pending` to `approved` and run the file again.\n2. Change the failure message to something more specific.\n3. Add a `Print \"ready to continue\"` line after the `Require` and notice when it appears.\n\n## Check Yourself\n\n1. What does `Require` check?\n2. When does the failure message appear?\n3. Does the program continue after a failed `Require`?\n\n## Related Lessons\n\n- [03-fixing-a-bug.md](/Users/admin/code/devlish/docs/course/06-testing-and-debugging/03-fixing-a-bug.md#L1)\n- [04-failing-with-a-clear-message.md](/Users/admin/code/devlish/docs/course/06-testing-and-debugging/04-failing-with-a-clear-message.md#L1)\n",
+          "examples": [
+            {
+              "filename": "05_require_review_status.dvl",
+              "source": "# Lesson 6.5 example: require a condition before continuing\n\nreview_status equals \"pending\"\n\n# Require is a compact way to fail unless the condition is true.\nRequire review_status is \"approved\" otherwise fail with \"Review must be approved\"\nPrint \"ready to continue\"\n"
+            }
+          ],
+          "fixtures": [],
+          "exercises": [],
+          "dvtScenarios": []
+        },
+        {
+          "id": "06-recovering-with-try",
+          "title": "Lesson 6.6: Recovering With Try",
+          "markdown": "# Lesson 6.6: Recovering With Try\n\nLast updated: 2026-03-26\nStatus: Current lesson.\n\n## Purpose\n\nTeach that not every problem has to stop the whole program.\n\n## Learning Goals\n\n- explain what `Try:` means\n- explain what `Otherwise:` means after a `Try:`\n- read a small program that recovers from a failed requirement\n\n## Vocabulary\n\n- recovery\n- fallback\n- failure\n- continue safely\n\n## Big Idea\n\nSometimes a program should stop.\n\nSometimes a program should use a safe fallback instead.\n\nDevlish now supports that pattern with:\n\n```text\nTry:\n  ...\nOtherwise:\n  ...\n```\n\nThe `Try:` block does the main work.\n\nIf something inside it fails, the `Otherwise:` block runs as the fallback.\n\n## Example File\n\n- [06_try_recovery.dvl](/Users/admin/code/devlish/docs/course/06-testing-and-debugging/examples/06_try_recovery.dvl#L1)\n\n## Example\n\n```text\nreview_status equals \"pending\"\n\nTry:\n  Require review_status is \"approved\" otherwise fail with \"Review must be approved\"\nOtherwise:\n  review_status equals \"manual_review\"\n  Print \"used fallback\"\n\nPrint review_status\n```\n\n## How To Run It\n\n```bash\n./bin/devlish run docs/course/06-testing-and-debugging/examples/06_try_recovery.dvl\n```\n\n## What Happens\n\n1. The program starts with `review_status` set to `\"pending\"`.\n2. The `Try:` block checks whether the review is approved.\n3. That requirement fails.\n4. Instead of ending the whole run, the `Otherwise:` block runs.\n5. The program uses `\"manual_review\"` as a safe fallback.\n\n## Expected Output\n\n```text\nused fallback\nmanual_review\n```\n\n## Why This Matters\n\nThis is the first recovery-style construct in Devlish.\n\nIt helps beginners see that programs can do more than:\n- succeed\n- fail\n\nThey can also:\n- try the main path\n- fall back to a safer path\n\n## Try This\n\n1. Change `review_status` to `\"approved\"` and run the file again.\n2. Remove the `Print \"used fallback\"` line and compare the output.\n3. Change the fallback value from `\"manual_review\"` to `\"needs_attention\"`.\n\n## Check Yourself\n\n1. What causes the `Otherwise:` block to run?\n2. What value does the program use after recovery?\n3. When would recovery be better than stopping the program?\n",
+          "examples": [
+            {
+              "filename": "06_try_recovery.dvl",
+              "source": "# Lesson 6.6 example: recover from a failed requirement\n\nreview_status equals \"pending\"\n\n# Try runs the risky step first.\nTry:\n  Require review_status is \"approved\" otherwise fail with \"Review must be approved\"\nOtherwise:\n  # Otherwise runs only if the Try block fails.\n  review_status equals \"manual_review\"\n  Print \"used fallback\"\n\nPrint review_status\n"
+            }
+          ],
+          "fixtures": [],
+          "exercises": [],
+          "dvtScenarios": [
+            {
+              "description": "try block recovers with a fallback",
+              "file": "../examples/06_try_recovery.dvl",
+              "expected": {
+                "variables": {
+                  "review_status": "manual_review"
+                }
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "projects",
+      "title": "Projects",
+      "description": "This folder is the home for milestone projects that tie multiple units together.",
+      "lessons": [
+        {
+          "id": "01-first-document-checker",
+          "title": "Project 1: First Document Checker",
+          "markdown": "# Project 1: First Document Checker\n\nLast updated: 2026-03-23\nStatus: Current project brief.\n\n## Goal\n\nBuild a small program that loads a document and checks whether required text is\npresent.\n\n## Skills Combined\n\n- sequence\n- input and output\n- first program structure\n\n## Suggested Deliverables\n\n- one `.dvl` file\n- one small input text file\n- one sentence explaining what should count as success\n",
+          "examples": [],
+          "fixtures": [],
+          "exercises": [],
+          "dvtScenarios": []
+        },
+        {
+          "id": "02-first-branching-workflow",
+          "title": "Project 2: First Branching Workflow",
+          "markdown": "# Project 2: First Branching Workflow\n\nLast updated: 2026-03-23\nStatus: Current project brief.\n\n## Goal\n\nBuild a workflow that extracts a value, compares it to a rule, and chooses one\nof two outcomes.\n\n## Skills Combined\n\n- values and names\n- comparisons\n- `If` and `Otherwise`\n\n## Suggested Deliverables\n\n- one `.dvl` file with a clear branch\n- one example input\n- one short explanation of why each branch exists\n",
+          "examples": [],
+          "fixtures": [],
+          "exercises": [],
+          "dvtScenarios": []
+        },
+        {
+          "id": "03-first-class-calculator",
+          "title": "Project 3: First Class Calculator",
+          "markdown": "# Project 3: First Class Calculator\n\nLast updated: 2026-03-23\nStatus: Current project brief.\n\n## Goal\n\nBuild a small class-style Devlish file with a public method and a helper.\n\n## Skills Combined\n\n- methods\n- parameters\n- return values\n- helper methods\n\n## Suggested Deliverables\n\n- one class-style `.dvl` file\n- one public method\n- one helper method\n- two example method runs with different arguments\n",
+          "examples": [],
+          "fixtures": [],
+          "exercises": [],
+          "dvtScenarios": []
+        },
+        {
+          "id": "04-first-tested-real-program",
+          "title": "Project 4: First Tested Real Program",
+          "markdown": "# Project 4: First Tested Real Program\n\nLast updated: 2026-03-23\nStatus: Current project brief.\n\n## Goal\n\nBuild a realistic workflow and protect it with at least one Devlish-native\ntest.\n\n## Skills Combined\n\n- real workflows\n- outputs\n- testing\n- debugging\n\n## Suggested Deliverables\n\n- one realistic workflow file\n- one `.dvt` check\n- one short note describing the bug or risk the test protects against\n",
+          "examples": [],
+          "fixtures": [],
+          "exercises": [],
+          "dvtScenarios": []
+        }
+      ]
+    }
+  ]
+}

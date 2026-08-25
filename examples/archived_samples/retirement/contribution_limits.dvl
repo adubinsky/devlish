@@ -1,0 +1,31 @@
+# Retirement: Contribution limits checker (simplified)
+
+Load examples/retirement/data/contribution_profile.txt as Contribution Profile
+
+Find participant age and save as participant_age
+Find coverage type and save as coverage_type
+
+participant_age equals 0 if participant_age == nil
+
+standard_401k_limit equals 23500
+catch_up_50_plus equals 7500
+catch_up_60_63 equals 11250
+
+max_401k_deferral equals standard_401k_limit
+max_401k_deferral equals standard_401k_limit plus catch_up_50_plus if participant_age >= 50
+max_401k_deferral equals standard_401k_limit plus catch_up_60_63 if participant_age >= 60 and participant_age <= 63
+
+ira_standard_limit equals 7000
+ira_catch_up equals 1000
+max_ira_contribution equals ira_standard_limit
+max_ira_contribution equals ira_standard_limit plus ira_catch_up if participant_age >= 50
+
+hsa_self_only_limit equals 4300
+hsa_family_limit equals 8550
+hsa_catch_up_55_plus equals 1000
+max_hsa_contribution equals 0
+max_hsa_contribution equals hsa_self_only_limit if coverage_type == self_only
+max_hsa_contribution equals hsa_family_limit if coverage_type == family
+max_hsa_contribution equals max_hsa_contribution plus hsa_catch_up_55_plus if participant_age >= 55
+
+Route max_401k_deferral to retirement_planning_queue

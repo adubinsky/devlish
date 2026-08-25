@@ -1,0 +1,27 @@
+# Environment
+.env
+.env.local
+/.claude/*
+
+# Rust build artifacts
+/crates/*/target/
+/crates/*/node_modules/
+/crates/*/devlish_runner.wasm
+/crates/*/pkg/
+
+# Devlish runtime
+/.devlish/
+/log/
+/tmp/
+/pkg/
+
+# macOS
+.DS_Store
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.gstack/

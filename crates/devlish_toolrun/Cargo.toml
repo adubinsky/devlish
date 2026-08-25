@@ -1,0 +1,10 @@
+[package]
+name = "devlish-toolrun"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+description = "Rust command-output compressor for Devlish agent tool calls"
+
+[[bin]]
+name = "devlish-toolrun"
+path = "src/main.rs"

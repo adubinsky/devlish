@@ -1,0 +1,28 @@
+# Medication Invoice Verifier Definitions
+#
+# This file defines business terms and thresholds for invoice verification.
+# Keep terms simple and explicit to improve deterministic parsing.
+
+# Core thresholds
+minimum_mapping_confidence is 90
+max_quantity_default is 30
+max_refills_default is 3
+
+# Decision labels
+approved_status is approved
+denied_status is denied
+review_status is needs review
+
+# Reason labels
+reason_missing_patient is missing patient id
+reason_missing_approved_list is missing approved medication list
+reason_not_approved is medication not approved for patient
+reason_quantity_exceeded is quantity limit exceeded
+reason_refill_exceeded is refill limit exceeded
+reason_mapping_uncertain is medication mapping uncertain
+
+# Data references (semantic definitions)
+patient_record is patient profile from PatientService
+approved_list is patient specific approved medications at service date
+normalized_medication is canonical medication identity from MedicationService
+authorization_record is prior authorization limits from AuthorizationService

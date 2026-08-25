@@ -1,0 +1,9 @@
+# Lesson 3.8 example: update fields inside a record
+
+# Set can write to nested fields when the surrounding record already exists.
+Set amount of invoice of review_packet to 1300
+Set reviewer of review_packet to "Ada"
+
+# Print the changed fields so the result is visible.
+Print amount of invoice of review_packet
+Print reviewer of review_packet

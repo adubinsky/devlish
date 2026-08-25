@@ -1,0 +1,41 @@
+# Devlish-native curriculum checks for the tutorial lessons
+
+Scenario "lesson 1 loads a document and checks required text"
+Given document from "../data/contract_notice.txt"
+When I run "../01_load_and_check.dvl"
+Then run should succeed
+Then check for "payment terms" should pass
+Then check for "liability cap" should pass
+Then check for "governing law" should pass
+
+Scenario "lesson 2 extracts and validates values"
+When I run "../02_extract_and_validate.dvl"
+Then run should succeed
+Then liability_cap should equal 1500000
+Then payment_terms should equal 45
+Then validation for liability_cap should pass
+Then validation for payment_terms should pass
+
+Scenario "lesson 3 routes approved work"
+When I run "../03_branch_and_route.dvl"
+Then run should succeed
+Then review_status should equal "approved"
+Then the route should be "approved_queue"
+
+Scenario "lesson 4 sends an email output"
+When I run "../04_send_email_output.dvl"
+Then run should succeed
+Then review_mailbox should equal "approvals_team"
+Then service "NotificationService" action "send_email" should have to "approvals_team"
+Then service "NotificationService" action "send_email" should have template "review_complete"
+
+Scenario "lesson 5 sends a message output"
+When I run "../05_send_message_output.dvl"
+Then run should succeed
+Then claims_queue should equal "claims_review_queue"
+Then service "MessagingService" action "send_message" should have to "claims_review_queue"
+
+Scenario "lesson 6 binds a second name"
+When I run "../06_bind_a_name.dvl"
+Then run should succeed
+Then working_copy should equal document

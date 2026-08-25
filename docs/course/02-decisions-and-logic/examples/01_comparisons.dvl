@@ -1,0 +1,9 @@
+# Lesson 2.1 example: use a comparison to update a value
+
+# Set up the facts that the comparison will use.
+invoice_amount equals 1200
+review_limit equals 1000
+needs_review equals false
+
+# The comparison is true, so this line changes needs_review to true.
+needs_review equals true if invoice_amount >= review_limit

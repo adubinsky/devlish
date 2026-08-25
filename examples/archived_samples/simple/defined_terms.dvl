@@ -1,0 +1,12 @@
+# Simple Defined Terms Example (using current `is` definition syntax)
+
+liability cap is highest liability cap amount
+termination notice is number of days before contract termination
+
+Load examples/sample_contract.txt
+
+Find liability cap and save as liability_cap
+Find termination notice and save as termination_notice
+
+liability_cap must be at least 1000000
+termination_notice must be at least 30

@@ -1,0 +1,7 @@
+# Lesson 1: Load input and check required text
+
+Load examples/archived_samples/tutorial/data/contract_notice.txt as Document
+
+Document must contain payment terms
+Document must contain liability cap
+Document must contain governing law

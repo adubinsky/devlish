@@ -1,0 +1,5 @@
+employee name: Alex Perez
+start date: 2026-03-01
+manager: Priya Shah
+equipment request: laptop
+offer letter: attached

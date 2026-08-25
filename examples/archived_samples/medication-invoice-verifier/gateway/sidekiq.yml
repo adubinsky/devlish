@@ -1,0 +1,4 @@
+:concurrency: 5
+:queues:
+  - [medication_invoices, 3]
+  - [default, 1]

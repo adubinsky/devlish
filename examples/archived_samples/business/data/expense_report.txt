@@ -1,0 +1,5 @@
+employee: Judy Smith
+department: Marketing
+total amount: 1450
+receipt count: 3
+submitted date: 2026-02-20

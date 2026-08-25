@@ -1,0 +1,7 @@
+# Lesson 1.4 example: give a value another readable name
+
+# Load the packet with the standard Document name.
+Load docs/course/01-values-and-names/examples/03_review_packet.txt as Document
+
+# Alias lets later code use a domain-specific name for the same value.
+Alias Document as Packet

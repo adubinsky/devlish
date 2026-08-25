@@ -1,0 +1,21 @@
+services:
+  PatientService:
+    type: api
+    endpoint: https://example.local/patient
+    capability: patient_lookup
+  MedicationService:
+    type: api
+    endpoint: https://example.local/medication
+    capability: medication_normalization
+  AuthorizationService:
+    type: api
+    endpoint: https://example.local/authorization
+    capability: authorization_lookup
+  DecisionLog:
+    type: storage
+    endpoint: postgres://decision-log
+    capability: immutable_audit_log
+  NotificationService:
+    type: api
+    endpoint: https://example.local/notify
+    capability: outbound_notifications

@@ -1,0 +1,6 @@
+{
+  "schema_version": "devlish-benchmark-input-v0",
+  "workbook": "fixture.xlsx",
+  "assertion_report_path": "../../tmp/xlsx_expected_cells/report.json",
+  "benchmark_report_path": "../../tmp/xlsx_expected_cells/benchmark-report.json"
+}

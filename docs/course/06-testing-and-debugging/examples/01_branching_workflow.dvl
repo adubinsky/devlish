@@ -1,0 +1,12 @@
+# Lesson 6.1 example: a small workflow protected by a test
+
+# Load a known packet so the branch behavior is repeatable.
+Load docs/course/06-testing-and-debugging/examples/01_branch_packet.txt as Document
+
+Find review status and save as review_status
+
+# This branch is the behavior the matching check file verifies.
+If review_status is "approved"
+  Route invoice to approved_queue
+Otherwise
+  Route invoice to manual_review_queue

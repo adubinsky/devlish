@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Devlish Bytecode WASM Demo</title>
+    <style>
+      body {
+        font-family: system-ui, sans-serif;
+        margin: 2rem;
+        max-width: 48rem;
+      }
+
+      pre {
+        background: #111;
+        color: #f5f5f5;
+        padding: 1rem;
+        overflow: auto;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Devlish Bytecode WASM Demo</h1>
+    <button id="run">Run Workflow</button>
+    <pre id="output">Idle</pre>
+
+    <script type="module">
+      import { loadDevlishWorkflow } from "../../../crates/devlish_wasm_runner/js/index.mjs";
+
+      const output = document.querySelector("#output");
+      const workflow = await loadDevlishWorkflow({
+        wasmUrl: "../../../pkg/devlish_wasm_runner/devlish_runner.wasm",
+        bytecodeUrl: "../../../tmp/review_score.dvlc.json",
+        host: {
+          emitEvent(event) {
+            if (event.type === "output_emitted") {
+              output.textContent += `\nEvent: ${JSON.stringify(event)}`;
+            }
+          },
+          writeFile(request) {
+            output.textContent += `\nExport: ${request.path} = ${request.content}`;
+            return true;
+          }
+        }
+      });
+
+      document.querySelector("#run").addEventListener("click", async () => {
+        output.textContent = "Running...";
+        const result = await workflow.run({ customer_tier: "priority" });
+        output.textContent += `\n\n${JSON.stringify(result, null, 2)}`;
+      });
+    </script>
+  </body>
+</html>

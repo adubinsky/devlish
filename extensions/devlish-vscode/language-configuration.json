@@ -1,0 +1,25 @@
+{
+  "comments": {
+    "lineComment": "#"
+  },
+  "brackets": [],
+  "autoClosingPairs": [
+    { "open": "\"", "close": "\"" },
+    { "open": "'", "close": "'" }
+  ],
+  "surroundingPairs": [
+    { "open": "\"", "close": "\"" },
+    { "open": "'", "close": "'" }
+  ],
+  "folding": {
+    "offSide": true,
+    "markers": {
+      "start": "^\\s*(If|For each|While|Until|Try|Class|Method|Private method)\\b",
+      "end": "^\\s*(Otherwise|$)"
+    }
+  },
+  "indentationRules": {
+    "increaseIndentPattern": "^\\s*(If|Otherwise|For each|While|Until|Try|Otherwise)\\b.*:?\\s*$",
+    "decreaseIndentPattern": "^\\s*(Otherwise)\\b"
+  }
+}
