@@ -17,6 +17,24 @@ A shared VM (`devlish-vm`) executes that bytecode natively on the command line
 or via WASM in browsers and Node. No Ruby, Python, or Node runtime is needed
 to compile or run. MIT licensed.
 
+```dvl
+Operations's Invoice Reviewer:
+  review invoice using invoice amount:
+    review_needed equals false
+    review_needed equals true if invoice amount >= 10000
+    escalation_label equals "standard"
+    escalation_label equals "priority" if review_needed == true
+    respond with escalation_label
+
+  classify risk using invoice amount:
+    risk equals "low"
+    risk equals "medium" if invoice amount >= 5000
+    risk equals "high" if invoice amount >= 25000
+    respond with risk
+```
+
+From `docs/course/04-methods-and-classes/examples/04_invoice_reviewer.dvl`.
+
 ## Getting Started
 
 ```bash
