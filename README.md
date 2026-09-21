@@ -55,13 +55,16 @@ https://devlish.dev/playground.html (WebAssembly; nothing you type is uploaded).
 
 ```text
 devlish compile <file.dvl> [--output path.dvlc.json]   Compile to bytecode
-devlish run <file> [--input json] [--method name] [--env KEY=VALUE] [--quiet]
+devlish run <file> [--input json] [--method name] [--env KEY=VALUE]
+            [--provider NAME] [--model NAME] [--log-level LEVEL|--quiet]
                                                        Run a .dvl or .dvlc.json file
 devlish validate <file.dvl>                            Check syntax (alias: lint)
 devlish disassemble <file.dvlc.json>                   Show bytecode instructions
 devlish fmt <file.dvl>                                 Format a source file
 devlish repl                                           Interactive read-eval-print loop
 devlish new <project_name>                             Create a new project
+devlish serve [--bind HOST:PORT] [--log-level LEVEL]   HTTP daemon (/v1/health|compile|run|lint|…)
+devlish harness run|resume|init-config                 Outbound LLM sessions
 devlish mcp [--tools-dir dir]                          Start MCP server (JSON-RPC over stdio)
 devlish course                                         Interactive beginner course
 devlish evidence <rule.dvl>                            Run golden cases, emit signed evidence report
@@ -71,6 +74,10 @@ devlish release <verb>                                 Release lifecycle: propos
                                                        publish, retire, list, verify
 devlish version | help
 ```
+
+Logging: `--log-level error|info|debug` (or `DEVLISH_LOG`); `--quiet` forces `error`.
+HTTP caller guide: `docs/SERVE_QUICKSTART.md`. Live spin-up/down check:
+`./scripts/llm_serve_harness.sh` (OpenAI or OpenRouter).
 
 The `run` command auto-compiles `.dvl` files in memory. Implicit file
 arguments work: `devlish script.dvl` is the same as `devlish run script.dvl`.
@@ -162,6 +169,18 @@ claude mcp add devlish -- devlish mcp --tools-dir /path/to/tools
 `Ask` lines define the tool's input schema; `Respond with` returns typed JSON
 and `Fail with` returns structured errors the model can parse and retry.
 Describe tools with types in `devlish.toml` manifests for richer discovery.
+
+## Outbound harness: Devlish calls your LLM
+
+Flip the polarity: a `.dvl` program can call Anthropic, OpenAI, or Ollama.
+
+```bash
+devlish harness init-config
+devlish harness run examples/outbound_classify/classify.dvl --provider anthropic
+devlish serve --bind 127.0.0.1:7420   # HTTP API daemon
+```
+
+See `docs/ENVIRONMENT_ROADMAP_STATUS.md` and `docs/LANGUAGE_REFERENCE.md`.
 
 ## WASM Embedding
 

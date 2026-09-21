@@ -140,6 +140,28 @@ The first test harness is aimed at the Devlish 2.0 tutorial subset:
 It is intended to validate lesson programs and early LLM-authored examples in
 Devlish terms.
 
+## CLI log levels (DEVL-109)
+
+When cross-checking failures across `compile` / `run` / `serve`, dial verbosity
+with:
+
+```bash
+devlish run program.dvl --log-level debug
+DEVLISH_LOG=info devlish serve --bind 127.0.0.1:7420
+devlish run program.dvl --quiet   # same as --log-level error
+```
+
+| Level | What you get |
+|-------|----------------|
+| `error` | Failures only |
+| `info` (default) | Phase progress, HTTP `METHOD path -> status`, LLM completion summaries |
+| `debug` | VM instruction events, HTTP body previews, LLM prompt sizes |
+
+JSON event lines on stderr include a `"level"` field; human lines use
+`[error]` / `[info]` / `[debug]` prefixes. Live serve spin-up/down against an
+outbound LLM: `./scripts/llm_serve_harness.sh`. Caller guide:
+`docs/SERVE_QUICKSTART.md`.
+
 ## Current Limitations
 
 The current harness does not yet support:

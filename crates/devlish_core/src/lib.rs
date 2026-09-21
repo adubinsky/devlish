@@ -2,6 +2,11 @@ use serde::Serialize;
 use serde_json::{json, Map, Number, Value};
 use std::collections::{HashMap, HashSet};
 
+pub mod logutil;
+
+#[cfg(feature = "native")]
+pub mod service;
+
 const FORMAT: &str = "devlish-bytecode";
 const FORMAT_VERSION: u8 = 0;
 const COMPILER_VERSION: &str = "0.1.0";
@@ -267,6 +272,25 @@ enum StatementKind {
     Checkpoint {
         prompt: Expression,
         context_key: Option<String>,
+    },
+    /// Outbound LLM call: `Ask the model with <prompt> as <dest>`
+    LlmComplete {
+        prompt: Expression,
+        dest: String,
+        model: Option<String>,
+        provider: Option<String>,
+        expect_json: bool,
+    },
+    /// Journaled wall clock: `Get the current time as <dest>`
+    ClockNow {
+        dest: String,
+        clock_kind: String,
+    },
+    /// Journaled random: `Draw a random number as <dest>` / with range
+    RandomDraw {
+        dest: String,
+        low: Option<Expression>,
+        high: Option<Expression>,
     },
     FileCopy {
         source: Expression,
@@ -1394,6 +1418,9 @@ fn rename_symbols_in_statement(statement: &mut Statement, rename: &HashMap<Strin
         | StatementKind::RespondWith { .. }
         | StatementKind::HttpDownload { .. }
         | StatementKind::Checkpoint { .. }
+        | StatementKind::LlmComplete { .. }
+        | StatementKind::ClockNow { .. }
+        | StatementKind::RandomDraw { .. }
         | StatementKind::FileCopy { .. }
         | StatementKind::FileMove { .. }
         | StatementKind::FileMkdir { .. }
@@ -1758,6 +1785,11 @@ fn collect_defined_symbols(statement: &Statement, symbols: &mut HashSet<String>)
         StatementKind::FileGlob { dest, .. } => {
             symbols.insert(dest.clone());
         }
+        StatementKind::LlmComplete { dest, .. }
+        | StatementKind::ClockNow { dest, .. }
+        | StatementKind::RandomDraw { dest, .. } => {
+            symbols.insert(dest.clone());
+        }
         StatementKind::FileCopy { .. }
         | StatementKind::FileMove { .. }
         | StatementKind::FileMkdir { .. }
@@ -2097,6 +2129,16 @@ fn each_expression_in_statement(statement: &Statement, visit: &mut impl FnMut(&E
         }
         StatementKind::XlsxReadRows { path, .. } => visit(path),
         StatementKind::Checkpoint { prompt, .. } => visit(prompt),
+        StatementKind::LlmComplete { prompt, .. } => visit(prompt),
+        StatementKind::ClockNow { .. } => {}
+        StatementKind::RandomDraw { low, high, .. } => {
+            if let Some(low) = low {
+                visit(low);
+            }
+            if let Some(high) = high {
+                visit(high);
+            }
+        }
         StatementKind::FileCopy {
             source,
             destination,
@@ -2225,6 +2267,16 @@ fn each_expression_in_statement_mut(
         }
         StatementKind::XlsxReadRows { path, .. } => visit(path),
         StatementKind::Checkpoint { prompt, .. } => visit(prompt),
+        StatementKind::LlmComplete { prompt, .. } => visit(prompt),
+        StatementKind::ClockNow { .. } => {}
+        StatementKind::RandomDraw { low, high, .. } => {
+            if let Some(low) = low {
+                visit(low);
+            }
+            if let Some(high) = high {
+                visit(high);
+            }
+        }
         StatementKind::FileCopy {
             source,
             destination,
@@ -2319,6 +2371,9 @@ fn child_statement_blocks(statement: &Statement) -> Vec<&[Statement]> {
         | StatementKind::HttpDownload { .. }
         | StatementKind::XlsxReadRows { .. }
         | StatementKind::Checkpoint { .. }
+        | StatementKind::LlmComplete { .. }
+        | StatementKind::ClockNow { .. }
+        | StatementKind::RandomDraw { .. }
         | StatementKind::FileCopy { .. }
         | StatementKind::FileMove { .. }
         | StatementKind::FileMkdir { .. }
@@ -2380,6 +2435,9 @@ fn child_statement_blocks_mut(statement: &mut Statement) -> Vec<&mut Vec<Stateme
         | StatementKind::HttpDownload { .. }
         | StatementKind::XlsxReadRows { .. }
         | StatementKind::Checkpoint { .. }
+        | StatementKind::LlmComplete { .. }
+        | StatementKind::ClockNow { .. }
+        | StatementKind::RandomDraw { .. }
         | StatementKind::FileCopy { .. }
         | StatementKind::FileMove { .. }
         | StatementKind::FileMkdir { .. }
@@ -2797,6 +2855,20 @@ fn parse_manifest_permission(line: &str) -> Option<ManifestPermission> {
             scope: None,
         });
     }
+    // "Call language models" must precede the generic "Call <service> service"
+    // matcher, which would otherwise treat it as a service_call.
+    if let Some(rest) = lower.strip_prefix("call language models via ") {
+        return Some(ManifestPermission {
+            kind: "llm_complete".to_string(),
+            scope: Some(rest.trim().trim_matches('"').to_string()),
+        });
+    }
+    if lower == "call language models" {
+        return Some(ManifestPermission {
+            kind: "llm_complete".to_string(),
+            scope: None,
+        });
+    }
     // "Call <service> service"
     if let Some(rest) = lower.strip_prefix("call ") {
         let service = rest.trim_end_matches(" service").trim();
@@ -2815,6 +2887,18 @@ fn parse_manifest_permission(line: &str) -> Option<ManifestPermission> {
     if lower == "http requests" {
         return Some(ManifestPermission {
             kind: "http_request".to_string(),
+            scope: None,
+        });
+    }
+    if lower == "clock" || lower == "current time" {
+        return Some(ManifestPermission {
+            kind: "clock".to_string(),
+            scope: None,
+        });
+    }
+    if lower == "randomness" || lower == "random" {
+        return Some(ManifestPermission {
+            kind: "random".to_string(),
             scope: None,
         });
     }
@@ -3461,6 +3545,34 @@ fn parse_flat_statement(line_number: usize, line: &str) -> Result<Statement, Com
                 message: None,
             },
         ));
+    }
+
+    // Ask the model ["model"] with <prompt> [expecting json] as <name>
+    if let Some(rest) = strip_prefix_ci(line, "Ask the model ") {
+        return parse_ask_the_model(rest, line, line_number);
+    }
+    // Get the current time as <name>
+    if let Some(rest) = strip_prefix_ci(line, "Get the current ") {
+        if let Some((kind_part, dest)) = split_once_ci_outside_quotes(rest, " as ") {
+            let kind_lower = kind_part.trim().to_ascii_lowercase();
+            let clock_kind = match kind_lower.as_str() {
+                "time" | "unix time" | "timestamp" => "unix",
+                "iso time" | "iso timestamp" => "iso",
+                other => other,
+            };
+            return Ok(statement(
+                line_number,
+                line,
+                StatementKind::ClockNow {
+                    dest: sanitize_name(dest.trim()),
+                    clock_kind: clock_kind.to_string(),
+                },
+            ));
+        }
+    }
+    // Draw a random number [between <low> and <high>] as <name>
+    if let Some(rest) = strip_prefix_ci(line, "Draw a random number ") {
+        return parse_random_draw(rest, line, line_number);
     }
 
     // Ask multiline "prompt" as <name>
@@ -5977,6 +6089,88 @@ impl BytecodeCompiler {
                 }
                 self.emit("CHECKPOINT", map(operands), Some(statement));
                 self.record_effect("checkpoint", statement, vec![]);
+            }
+            StatementKind::LlmComplete {
+                prompt,
+                dest,
+                model,
+                provider,
+                expect_json,
+            } => {
+                let prompt_reg = self.compile_expression(prompt, statement);
+                let dest_sym = sanitize_name(dest);
+                let dest_reg = self.next_register();
+                let mut operands = vec![
+                    ("prompt", string_value(&prompt_reg)),
+                    ("dest", string_value(&dest_reg)),
+                    ("expect_json", Value::Bool(*expect_json)),
+                ];
+                if let Some(model) = model {
+                    operands.push(("model", string_value(model)));
+                }
+                if let Some(provider) = provider {
+                    operands.push(("provider", string_value(provider)));
+                }
+                self.emit("LLM_COMPLETE", map(operands), Some(statement));
+                self.register_symbol(&dest_sym);
+                self.emit(
+                    "STORE",
+                    map(vec![
+                        ("symbol", string_value(&dest_sym)),
+                        ("value", string_value(&dest_reg)),
+                    ]),
+                    Some(statement),
+                );
+                self.record_effect("llm_complete", statement, vec![]);
+            }
+            StatementKind::ClockNow { dest, clock_kind } => {
+                let dest_sym = sanitize_name(dest);
+                let dest_reg = self.next_register();
+                self.emit(
+                    "CLOCK_NOW",
+                    map(vec![
+                        ("dest", string_value(&dest_reg)),
+                        ("clock_kind", string_value(clock_kind)),
+                    ]),
+                    Some(statement),
+                );
+                self.register_symbol(&dest_sym);
+                self.emit(
+                    "STORE",
+                    map(vec![
+                        ("symbol", string_value(&dest_sym)),
+                        ("value", string_value(&dest_reg)),
+                    ]),
+                    Some(statement),
+                );
+                self.record_effect("clock", statement, vec![]);
+            }
+            StatementKind::RandomDraw { dest, low, high } => {
+                let dest_sym = sanitize_name(dest);
+                let dest_reg = self.next_register();
+                let mut operands = vec![
+                    ("dest", string_value(&dest_reg)),
+                    ("distribution", string_value("uniform")),
+                ];
+                if let Some(low_expr) = low {
+                    let low_reg = self.compile_expression(low_expr, statement);
+                    operands.push(("low", string_value(&low_reg)));
+                }
+                if let Some(high_expr) = high {
+                    let high_reg = self.compile_expression(high_expr, statement);
+                    operands.push(("high", string_value(&high_reg)));
+                }
+                self.emit("RANDOM_DRAW", map(operands), Some(statement));
+                self.register_symbol(&dest_sym);
+                self.emit(
+                    "STORE",
+                    map(vec![
+                        ("symbol", string_value(&dest_sym)),
+                        ("value", string_value(&dest_reg)),
+                    ]),
+                    Some(statement),
+                );
+                self.record_effect("random", statement, vec![]);
             }
             StatementKind::Import { .. } => {
                 // Import statements are resolved at compile time by
@@ -8673,6 +8867,91 @@ fn strip_suffix_ci<'a>(text: &'a str, suffix: &str) -> Option<&'a str> {
         .map(|_| &text[..start])
 }
 
+/// Parse: `["model"] with <prompt> [expecting json] as <dest>`
+fn parse_ask_the_model(
+    rest: &str,
+    line: &str,
+    line_number: usize,
+) -> Result<Statement, CompileError> {
+    let mut work = rest.trim();
+    let mut model: Option<String> = None;
+    if let Some((quoted, after)) = quoted_prefix(work) {
+        model = Some(quoted);
+        work = after.trim();
+    }
+    let work = strip_prefix_ci(work, "with ").ok_or_else(|| {
+        CompileError::single(
+            line_number,
+            "Expected `Ask the model with <prompt> as <name>`",
+            line,
+        )
+    })?;
+    let (prompt_part, dest_part) = split_once_ci_outside_quotes(work, " as ").ok_or_else(|| {
+        CompileError::single(
+            line_number,
+            "Expected `as <name>` after Ask the model prompt",
+            line,
+        )
+    })?;
+    let mut prompt_text = prompt_part.trim();
+    let mut expect_json = false;
+    if let Some(before) = strip_suffix_ci(prompt_text, " expecting json") {
+        expect_json = true;
+        prompt_text = before.trim();
+    }
+    let prompt = parse_expression(prompt_text);
+    Ok(statement(
+        line_number,
+        line,
+        StatementKind::LlmComplete {
+            prompt,
+            dest: sanitize_name(dest_part.trim()),
+            model,
+            provider: None,
+            expect_json,
+        },
+    ))
+}
+
+/// Parse: `[between <low> and <high>] as <dest>`
+fn parse_random_draw(
+    rest: &str,
+    line: &str,
+    line_number: usize,
+) -> Result<Statement, CompileError> {
+    let (range_or_empty, dest) = split_once_ci_outside_quotes(rest, " as ").ok_or_else(|| {
+        CompileError::single(
+            line_number,
+            "Expected `Draw a random number as <name>`",
+            line,
+        )
+    })?;
+    let mut low = None;
+    let mut high = None;
+    let range = range_or_empty.trim();
+    if let Some(between) = strip_prefix_ci(range, "between ") {
+        if let Some((low_text, high_text)) = split_once_ci_outside_quotes(between, " and ") {
+            low = Some(parse_expression(low_text.trim()));
+            high = Some(parse_expression(high_text.trim()));
+        }
+    } else if !range.is_empty() {
+        return Err(CompileError::single(
+            line_number,
+            "Expected `Draw a random number as <name>` or `... between <low> and <high> as <name>`",
+            line,
+        ));
+    }
+    Ok(statement(
+        line_number,
+        line,
+        StatementKind::RandomDraw {
+            dest: sanitize_name(dest.trim()),
+            low,
+            high,
+        },
+    ))
+}
+
 fn split_once_ci<'a>(text: &'a str, needle: &str) -> Option<(&'a str, &'a str)> {
     let lower = text.to_ascii_lowercase();
     let needle_lower = needle.to_ascii_lowercase();
@@ -9666,6 +9945,9 @@ mod tests {
             self.files_written.push(request.clone());
             Ok(())
         }
+        fn respond(&mut self, _value: &Value) -> Result<(), String> {
+            Ok(())
+        }
         fn read_file(&mut self, request: &Value) -> Result<Value, String> {
             let path = request
                 .get("path")
@@ -9674,6 +9956,29 @@ mod tests {
             std::fs::read_to_string(path)
                 .map(Value::String)
                 .map_err(|error| format!("failed to read {path}: {error}"))
+        }
+        fn clock_now(&mut self, kind: &str) -> Result<Value, String> {
+            match kind {
+                "iso" => Ok(Value::String("1700000000".to_string())),
+                _ => Ok(json!(1700000000.0)),
+            }
+        }
+        fn random_draw(&mut self, request: &Value) -> Result<Value, String> {
+            let low = request.get("low").and_then(Value::as_f64).unwrap_or(0.0);
+            let high = request.get("high").and_then(Value::as_f64).unwrap_or(1.0);
+            Ok(json!((low + high) / 2.0))
+        }
+        fn llm_complete(&mut self, request: &Value) -> Result<Value, String> {
+            let prompt = request
+                .get("prompt")
+                .cloned()
+                .unwrap_or(Value::String(String::new()));
+            Ok(json!({
+                "text": "ok",
+                "provider": "test",
+                "model": "test",
+                "json": {"echo": prompt}
+            }))
         }
     }
 
@@ -12965,5 +13270,44 @@ Copy file from "/a" to "/b""#;
             warnings.is_empty(),
             "expected no warnings, got: {warnings:?}"
         );
+    }
+
+    #[test]
+    fn e2e_ask_the_model_compiles_to_llm_complete() {
+        let package = compile_ok(
+            "Permissions:\n  Call language models\n\n\
+             prompt equals \"hi\"\n\
+             Ask the model with prompt as reply\n\
+             Respond with reply",
+        );
+        let ops: Vec<&str> = package
+            .get("instructions")
+            .and_then(Value::as_array)
+            .unwrap()
+            .iter()
+            .filter_map(|i| i.get("op").and_then(Value::as_str))
+            .collect();
+        assert!(
+            ops.contains(&"LLM_COMPLETE"),
+            "expected LLM_COMPLETE in {ops:?}"
+        );
+    }
+
+    #[test]
+    fn e2e_clock_and_random_effects_run() {
+        let result = compile_and_run_ok(
+            "Permissions:\n  Clock\n  Randomness\n\n\
+             Get the current time as now\n\
+             Draw a random number between 1 and 2 as roll\n\
+             Respond with record with now as now and roll as roll",
+            json!({}),
+        );
+        let response = result.get("response").cloned().unwrap_or(result);
+        assert!(response.get("now").is_some(), "missing now: {response}");
+        let roll = response
+            .get("roll")
+            .and_then(Value::as_f64)
+            .expect("roll");
+        assert!((1.0..=2.0).contains(&roll), "roll out of range: {roll}");
     }
 }

@@ -586,6 +586,44 @@ Email <recipient>
 Notify <recipient>
 ```
 
+### Outbound Language Models
+
+Devlish programs can **call** an LLM through a journaled host effect. Prefer
+this over ad-hoc HTTP when the intent is model completion.
+
+```text
+Permissions:
+  Call language models
+
+Ask the model with prompt as draft
+Ask the model with prompt expecting json as classification
+Ask the model "claude-sonnet-4-20250514" with prompt as answer
+```
+
+Configure providers in `~/.devlish/config.toml` (see `devlish harness init-config`).
+Credentials resolve through the existing `.env` / `--env` chain
+(`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, etc.).
+
+CLI:
+```bash
+devlish harness run workflow.dvl --provider anthropic --model claude-sonnet-4-20250514
+devlish serve --bind 127.0.0.1:7420
+```
+
+### Clock and randomness (journaled)
+
+```text
+Permissions:
+  Clock
+  Randomness
+
+Get the current time as now
+Draw a random number as unit
+Draw a random number between 1 and 6 as roll
+```
+
+These are declared effects so governed runs can journal and replay them.
+
 ## 3) Program Manifest (Permissions and Access)
 
 A Devlish program can declare its required permissions, resource boundaries,
@@ -614,7 +652,10 @@ Available permission types:
 | Read files | `Read files` or `Read files from "<path>"` |
 | Write files | `Write files` or `Write files to "<path>"` |
 | HTTP requests | `HTTP requests` or `HTTP requests to "<domain>"` |
-| Filesystem | `Filesystem operations` or `Filesystem operations on "<path>"` |
+| Call language models | `Call language models` or `Call language models via "<provider>"` |
+| Clock | `Clock` or `Current time` |
+| Randomness | `Randomness` or `Random` |
+| Filesystem operations | `Filesystem operations` or `Filesystem operations on "<path>"` |
 | Service calls | `Call <ServiceName> service` |
 
 Scoped permissions (with `from`, `to`, or `on`) restrict the effect to paths
