@@ -1,0 +1,29 @@
+Rule:
+  id: protection.public_announcement
+  version: 1.0.0
+
+Ask "Which effect is requested?" as effect
+Ask "What are the effect arguments?" as request
+
+# Release text is reviewed as part of this versioned policy, not supplied by the model.
+approved_text equals "Example Company will attend the public developer conference."
+If effect equals "http_request":
+  If method of request equals "POST":
+    If url of request equals "https://announcements.example.invalid/v1/public":
+      header_shape equals record with "record" as headers
+      If request matches shape header_shape:
+        header_fields equals keys of headers of request
+        If count of header_fields equals 0:
+          payload equals body of request
+          shape equals record with "text" as announcement
+          If payload matches shape shape:
+            fields equals keys of payload
+            If count of fields equals 1:
+              If announcement of payload equals approved_text:
+                Respond with record with true as allow and "Only the reviewed public announcement may reach the designated endpoint." as reason
+
+If effect equals "respond":
+  If value of request equals "Public announcement submitted.":
+    Respond with record with true as allow and "The fixed acknowledgement discloses no company material." as reason
+
+Respond with record with false as allow and "Company IP session: unreviewed content and alternate destinations are prohibited." as reason

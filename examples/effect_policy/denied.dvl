@@ -1,0 +1,5 @@
+Permissions:
+  Call language models
+
+Ask the model with "This call must never reach a provider." as answer
+Respond with answer

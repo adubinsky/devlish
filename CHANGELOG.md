@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Policy enforcement and tamper-evidence reports
+- Add separately supplied Devlish effect policies to CLI runs, with deny-by-default decisions, durable pre-dispatch records, and fail-closed recording errors.
+- Add repeatable application-integrity, policy-case, and offline process-replay reports, externally checkable report digests, and English explanations authored in Devlish.
+- Add opt-in sensitive effect evidence, exact-byte artifact verification, and compiled-policy digest pinning.
+- Add NPPI and company-IP disclosure policies with 25 synthetic scenarios and tests for denial, tampering, replay, and artifact substitution.
+- Preserve quoted commas, conjunctions, and field-binding words in audit explanations and other record/list literals.
+- Document the current CLI-only enforcement boundary and the remaining signature, build-provenance, protected-loading, and external-tool-launcher work.
+
 ### Changed
 - Single quotes are no longer string delimiters; string literals are double-quoted only. Apostrophes are ordinary English text everywhere, which removes an entire class of parser bugs where a possessive (`math's pi times 2`, `r equals math's pi if flag`) silently swallowed the rest of the line by "opening a string": the operator splitter, trailing-`if` splitter, and bracket guard no longer treat `'` as a quote. Possessive markers fold into names with `_` as the only connector (`Set salesperson's commission to 5` binds `salesperson_commission`, `owners' equity` becomes `owners_equity`; read back with the plain phrasing `salesperson commission`). In expression position `X's Y` remains a module reference and errors loudly when `X` is not a `Use`d module. `Import 'file.dvl'` must now be written with double quotes.
 

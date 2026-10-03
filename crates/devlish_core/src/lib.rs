@@ -2,7 +2,9 @@ use serde::Serialize;
 use serde_json::{json, Map, Number, Value};
 use std::collections::{HashMap, HashSet};
 
+pub mod integrity;
 pub mod logutil;
+pub mod policy_log;
 
 #[cfg(feature = "native")]
 pub mod service;
@@ -4765,15 +4767,28 @@ fn split_list_items(text: &str) -> Vec<&str> {
     let bytes = lower.as_bytes();
     let len = bytes.len();
     let mut i = 0;
+    let mut in_quote = false;
     while i < len {
-        if bytes[i] == b',' {
+        if in_quote {
+            if bytes[i] == b'\\' {
+                i += 2;
+                continue;
+            }
+            if bytes[i] == b'"' {
+                in_quote = false;
+            }
+            i += 1;
+        } else if bytes[i] == b'"' {
+            in_quote = true;
+            i += 1;
+        } else if bytes[i] == b',' {
             let segment = text[start..i].trim();
             if !segment.is_empty() {
                 items.push(segment);
             }
             start = i + 1;
             i += 1;
-        } else if i + 5 <= len && &lower[i..i + 5] == " and " {
+        } else if i + 5 <= len && &bytes[i..i + 5] == b" and " {
             let segment = text[start..i].trim();
             if !segment.is_empty() {
                 items.push(segment);
@@ -7483,7 +7498,7 @@ fn parse_expression(raw: &str) -> Expression {
         let items = split_list_items(rest.trim());
         let mut fields = Vec::new();
         for item in items {
-            if let Some((val_text, key_text)) = split_once_ci(item.trim(), " as ") {
+            if let Some((val_text, key_text)) = split_once_ci_outside_quotes(item.trim(), " as ") {
                 fields.push((
                     sanitize_name(key_text.trim()),
                     parse_expression(val_text.trim()),
@@ -8782,7 +8797,9 @@ fn split_once_ci_outside_quotes<'a>(text: &'a str, needle: &str) -> Option<(&'a 
             // splitting (DEVL-127, DEVL-131).
             if ch == '"' {
                 in_quote = true;
-            } else if i + needle_len <= lower.len() && lower[i..i + needle_len] == needle_lower {
+            } else if i + needle_len <= lower.len()
+                && lower.as_bytes()[i..i + needle_len] == *needle_lower.as_bytes()
+            {
                 return Some((&text[..i], &text[i + needle_len..]));
             }
         }

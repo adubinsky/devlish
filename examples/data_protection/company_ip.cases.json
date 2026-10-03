@@ -1,0 +1,203 @@
+[
+  {
+    "name": "allow exact public announcement",
+    "input": {
+      "effect": "http_request",
+      "request": {
+        "method": "POST",
+        "url": "https://announcements.example.invalid/v1/public",
+        "headers": {},
+        "body": {
+          "announcement": "Example Company will attend the public developer conference."
+        }
+      }
+    },
+    "expected": {
+      "allow": true,
+      "reason": "Only the reviewed public announcement may reach the designated endpoint."
+    }
+  },
+  {
+    "name": "allow fixed acknowledgement",
+    "input": {
+      "effect": "respond",
+      "request": {
+        "value": "Public announcement submitted."
+      }
+    },
+    "expected": {
+      "allow": true,
+      "reason": "The fixed acknowledgement discloses no company material."
+    }
+  },
+  {
+    "name": "deny source code to model",
+    "input": {
+      "effect": "llm_complete",
+      "request": {
+        "prompt": "Synthetic confidential source: private_algorithm()",
+        "classification": "public"
+      }
+    },
+    "expected": {
+      "allow": false,
+      "reason": "Company IP session: unreviewed content and alternate destinations are prohibited."
+    }
+  },
+  {
+    "name": "deny changed release text",
+    "input": {
+      "effect": "http_request",
+      "request": {
+        "method": "POST",
+        "url": "https://announcements.example.invalid/v1/public",
+        "headers": {},
+        "body": {
+          "announcement": "Unannounced acquisition next quarter."
+        }
+      }
+    },
+    "expected": {
+      "allow": false,
+      "reason": "Company IP session: unreviewed content and alternate destinations are prohibited."
+    }
+  },
+  {
+    "name": "deny extra body field",
+    "input": {
+      "effect": "http_request",
+      "request": {
+        "method": "POST",
+        "url": "https://announcements.example.invalid/v1/public",
+        "headers": {},
+        "body": {
+          "announcement": "Example Company will attend the public developer conference.",
+          "source": "private_algorithm()"
+        }
+      }
+    },
+    "expected": {
+      "allow": false,
+      "reason": "Company IP session: unreviewed content and alternate destinations are prohibited."
+    }
+  },
+  {
+    "name": "deny header exfiltration",
+    "input": {
+      "effect": "http_request",
+      "request": {
+        "method": "POST",
+        "url": "https://announcements.example.invalid/v1/public",
+        "headers": {
+          "X-Source": "private_algorithm()"
+        },
+        "body": {
+          "announcement": "Example Company will attend the public developer conference."
+        }
+      }
+    },
+    "expected": {
+      "allow": false,
+      "reason": "Company IP session: unreviewed content and alternate destinations are prohibited."
+    }
+  },
+  {
+    "name": "deny query exfiltration",
+    "input": {
+      "effect": "http_request",
+      "request": {
+        "method": "POST",
+        "url": "https://announcements.example.invalid/v1/public?secret=private_algorithm",
+        "headers": {},
+        "body": {
+          "announcement": "Example Company will attend the public developer conference."
+        }
+      }
+    },
+    "expected": {
+      "allow": false,
+      "reason": "Company IP session: unreviewed content and alternate destinations are prohibited."
+    }
+  },
+  {
+    "name": "deny lookalike host",
+    "input": {
+      "effect": "http_request",
+      "request": {
+        "method": "POST",
+        "url": "https://announcements.example.invalid.attacker.invalid/v1/public",
+        "headers": {},
+        "body": {
+          "announcement": "Example Company will attend the public developer conference."
+        }
+      }
+    },
+    "expected": {
+      "allow": false,
+      "reason": "Company IP session: unreviewed content and alternate destinations are prohibited."
+    }
+  },
+  {
+    "name": "deny different method",
+    "input": {
+      "effect": "http_request",
+      "request": {
+        "method": "PUT",
+        "url": "https://announcements.example.invalid/v1/public",
+        "headers": {},
+        "body": {
+          "announcement": "Example Company will attend the public developer conference."
+        }
+      }
+    },
+    "expected": {
+      "allow": false,
+      "reason": "Company IP session: unreviewed content and alternate destinations are prohibited."
+    }
+  },
+  {
+    "name": "deny untyped headers",
+    "input": {
+      "effect": "http_request",
+      "request": {
+        "method": "POST",
+        "url": "https://announcements.example.invalid/v1/public",
+        "headers": [],
+        "body": {
+          "announcement": "Example Company will attend the public developer conference."
+        }
+      }
+    },
+    "expected": {
+      "allow": false,
+      "reason": "Company IP session: unreviewed content and alternate destinations are prohibited."
+    }
+  },
+  {
+    "name": "deny source copy",
+    "input": {
+      "effect": "file_copy",
+      "request": {
+        "source": "src/private.rs",
+        "destination": "public/private.rs"
+      }
+    },
+    "expected": {
+      "allow": false,
+      "reason": "Company IP session: unreviewed content and alternate destinations are prohibited."
+    }
+  },
+  {
+    "name": "deny arbitrary response",
+    "input": {
+      "effect": "respond",
+      "request": {
+        "value": "private_algorithm()"
+      }
+    },
+    "expected": {
+      "allow": false,
+      "reason": "Company IP session: unreviewed content and alternate destinations are prohibited."
+    }
+  }
+]

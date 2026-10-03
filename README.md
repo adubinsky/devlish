@@ -67,7 +67,9 @@ devlish serve [--bind HOST:PORT] [--log-level LEVEL]   HTTP daemon (/v1/health|c
 devlish harness run|resume|init-config                 Outbound LLM sessions
 devlish mcp [--tools-dir dir]                          Start MCP server (JSON-RPC over stdio)
 devlish course                                         Interactive beginner course
-devlish evidence <rule.dvl>                            Run golden cases, emit signed evidence report
+devlish evidence <rule.dvl>                            Run golden cases, emit hashed evidence report
+devlish artifact hash|verify                           Inspect or verify exact file bytes
+devlish report application|policy|process|verify|explain  Tamper-evidence reports
 devlish audit-verify <log.jsonl>                       Verify the hash chain of an audit log
 devlish replay <log.jsonl>                             Re-run a journaled run offline, verify output
 devlish release <verb>                                 Release lifecycle: propose, approve,
@@ -181,6 +183,26 @@ devlish serve --bind 127.0.0.1:7420   # HTTP API daemon
 ```
 
 See `docs/ENVIRONMENT_ROADMAP_STATUS.md` and `docs/LANGUAGE_REFERENCE.md`.
+
+## Executable effect policies
+
+`devlish run` can enforce a separately supplied Devlish policy before each
+host tool effect and persist its decision before dispatch:
+
+```bash
+devlish run examples/effect_policy/allowed.dvl \
+  --policy examples/effect_policy/policy.dvl --policy-log allowed-policy.jsonl
+```
+
+Policies return an explicit boolean decision and an English explanation.
+Malformed policies fail closed. This first increment supports CLI `run`;
+offline replay reports are available with `--policy-evidence`. Server enforcement
+and the Devlish agent loop are next.
+See [Effect policies](docs/EFFECT_POLICY.md) for the contract and current limits,
+[NPPI and company-IP examples](examples/data_protection/README.md) for tested
+rules, and [Policy provenance](docs/POLICY_PROVENANCE.md) for artifact verification
+and the signing roadmap. [Repeatable compliance reports](docs/COMPLIANCE_REPORTS.md)
+cover application integrity, policy cases, and offline process reproduction.
 
 ## WASM Embedding
 

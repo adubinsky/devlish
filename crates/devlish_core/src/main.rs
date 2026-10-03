@@ -1,4 +1,6 @@
+use devlish_core::policy_log::PolicyLog;
 use devlish_core::{compile_source_to_json, parse_iso_date, sha256_hex, CompileOptions};
+use devlish_vm::policy::{EffectPolicy, PolicyHost, PolicyRecorder};
 use devlish_vm::{HostEffects, Vm};
 use serde_json::{json, Value};
 use std::env;
@@ -8,6 +10,7 @@ use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
 mod harness;
+mod reports;
 mod serve;
 
 use devlish_core::logutil;
@@ -87,6 +90,8 @@ fn run(args: Vec<String>) -> Result<(), String> {
             println!("Devlish {VERSION}");
             Ok(())
         }
+        "report" => reports::run(args),
+        "artifact" => run_artifact(args),
         "compile" => run_compile(args),
         "run" => run_execute(args),
         "disassemble" => run_disassemble(args),
@@ -124,12 +129,14 @@ fn print_help() {
 Usage: devlish-core <command> [options]
 
 Commands:
+  report <kind>              Repeatable application, policy, process, and integrity reports
+  artifact hash|verify       Hash a file or verify its exact bytes against a trusted SHA-256
   compile <file.dvl>          Compile a Devlish source file to bytecode
   run <file>                  Run a compiled bytecode file or source file
   disassemble <file.dvlc.json>  Disassemble a bytecode package
   validate <file.dvl>         Validate a source file (alias: lint)
   lint <file.dvl>             Validate a source file (alias: validate)
-  evidence <rule.dvl>         Run golden cases and emit a signed evidence report
+  evidence <rule.dvl>         Run golden cases and emit a hashed evidence report
   audit-verify <log.jsonl>    Verify the hash chain of an audit log
   replay <log.jsonl>          Re-run a journaled governed run offline and verify its output
   release <verb>              Release lifecycle: propose, approve, publish, retire, list, verify
@@ -157,6 +164,10 @@ Run options:
   --env KEY=VALUE             Set a credential/environment variable (repeatable)
   --audit-log <path>          Append governed-run audit records to a JSONL log
                               (falls back to DEVLISH_AUDIT_LOG)
+  --policy <file>             Enforce a Devlish effect policy (requires --policy-log)
+  --policy-evidence          Include sensitive effect data in the log for offline reports
+  --policy-sha256 <digest>    Pin the exact compiled policy bytes to an approved digest
+  --policy-log <path>         Create an exclusive, durable policy decision log
   --journal <dir>             Archive input, bytecode, and every effect exchange
                               as content-addressed attachments (enables replay;
                               requires --audit-log)
@@ -192,6 +203,21 @@ fn run_compile(args: Vec<String>) -> Result<(), String> {
     } else {
         println!("{json}");
     }
+    Ok(())
+}
+
+fn run_artifact(args: Vec<String>) -> Result<(), String> {
+    let usage = "Usage: devlish artifact hash <file> | artifact verify <file> --sha256 <trusted-digest>";
+    let verb = args.get(1).map(String::as_str).ok_or(usage)?;
+    let path = Path::new(args.get(2).ok_or(usage)?);
+    let (bytes, verified) = match verb {
+        "hash" if args.len() == 3 => (devlish_core::integrity::read_regular_file(path)?, false),
+        "verify" if args.len() == 5 && args[3] == "--sha256" =>
+            (devlish_core::integrity::read_verified(path, &args[4])?, true),
+        _ => return Err(usage.into()),
+    };
+    println!("{}", json!({"path":path, "sha256":sha256_hex(&bytes),
+        "bytes":bytes.len(), "digest_matches":verified, "signature_verified":false}));
     Ok(())
 }
 
@@ -300,6 +326,36 @@ fn select_effective_version(
 
 fn run_execute(args: Vec<String>) -> Result<(), String> {
     let config = RunConfig::parse(args)?;
+    if config.policy.is_some() != config.policy_log.is_some() {
+        return Err("--policy and --policy-log must be supplied together".into());
+    }
+    if config.policy.is_some() && config.journal.is_some() {
+        return Err("--policy cannot be combined with legacy --journal replay; use --policy-evidence and report process".into());
+    }
+    if config.policy_evidence && config.policy.is_none() {
+        return Err("--policy-evidence requires --policy and --policy-log".into());
+    }
+    if config.policy_sha256.is_some() && config.policy.is_none() {
+        return Err("--policy-sha256 requires --policy".into());
+    }
+    let policy = config.policy.as_ref().map(|path| {
+        let mut policy = if let Some(expected) = &config.policy_sha256 {
+            if path.extension().is_some_and(|ext| ext == "dvl") {
+                return Err("--policy-sha256 requires compiled bytecode; compile the policy first".into());
+            }
+            let bytes = devlish_core::integrity::read_verified(path, expected)?;
+            // Execute the exact verified buffer, never reopen the pathname.
+            let package = serde_json::from_slice(&bytes)
+                .map_err(|e| format!("invalid verified policy bytecode: {e}"))?;
+            EffectPolicy::new(package)?
+        } else {
+            EffectPolicy::new(load_package(path)?)?
+        };
+        if let Some(expected) = &config.policy_sha256 {
+            policy.set_file_digest(expected.to_ascii_lowercase());
+        }
+        Ok::<_, String>(policy)
+    }).transpose()?;
     if config.journal.is_some()
         && config.audit_log.is_none()
         && env::var("DEVLISH_AUDIT_LOG")
@@ -417,6 +473,12 @@ fn run_execute(args: Vec<String>) -> Result<(), String> {
             &mut plain_host
         }
     };
+    let mut policy_log = match (&policy, &config.policy_log) {
+        (Some(policy), Some(path)) => {
+            Some(PolicyLog::create_for_run(path, policy.identity(), &package, &input, !config.quiet, config.policy_evidence)?)
+        }
+        _ => None,
+    };
     let vm = Vm::new(package, input);
     match vm {
         Err(error) => {
@@ -436,7 +498,26 @@ fn run_execute(args: Vec<String>) -> Result<(), String> {
             if config.quiet {
                 vm.set_emit_events(false);
             }
-            match vm.run(host) {
+            let execution = match (&policy, policy_log.as_mut()) {
+                (Some(policy), Some(log)) => {
+                    let guarded = PolicyHost::new(host, policy, log);
+                    let mut guarded = if config.policy_evidence { guarded.with_evidence() } else { guarded };
+                    let result = vm.run(&mut guarded);
+                    if guarded.recording_failed() {
+                        return Err("policy recording failed; run cannot report success".into());
+                    }
+                    let result_value = match &result {
+                        Ok(value) => json!({"ok":value}),
+                        Err(error) => json!({"err":error.message}),
+                    };
+                    log.record(&json!({"type":"policy_run_finished", "success": result.is_ok(),
+                        "paused": result_value.pointer("/ok/is_checkpoint").and_then(Value::as_bool).unwrap_or(false),
+                        "result_sha256":sha256_hex(&serde_json::to_vec(&result_value).map_err(|e| e.to_string())?)}))?;
+                    result
+                }
+                _ => vm.run(host),
+            };
+            match execution {
                 Ok(result) => {
                     // If the program used "Respond with", the output was already
                     // written to stdout by host.respond(). Don't dump the full
@@ -4349,6 +4430,10 @@ struct RunConfig {
     /// Archive the input, bytecode, and every effect exchange for governed
     /// runs into this directory, enabling `devlish replay`.
     journal: Option<PathBuf>,
+    policy: Option<PathBuf>,
+    policy_log: Option<PathBuf>,
+    policy_sha256: Option<String>,
+    policy_evidence: bool,
     /// Refuse to execute any artifact whose hash is not a published release
     /// in this registry (`--governed`).
     governed: Option<PathBuf>,
@@ -4367,6 +4452,10 @@ impl RunConfig {
         let mut env_overrides = Vec::new();
         let mut audit_log = None;
         let mut journal = None;
+        let mut policy = None;
+        let mut policy_log = None;
+        let mut policy_sha256 = None;
+        let mut policy_evidence = false;
         let mut governed = None;
         let mut provider = None;
         let mut model = None;
@@ -4413,6 +4502,23 @@ impl RunConfig {
                         Some(PathBuf::from(args.get(index).ok_or_else(|| {
                             "--audit-log requires a file path".to_string()
                         })?));
+                }
+                "--policy-evidence" => policy_evidence = true,
+                "--policy-sha256" => {
+                    index += 1;
+                    policy_sha256 = Some(args.get(index).ok_or("--policy-sha256 requires a digest")?.clone());
+                }
+                "--policy" | "--policy-log" => {
+                    let option = args[index].clone();
+                    index += 1;
+                    let path = PathBuf::from(
+                        args.get(index).ok_or_else(|| format!("{option} requires a path"))?,
+                    );
+                    if option == "--policy" {
+                        policy = Some(path);
+                    } else {
+                        policy_log = Some(path);
+                    }
                 }
                 "--journal" => {
                     index += 1;
@@ -4484,6 +4590,10 @@ impl RunConfig {
             env_overrides,
             audit_log,
             journal,
+            policy,
+            policy_log,
+            policy_sha256,
+            policy_evidence,
             governed,
             provider,
             model,
@@ -4501,7 +4611,7 @@ fn compile_usage() -> String {
 }
 
 fn run_usage() -> String {
-    "Usage: devlish-core run <file> [<file>...] [--input '{\"key\":\"value\"}'] [--method <name>] [--as-of YYYY-MM-DD] [--audit-log <path>] [--provider NAME] [--model NAME] [--log-level LEVEL|--quiet]"
+    "Usage: devlish-core run <file> [<file>...] [--input '{\"key\":\"value\"}'] [--method <name>] [--as-of YYYY-MM-DD] [--audit-log <path>] [--policy <file> --policy-log <new-path> [--policy-sha256 <digest>]] [--provider NAME] [--model NAME] [--log-level LEVEL|--quiet]"
         .to_string()
 }
 
