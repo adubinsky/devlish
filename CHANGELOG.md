@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Independent audit verification
+- Add a standalone offline verifier for exact-byte Ed25519 signatures, explicit operator trust keys, revocation flags, and signature-purpose separation.
+- Verify signed checkpoints and terminal receipts against independently supplied digests and policy-log chains, while distinguishing recorded history from actual execution assurance.
+- Add synthetic signing examples, adversarial verification tests, and an independent-verifier guide. Protected receipt issuance, signed release approval, and runtime attestation remain future work.
+- Reject named pipes promptly when checking artifact and report inputs instead of waiting indefinitely for a writer.
+
 ### Policy enforcement and tamper-evidence reports
 - Add separately supplied Devlish effect policies to CLI runs, with deny-by-default decisions, durable pre-dispatch records, and fail-closed recording errors.
 - Add repeatable application-integrity, policy-case, and offline process-replay reports, externally checkable report digests, and English explanations authored in Devlish.

@@ -143,3 +143,43 @@ fn policy_hash_matches_governance_serialization() {
     // Assert.
     assert_eq!(policy.identity()["artifact_sha256"], json!(expected));
 }
+
+#[cfg(unix)]
+#[test]
+fn artifact_hash_rejects_fifo_without_waiting_for_a_writer() {
+    use std::ffi::CString;
+    use std::os::unix::ffi::OsStrExt;
+    use std::process::Stdio;
+    use std::time::{Duration, Instant};
+
+    // Arrange: an owned FIFO with no writer must never block file verification.
+    let fixture = Fixture::new();
+    let fifo = fixture.0.join("not-a-regular-file");
+    let name = CString::new(fifo.as_os_str().as_bytes()).unwrap();
+    // SAFETY: name is a valid NUL-terminated path in the isolated fixture.
+    assert_eq!(unsafe { libc::mkfifo(name.as_ptr(), 0o600) }, 0);
+
+    // Act: enforce a deadline so the regression cannot hang the test suite.
+    let mut child = Command::new(env!("CARGO_BIN_EXE_devlish-core"))
+        .args(["artifact", "hash"])
+        .arg(&fifo)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .unwrap();
+    let deadline = Instant::now() + Duration::from_secs(2);
+    while child.try_wait().unwrap().is_none() {
+        if Instant::now() >= deadline {
+            child.kill().unwrap();
+            child.wait().unwrap();
+            panic!("artifact hash blocked opening a FIFO without a writer");
+        }
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    let output = child.wait_with_output().unwrap();
+
+    // Assert: no digest is emitted for a non-regular input.
+    assert!(!output.status.success());
+    assert!(output.stdout.is_empty());
+    assert!(String::from_utf8_lossy(&output.stderr).contains("not a regular file"));
+}

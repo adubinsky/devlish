@@ -1,6 +1,6 @@
 //! Exact-byte integrity checks. Expected digests must come from a trusted source.
 use crate::sha256_hex;
-use std::fs::File;
+use std::fs::OpenOptions;
 use std::io::Read;
 use std::path::Path;
 
@@ -22,7 +22,17 @@ pub fn read_verified(path: &Path, expected: &str) -> Result<Vec<u8>, String> {
 }
 
 pub fn read_regular_file(path: &Path) -> Result<Vec<u8>, String> {
-    let mut file = File::open(path).map_err(|e| format!("cannot open {}: {e}", path.display()))?;
+    let mut options = OpenOptions::new();
+    options.read(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        // Inspect the opened handle without waiting for a FIFO writer.
+        options.custom_flags(libc::O_NONBLOCK);
+    }
+    let mut file = options
+        .open(path)
+        .map_err(|e| format!("cannot open {}: {e}", path.display()))?;
     if !file.metadata().map_err(|e| e.to_string())?.is_file() {
         return Err(format!("{} is not a regular file", path.display()));
     }

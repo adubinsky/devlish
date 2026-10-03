@@ -204,6 +204,10 @@ rules, and [Policy provenance](docs/POLICY_PROVENANCE.md) for artifact verificat
 and the signing roadmap. [Repeatable compliance reports](docs/COMPLIANCE_REPORTS.md)
 cover application integrity, policy cases, and offline process reproduction.
 
+The separate [independent audit verifier](docs/INDEPENDENT_AUDIT_VERIFIER.md)
+checks signatures and signed log receipts offline. Its results explicitly
+separate authenticated bytes from proof of actual execution or enforcement.
+
 ## WASM Embedding
 
 Compiled Devlish programs run in browsers and Node via the `devlish-runtime`

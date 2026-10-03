@@ -166,3 +166,12 @@ input already has an explicit verification outcome. Resistance then prevents
 or independently authenticates those changes rather than merely detecting
 inconsistency. See [Policy provenance](POLICY_PROVENANCE.md) for the trust-chain
 and platform-specific launcher design.
+
+## Independent signature verification
+
+The first standalone `devlish-audit` increment verifies detached signatures over
+exact bytes against explicit operator trust keys, and checks format-3 log chains
+against signed receipts and independently supplied receipt digests. It does not
+yet authenticate build provenance, provide protected receipt issuance/storage,
+or establish actual execution.
+See [Independent audit verifier](INDEPENDENT_AUDIT_VERIFIER.md) for usage and limits.

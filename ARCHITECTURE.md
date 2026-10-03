@@ -115,3 +115,14 @@ or independent runtime attestation.
 See [Effect policies](docs/EFFECT_POLICY.md),
 [Compliance reports](docs/COMPLIANCE_REPORTS.md), and
 [Policy provenance](docs/POLICY_PROVENANCE.md).
+
+
+## Independent audit verifier
+
+`crates/devlish_audit` builds a separate offline verifier without dependencies on
+Devlish's compiler, VM, model providers or service host. It authenticates exact
+bytes under operator-supplied Ed25519 trust keys, and checks signed receipts
+against format-3 policy logs and independently supplied receipt digests.
+It does not execute artifacts or prove runtime integrity. Protected signing,
+independent receipt custody and authenticated release loading remain separate
+work. See [Independent audit verifier](docs/INDEPENDENT_AUDIT_VERIFIER.md).

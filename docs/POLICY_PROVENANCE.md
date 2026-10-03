@@ -23,10 +23,14 @@ Implemented locally:
   with explicit opt-in raw evidence and externally checkable report digests.
   See [Compliance reports](COMPLIANCE_REPORTS.md).
 
-Not implemented yet: cryptographic signature verification in Devlish, trusted CI
-build attestations, signed release identities, enforced external-process launch,
-OS isolation, signed audit receipts, and mandatory enforcement on every entry
-point. The existing release registry's author/approver names are labels, not
+- Independent `devlish-audit` verification of exact-byte signatures and signed
+  receipts against format-3 log chains and independently supplied receipt digests.
+  This does not establish protected receipt issuance or actual execution.
+
+Not implemented yet: runtime-enforced signed releases, trusted CI build
+attestations, signed release identities, enforced external-process launch,
+OS isolation, production signed-receipt issuance and independent storage,
+and mandatory enforcement on every entry point. The existing release registry's author/approver names are labels, not
 cryptographic identities. This document specifies those remaining links.
 
 ## The chain and its evidence
@@ -189,3 +193,12 @@ transparency log; publish only suitably designed release/audit commitments.
    signed audit receipts and durable recovery for interrupted effects.
 
 No end-to-end chain should be advertised as proven until these gates are met.
+
+## Independent signature verification
+
+The first standalone `devlish-audit` increment verifies detached signatures over
+exact bytes against explicit operator trust keys, and checks format-3 log chains
+against signed receipts and independently supplied receipt digests. It does not
+yet authenticate build provenance, provide protected receipt issuance/storage,
+or establish actual execution.
+See [Independent audit verifier](INDEPENDENT_AUDIT_VERIFIER.md) for usage and limits.
