@@ -25,15 +25,15 @@ Operations's Invoice Reviewer:
     escalation_label equals "standard"
     escalation_label equals "priority" if review_needed == true
     respond with escalation_label
-
-  classify risk using invoice amount:
-    risk equals "low"
-    risk equals "medium" if invoice amount >= 5000
-    risk equals "high" if invoice amount >= 25000
-    respond with risk
 ```
 
-From `docs/course/04-methods-and-classes/examples/04_invoice_reviewer.dvl`.
+The first method from `docs/course/04-methods-and-classes/examples/04_invoice_reviewer.dvl`.
+Save this single-method example as `invoice_review.dvl`, then run:
+
+```bash
+devlish run invoice_review.dvl --input '{"invoice_amount":12000}' --quiet
+# Response: "priority"
+```
 
 ## Getting Started
 
@@ -228,6 +228,9 @@ persist audit records. See `packages/devlish-runtime/README.md` for the full
 API.
 
 ## Documentation
+
+- [Architecture](ARCHITECTURE.md)
+- [Project instructions](CLAUDE.md)
 
 - `docs/LANGUAGE_REFERENCE.md` - authoring guide
 - `docs/AUDIT.md` - execution provenance audit log
