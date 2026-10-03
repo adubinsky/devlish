@@ -1,7 +1,8 @@
 # Devlish for VS Code
 
-Language support for [Devlish](https://github.com/adubinsky/devlish), the
-English-first programming language.
+Language support for [Devlish](https://github.com/adubinsky/devlish), an
+inspectable execution and verification layer for AI work. Programs are
+readable English `.dvl` source.
 
 ## Features
 
