@@ -1,0 +1,8 @@
+# JSON helpers (DEVL-147) — English surface over host/parse builtins.
+
+# parse_json and stringify are intended as VM builtins. Until those land,
+# programs should Prefer the existing HTTP body JSON parsing and
+# `Export value to "path"` which already pretty-prints JSON.
+
+# Placeholder so `Use the json module` resolves after helpers ship.
+json_module_version equals "0.1.0-placeholder"

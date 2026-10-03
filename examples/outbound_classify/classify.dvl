@@ -1,0 +1,19 @@
+Permissions:
+  Call language models
+  Clock
+
+# Outbound LLM harness example: classify a short note.
+# Run with:
+#   devlish harness init-config
+#   export OPENAI_API_KEY=...   # or OPENROUTER_API_KEY
+#   devlish harness run examples/outbound_classify/classify.dvl --provider openai
+#   # or: ./scripts/llm_serve_harness.sh
+
+Get the current time as started_at
+
+note equals "Customer asked for a refund on last month's invoice."
+prompt equals "Classify this support note as one of: billing, product, or other. Reply with JSON {\"category\":\"...\",\"rationale\":\"...\"}. Note: Customer asked for a refund on last month's invoice."
+
+Ask the model with prompt expecting json as classification
+
+Respond with record with classification as classification and started_at as started_at and note as note

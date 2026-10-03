@@ -1,0 +1,9 @@
+# Math module functions (DEVL-143)
+
+# Constants live in math.dvl; numeric helpers that need VM builtins land here
+# as English-callable names once DEVL-134/136 are available. For now this
+# module re-exports the constants and documents the intended surface.
+
+# Usage:
+#   Use the math module.
+#   Set c to math's pi times diameter

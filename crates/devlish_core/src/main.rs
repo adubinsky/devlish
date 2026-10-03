@@ -7,9 +7,14 @@ use std::io::{Read as IoRead, Write};
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
+mod harness;
+mod serve;
+
+use devlish_core::logutil;
+
 const VERSION: &str = "0.1.0";
 
-fn devlish_search_paths_for(source_path: Option<&Path>) -> Vec<String> {
+pub(crate) fn devlish_search_paths_for(source_path: Option<&Path>) -> Vec<String> {
     let mut paths = Vec::new();
     if let Some(project_root) = source_path
         .and_then(|path| path.parent())
@@ -67,6 +72,7 @@ fn main() -> ExitCode {
 }
 
 fn run(args: Vec<String>) -> Result<(), String> {
+    logutil::init_from_env_and_args(&args)?;
     if args.is_empty() {
         print_help();
         return Ok(());
@@ -92,6 +98,8 @@ fn run(args: Vec<String>) -> Result<(), String> {
         "release" => run_release(args),
         "new" => run_new(args),
         "mcp" => run_mcp(args),
+        "harness" => harness::run_harness(args),
+        "serve" => serve::run_serve(args),
         "course" => run_course(args),
         "fmt" | "format" => run_format(args),
         "repl" => run_repl(args),
@@ -127,6 +135,8 @@ Commands:
   release <verb>              Release lifecycle: propose, approve, publish, retire, list, verify
   new <project_name>          Create a new Devlish project
   mcp                         Start MCP server (JSON-RPC over stdio)
+  harness <verb>              Outbound LLM harness: run, resume, init-config
+  serve                       Start HTTP API daemon (compile/run/lint/harness)
   course                      Walk through the interactive beginner course
   fmt <file.dvl>              Format a Devlish source file
   repl                        Interactive read-eval-print loop
@@ -152,7 +162,10 @@ Run options:
                               requires --audit-log)
   --governed <registry.json>  Refuse to run any artifact that is not a published
                               release in the registry
-  --quiet                     Suppress VM debug events on stderr
+  --quiet                     Shorthand for --log-level error (suppress VM events)
+  --log-level LEVEL           error | info | debug (default info; or DEVLISH_LOG)
+  --provider NAME             Outbound LLM provider: openai, openrouter, anthropic, ollama
+  --model NAME                Outbound LLM model id
 
 Implicit run:
   devlish-core <file.dvl>     Equivalent to: devlish-core run <file.dvl>"
@@ -380,10 +393,12 @@ fn run_execute(args: Vec<String>) -> Result<(), String> {
                 .to_string(),
         );
     }
-    let native = NativeHost {
-        credentials: CredentialStore::new(&config.env_overrides, Some(&config.input)),
-        audit_log: audit_path.map(AuditLogWriter::new),
-    };
+    let mut native = NativeHost::new(
+        CredentialStore::new(&config.env_overrides, Some(&config.input)),
+        audit_path.map(AuditLogWriter::new),
+    );
+    native.llm_provider = config.provider.clone();
+    native.llm_model = config.model.clone();
     let mut journaling_host;
     let mut plain_host;
     let host: &mut dyn HostEffects = match &config.journal {
@@ -1288,6 +1303,31 @@ struct NativeHost {
     /// Present when `--audit-log` / `DEVLISH_AUDIT_LOG` is set: governed
     /// runs append hash-chained provenance records to this log.
     audit_log: Option<AuditLogWriter>,
+    /// Outbound LLM defaults (from CLI harness / serve).
+    llm_provider: Option<String>,
+    llm_model: Option<String>,
+    rng_state: u64,
+}
+
+impl NativeHost {
+    fn new(credentials: CredentialStore, audit_log: Option<AuditLogWriter>) -> Self {
+        use std::collections::hash_map::DefaultHasher;
+        use std::hash::{Hash, Hasher};
+        use std::time::{SystemTime, UNIX_EPOCH};
+        let mut hasher = DefaultHasher::new();
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map(|d| d.as_nanos())
+            .unwrap_or(0)
+            .hash(&mut hasher);
+        Self {
+            credentials,
+            audit_log,
+            llm_provider: None,
+            llm_model: None,
+            rng_state: hasher.finish() | 1,
+        }
+    }
 }
 
 /// Appends hash-chained audit records to a JSONL log. Every line carries the
@@ -1649,6 +1689,24 @@ impl<H: HostEffects> HostEffects for JournalingHost<H> {
         full.insert("journal_sha256".to_string(), json!(hash));
         self.inner.audit_record(&Value::Object(full))
     }
+
+    fn llm_complete(&mut self, request: &Value) -> Result<Value, String> {
+        let result = self.inner.llm_complete(request);
+        self.journal_value("llm_complete", request.clone(), &result);
+        result
+    }
+
+    fn clock_now(&mut self, kind: &str) -> Result<Value, String> {
+        let result = self.inner.clock_now(kind);
+        self.journal_value("clock_now", json!({ "kind": kind }), &result);
+        result
+    }
+
+    fn random_draw(&mut self, request: &Value) -> Result<Value, String> {
+        let result = self.inner.random_draw(request);
+        self.journal_value("random_draw", request.clone(), &result);
+        result
+    }
 }
 
 /// Replays a journaled run: every effect request must match the journal in
@@ -1815,6 +1873,18 @@ impl HostEffects for ReplayHost {
             "file_glob",
             &json!({ "pattern": pattern, "directory": directory }),
         )
+    }
+
+    fn llm_complete(&mut self, request: &Value) -> Result<Value, String> {
+        self.next("llm_complete", request)
+    }
+
+    fn clock_now(&mut self, kind: &str) -> Result<Value, String> {
+        self.next("clock_now", &json!({ "kind": kind }))
+    }
+
+    fn random_draw(&mut self, request: &Value) -> Result<Value, String> {
+        self.next("random_draw", request)
     }
 }
 
@@ -2596,9 +2666,7 @@ impl HostEffects for NativeHost {
     }
 
     fn emit_event(&mut self, event: &Value) {
-        if let Ok(line) = serde_json::to_string(event) {
-            eprintln!("{line}");
-        }
+        logutil::emit_event_json(event);
     }
 
     fn write_file(&mut self, request: &Value) -> Result<(), String> {
@@ -2933,6 +3001,81 @@ impl HostEffects for NativeHost {
     fn resolve_credential(&self, key: &str) -> Option<String> {
         self.credentials.resolve(key)
     }
+
+    fn llm_complete(&mut self, request: &Value) -> Result<Value, String> {
+        use devlish_llm::{complete, response_value, CredentialResolver, LlmConfig, LlmRequest};
+        struct Creds<'a>(&'a CredentialStore);
+        impl CredentialResolver for Creds<'_> {
+            fn resolve(&self, key: &str) -> Option<String> {
+                self.0.resolve(key)
+            }
+        }
+        let prompt = request
+            .get("prompt")
+            .and_then(Value::as_str)
+            .ok_or_else(|| "llm_complete missing prompt".to_string())?
+            .to_string();
+        let expect_json = request
+            .get("expect_json")
+            .and_then(Value::as_bool)
+            .unwrap_or(false);
+        let llm_req = LlmRequest {
+            prompt: prompt.clone(),
+            model: request
+                .get("model")
+                .and_then(Value::as_str)
+                .map(str::to_string)
+                .or_else(|| self.llm_model.clone()),
+            provider: request
+                .get("provider")
+                .and_then(Value::as_str)
+                .map(str::to_string)
+                .or_else(|| self.llm_provider.clone()),
+            expect_json,
+            system: request
+                .get("system")
+                .and_then(Value::as_str)
+                .map(str::to_string),
+        };
+        logutil::debug(&format!(
+            "llm_complete provider={:?} model={:?} expect_json={expect_json} prompt_chars={}",
+            llm_req.provider,
+            llm_req.model,
+            prompt.len()
+        ));
+        let response = complete(&llm_req, &LlmConfig::load(), &Creds(&self.credentials))?;
+        logutil::info(&format!(
+            "llm_complete ok provider={} model={} response_chars={}",
+            response.provider,
+            response.model,
+            response.text.len()
+        ));
+        Ok(response_value(&response))
+    }
+
+    fn clock_now(&mut self, kind: &str) -> Result<Value, String> {
+        use std::time::{SystemTime, UNIX_EPOCH};
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map_err(|e| e.to_string())?;
+        match kind {
+            "iso" => Ok(Value::String(format!("{}", now.as_secs()))),
+            _ => Ok(json!(now.as_secs_f64())),
+        }
+    }
+
+    fn random_draw(&mut self, request: &Value) -> Result<Value, String> {
+        self.rng_state ^= self.rng_state << 13;
+        self.rng_state ^= self.rng_state >> 7;
+        self.rng_state ^= self.rng_state << 17;
+        let unit = (self.rng_state as f64) / (u64::MAX as f64);
+        let low = request.get("low").and_then(Value::as_f64).unwrap_or(0.0);
+        let high = request.get("high").and_then(Value::as_f64).unwrap_or(1.0);
+        if (high - low).abs() < f64::EPSILON {
+            return Ok(json!(low));
+        }
+        Ok(json!(low + unit * (high - low)))
+    }
 }
 
 fn run_course(_args: Vec<String>) -> Result<(), String> {
@@ -3189,10 +3332,10 @@ fn run_course(_args: Vec<String>) -> Result<(), String> {
                         Ok(json_str) => {
                             let package: Value =
                                 serde_json::from_str(&json_str).unwrap_or_else(|_| json!({}));
-                            let mut host = NativeHost {
-                                credentials: CredentialStore::new(&[], Some(ex.as_path())),
-                                audit_log: None,
-                            };
+                            let mut host = NativeHost::new(
+                                CredentialStore::new(&[], Some(ex.as_path())),
+                                None,
+                            );
                             match Vm::new(package, json!({})) {
                                 Err(error) => println!("  VM error: {}", error.message),
                                 Ok(mut vm) => match vm.run(&mut host) {
@@ -3463,21 +3606,21 @@ impl HostEffects for ReplHost {
         // Suppress VM events in the REPL
     }
     fn write_file(&mut self, request: &Value) -> Result<(), String> {
-        let mut native = NativeHost {
-            audit_log: None,
-            credentials: CredentialStore {
+        let mut native = NativeHost::new(
+            CredentialStore {
                 entries: Vec::new(),
             },
-        };
+            None,
+        );
         native.write_file(request)
     }
     fn read_file(&mut self, request: &Value) -> Result<Value, String> {
-        let mut native = NativeHost {
-            audit_log: None,
-            credentials: CredentialStore {
+        let mut native = NativeHost::new(
+            CredentialStore {
                 entries: Vec::new(),
             },
-        };
+            None,
+        );
         native.read_file(request)
     }
     fn respond(&mut self, value: &Value) -> Result<(), String> {
@@ -3871,10 +4014,10 @@ fn mcp_run_dvl_tool(tool: &DvlTool, arguments: &Value) -> Value {
         Err(error) => return json!([{"type": "text", "text": format!("Internal error: {error}")}]),
     };
     let input = arguments.clone();
-    let mut host = NativeHost {
-        credentials: CredentialStore::new(&[], Some(tool.source_path.as_path())),
-        audit_log: None,
-    };
+    let mut host = NativeHost::new(
+        CredentialStore::new(&[], Some(tool.source_path.as_path())),
+        None,
+    );
     match Vm::new(package, input) {
         Err(error) => json!([{"type": "text", "text": format!("VM error: {}", error.message)}]),
         Ok(mut vm) => match vm.run(&mut host) {
@@ -4088,122 +4231,52 @@ fn mcp_compile(args: &Value) -> Value {
         .get("source_path")
         .and_then(Value::as_str)
         .map(String::from);
-    match compile_source_to_json(
+    let result = devlish_core::service::service_compile(
         source,
-        CompileOptions {
-            source_path,
-            search_paths: devlish_search_paths_for(None),
-        },
-    ) {
-        Ok(bytecode_json) => json!([{"type": "text", "text": bytecode_json}]),
-        Err(error) => json!([{"type": "text", "text": format!("Compile error: {error}")}]),
+        source_path,
+        devlish_search_paths_for(None),
+    );
+    // MCP compile historically returned raw bytecode JSON text.
+    if result.ok {
+        let text = serde_json::to_string_pretty(&result.value).unwrap_or_default();
+        json!([{"type": "text", "text": text}])
+    } else {
+        devlish_core::service::to_mcp_content(&result)
     }
 }
 
 fn mcp_run(args: &Value) -> Value {
-    let source = args.get("source").and_then(Value::as_str).unwrap_or("");
+    let source = args
+        .get("source")
+        .and_then(Value::as_str)
+        .unwrap_or("")
+        .to_string();
     let source_path = args
         .get("source_path")
         .and_then(Value::as_str)
         .map(String::from);
     let input = args.get("input").cloned().unwrap_or(json!({}));
-
-    let json_str = match compile_source_to_json(
-        source,
-        CompileOptions {
-            source_path,
-            search_paths: devlish_search_paths_for(None),
-        },
-    ) {
-        Ok(j) => j,
-        Err(error) => return json!([{"type": "text", "text": format!("Compile error: {error}")}]),
-    };
-
-    let package: Value = match serde_json::from_str(&json_str) {
-        Ok(p) => p,
-        Err(error) => return json!([{"type": "text", "text": format!("Internal error: {error}")}]),
-    };
-
-    let source_file = args
-        .get("source_path")
+    let provider = args
+        .get("provider")
         .and_then(Value::as_str)
-        .map(Path::new);
-    let mut host = NativeHost {
-        credentials: CredentialStore::new(&[], source_file),
-        audit_log: None,
-    };
-    match Vm::new(package, input) {
-        Err(error) => json!([{"type": "text", "text": format!("VM error: {}", error.message)}]),
-        Ok(mut vm) => match vm.run(&mut host) {
-            Ok(result) => {
-                let text = serde_json::to_string_pretty(&result).unwrap_or_default();
-                json!([{"type": "text", "text": text}])
-            }
-            Err(error) => {
-                json!([{"type": "text", "text": format!("Runtime error: {}", error.message)}])
-            }
-        },
-    }
+        .map(String::from);
+    let model = args.get("model").and_then(Value::as_str).map(String::from);
+    let result = devlish_core::service::service_run(devlish_core::service::RunRequest {
+        source,
+        source_path,
+        input,
+        env: vec![],
+        provider,
+        model,
+        search_paths: devlish_search_paths_for(None),
+    });
+    devlish_core::service::to_mcp_content(&result)
 }
 
 fn mcp_lint(args: &Value) -> Value {
     let source = args.get("source").and_then(Value::as_str).unwrap_or("");
-    match compile_source_to_json(
-        source,
-        CompileOptions {
-            source_path: None,
-            search_paths: vec![],
-        },
-    ) {
-        Ok(_) => {
-            // Compilation succeeded; surface the same non-fatal lint findings the
-            // CLI reports so the MCP lint tool does not diverge (DEVL-127).
-            let diagnostics: Vec<Value> = match devlish_core::lint_source(
-                source,
-                CompileOptions {
-                    source_path: None,
-                    search_paths: vec![],
-                },
-            ) {
-                Ok(warnings) => warnings
-                    .iter()
-                    .map(|w| {
-                        json!({
-                            "line": w.line,
-                            "severity": "warning",
-                            "message": w.message,
-                            "source_text": w.source_text
-                        })
-                    })
-                    .collect(),
-                Err(_) => Vec::new(),
-            };
-            let result = json!({
-                "valid": true,
-                "diagnostics": diagnostics
-            });
-            json!([{"type": "text", "text": serde_json::to_string_pretty(&result).unwrap_or_default()}])
-        }
-        Err(error) => {
-            let diagnostics: Vec<Value> = error
-                .diagnostics
-                .iter()
-                .map(|d| {
-                    json!({
-                        "line": d.line,
-                        "severity": "error",
-                        "message": d.message,
-                        "source_text": d.source_text
-                    })
-                })
-                .collect();
-            let result = json!({
-                "valid": false,
-                "diagnostics": diagnostics
-            });
-            json!([{"type": "text", "text": serde_json::to_string_pretty(&result).unwrap_or_default()}])
-        }
-    }
+    let result = devlish_core::service::service_lint(source);
+    devlish_core::service::to_mcp_content(&result)
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -4279,6 +4352,8 @@ struct RunConfig {
     /// Refuse to execute any artifact whose hash is not a published release
     /// in this registry (`--governed`).
     governed: Option<PathBuf>,
+    provider: Option<String>,
+    model: Option<String>,
 }
 
 impl RunConfig {
@@ -4293,6 +4368,8 @@ impl RunConfig {
         let mut audit_log = None;
         let mut journal = None;
         let mut governed = None;
+        let mut provider = None;
+        let mut model = None;
         let mut index = 1usize;
         while index < args.len() {
             match args[index].as_str() {
@@ -4351,12 +4428,33 @@ impl RunConfig {
                             "--governed requires a registry path".to_string()
                         })?));
                 }
+                "--provider" => {
+                    index += 1;
+                    provider = Some(
+                        args.get(index)
+                            .ok_or_else(|| "--provider requires a name".to_string())?
+                            .to_string(),
+                    );
+                }
+                "--model" => {
+                    index += 1;
+                    model = Some(
+                        args.get(index)
+                            .ok_or_else(|| "--model requires a name".to_string())?
+                            .to_string(),
+                    );
+                }
+                "--log-level" => {
+                    // Consumed by logutil::init_from_env_and_args; skip value.
+                    index += 1;
+                }
                 "--test" => {
                     test_mode = true;
                 }
-                "--quiet" => {
+                "--quiet" | "-q" => {
                     quiet = true;
                 }
+                value if value.starts_with("--log-level=") => {}
                 value if value.starts_with('-') => return Err(format!("unknown option: {value}")),
                 value => {
                     inputs.push(PathBuf::from(value));
@@ -4387,6 +4485,8 @@ impl RunConfig {
             audit_log,
             journal,
             governed,
+            provider,
+            model,
         })
     }
 }
@@ -4401,7 +4501,7 @@ fn compile_usage() -> String {
 }
 
 fn run_usage() -> String {
-    "Usage: devlish-core run <file> [<file>...] [--input '{\"key\":\"value\"}'] [--method <name>] [--as-of YYYY-MM-DD] [--audit-log <path>] [--quiet]"
+    "Usage: devlish-core run <file> [<file>...] [--input '{\"key\":\"value\"}'] [--method <name>] [--as-of YYYY-MM-DD] [--audit-log <path>] [--provider NAME] [--model NAME] [--log-level LEVEL|--quiet]"
         .to_string()
 }
 
@@ -5006,6 +5106,83 @@ source = "b.dvl"
             json!("https://api.example.com/rate")
         );
         std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn replay_host_feeds_llm_clock_and_random_effects() {
+        let effects = vec![
+            json!({
+                "kind": "clock_now",
+                "request": { "kind": "unix" },
+                "response": { "ok": 1_700_000_000.0 }
+            }),
+            json!({
+                "kind": "llm_complete",
+                "request": {
+                    "prompt": "say hi",
+                    "expect_json": false
+                },
+                "response": {
+                    "ok": {
+                        "text": "hello",
+                        "provider": "openai",
+                        "model": "gpt-4o-mini"
+                    }
+                }
+            }),
+            json!({
+                "kind": "random_draw",
+                "request": { "low": 0.0, "high": 1.0 },
+                "response": { "ok": 0.42 }
+            }),
+        ];
+
+        let mut host = ReplayHost::new(effects.clone());
+        assert_eq!(host.clock_now("unix"), Ok(json!(1_700_000_000.0)));
+        assert_eq!(
+            host.llm_complete(&json!({
+                "prompt": "say hi",
+                "expect_json": false
+            })),
+            Ok(json!({
+                "text": "hello",
+                "provider": "openai",
+                "model": "gpt-4o-mini"
+            }))
+        );
+        assert_eq!(
+            host.random_draw(&json!({ "low": 0.0, "high": 1.0 })),
+            Ok(json!(0.42))
+        );
+        assert!(host.fully_consumed().is_ok());
+
+        let mut host = ReplayHost::new(effects);
+        let error = host
+            .llm_complete(&json!({
+                "prompt": "say hi",
+                "expect_json": false
+            }))
+            .expect_err("diverged");
+        // First effect is clock_now; requesting llm first is a divergence.
+        assert!(
+            error.contains("replay diverged at effect #1"),
+            "got: {error}"
+        );
+    }
+
+    #[test]
+    fn log_level_flag_and_quiet_are_parsed() {
+        use devlish_core::logutil::{self, LogLevel};
+        let previous = logutil::current();
+        logutil::init_from_env_and_args(&["run".into(), "--log-level".into(), "debug".into()])
+            .unwrap();
+        assert_eq!(logutil::current(), LogLevel::Debug);
+        assert!(logutil::enabled(LogLevel::Debug));
+
+        logutil::init_from_env_and_args(&["run".into(), "--quiet".into()]).unwrap();
+        assert_eq!(logutil::current(), LogLevel::Error);
+        assert!(!logutil::enabled(LogLevel::Info));
+        logutil::set_level(previous);
     }
 
     #[test]

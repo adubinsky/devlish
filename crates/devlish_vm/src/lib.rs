@@ -83,6 +83,20 @@ pub trait HostEffects {
     fn audit_record(&mut self, _record: &Value) -> Result<(), String> {
         Ok(())
     }
+    /// Outbound LLM completion. Request is a record with at least `prompt`,
+    /// and optional `model`, `provider`, `expect_json`, and `system`.
+    /// Authoritative hosts journal this effect for replay.
+    fn llm_complete(&mut self, _request: &Value) -> Result<Value, String> {
+        Err("llm_complete not implemented by this host".to_string())
+    }
+    /// Wall-clock / monotonic time as a journaled effect (DEVL-139).
+    fn clock_now(&mut self, _kind: &str) -> Result<Value, String> {
+        Err("clock_now not implemented by this host".to_string())
+    }
+    /// Seeded randomness as a journaled effect (DEVL-138).
+    fn random_draw(&mut self, _request: &Value) -> Result<Value, String> {
+        Err("random_draw not implemented by this host".to_string())
+    }
 }
 
 /// Error type for VM operations.
@@ -658,6 +672,128 @@ impl Vm {
                         ("service", json!(service)),
                         ("action", json!(action)),
                     ]),
+                );
+            }
+            "LLM_COMPLETE" => {
+                let prompt_val = self.register_value(&string_field(instruction, "prompt")?)?;
+                let prompt = match &prompt_val {
+                    Value::String(s) => s.clone(),
+                    other => other.to_string(),
+                };
+                self.check_manifest_permission("llm_complete", None)?;
+                let dest = string_field(instruction, "dest")?;
+                let model = instruction
+                    .get("model")
+                    .and_then(Value::as_str)
+                    .map(str::to_string);
+                let provider = instruction
+                    .get("provider")
+                    .and_then(Value::as_str)
+                    .map(str::to_string);
+                let expect_json = instruction
+                    .get("expect_json")
+                    .and_then(Value::as_bool)
+                    .unwrap_or(false);
+                let mut request = Map::new();
+                request.insert("prompt".to_string(), json!(prompt));
+                if let Some(model) = model {
+                    request.insert("model".to_string(), json!(model));
+                }
+                if let Some(provider) = provider {
+                    request.insert("provider".to_string(), json!(provider));
+                }
+                request.insert("expect_json".to_string(), json!(expect_json));
+                let request = Value::Object(request);
+                self.push_event(
+                    host,
+                    "effect_requested",
+                    map_from_pairs(vec![("kind", json!("llm_complete"))]),
+                );
+                let result = host
+                    .llm_complete(&request)
+                    .map_err(|err| self.error(format!("LLM complete failed: {err}")))?;
+                // Prefer parsed JSON payload when the program asked for JSON.
+                let stored = if expect_json {
+                    result
+                        .get("json")
+                        .cloned()
+                        .unwrap_or_else(|| result.clone())
+                } else {
+                    result
+                        .get("text")
+                        .cloned()
+                        .unwrap_or_else(|| result.clone())
+                };
+                self.registers.insert(dest.clone(), stored.clone());
+                self.context.insert(dest.clone(), stored.clone());
+                self.results.insert(dest.clone(), stored);
+                self.push_event(
+                    host,
+                    "effect_completed",
+                    map_from_pairs(vec![("kind", json!("llm_complete"))]),
+                );
+            }
+            "CLOCK_NOW" => {
+                let kind = instruction
+                    .get("clock_kind")
+                    .and_then(Value::as_str)
+                    .unwrap_or("unix");
+                let dest = string_field(instruction, "dest")?;
+                self.check_manifest_permission("clock", None)?;
+                self.push_event(
+                    host,
+                    "effect_requested",
+                    map_from_pairs(vec![
+                        ("kind", json!("clock_now")),
+                        ("clock_kind", json!(kind)),
+                    ]),
+                );
+                let result = host
+                    .clock_now(kind)
+                    .map_err(|err| self.error(format!("clock_now failed: {err}")))?;
+                self.registers.insert(dest.clone(), result.clone());
+                self.context.insert(dest.clone(), result.clone());
+                self.results.insert(dest.clone(), result);
+                self.push_event(
+                    host,
+                    "effect_completed",
+                    map_from_pairs(vec![("kind", json!("clock_now"))]),
+                );
+            }
+            "RANDOM_DRAW" => {
+                let dest = string_field(instruction, "dest")?;
+                self.check_manifest_permission("random", None)?;
+                let mut request = Map::new();
+                if let Some(dist) = instruction.get("distribution").and_then(Value::as_str) {
+                    request.insert("distribution".to_string(), json!(dist));
+                }
+                if let Some(low_reg) = instruction.get("low").and_then(Value::as_str) {
+                    let low_val = self.register_value(low_reg)?;
+                    request.insert("low".to_string(), low_val);
+                }
+                if let Some(high_reg) = instruction.get("high").and_then(Value::as_str) {
+                    let high_val = self.register_value(high_reg)?;
+                    request.insert("high".to_string(), high_val);
+                }
+                if let Some(seed) = instruction.get("seed") {
+                    request.insert("seed".to_string(), seed.clone());
+                }
+                let request = Value::Object(request);
+                self.push_event(
+                    host,
+                    "effect_requested",
+                    map_from_pairs(vec![("kind", json!("random_draw"))]),
+                );
+                let result = host
+                    .random_draw(&request)
+                    .map_err(|err| self.error(format!("random_draw failed: {err}")))?;
+                self.registers.insert(dest.clone(), result.clone());
+                self.context.insert(dest.clone(), result.clone());
+                self.results.insert(dest.clone(), result);
+                self.push_event(
+                    host,
+                    "effect_completed",
+                    map_from_pairs(vec![("kind", json!("random_draw"))]),
                 );
             }
             "HTTP_REQUEST" => {
