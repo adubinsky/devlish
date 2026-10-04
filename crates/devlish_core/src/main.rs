@@ -506,12 +506,21 @@ fn run_execute_loaded(
         }
         _ => None,
     };
+    if let Some(loaded) = verified {
+        let run = devlish_core::governed_run::GovernedRun::new(
+            package, input, loaded.policy, loaded.instruction_limit, loaded.allowed_effects,
+        ).map_err(|e| e.to_string())?;
+        let run = if config.policy_evidence { run.with_replay_evidence() } else { run };
+        let completion = run.run(host, policy_log.as_mut().ok_or("missing verified policy log")?)
+            .map_err(|e| e.to_string())?;
+        if !completion.response_emitted {
+            println!("{}", json!({"success":true,"response_emitted":false,"paused":completion.paused}));
+        }
+        return Ok(());
+    }
     let vm = Vm::new(package, input);
     match vm {
         Err(error) => {
-            if verified.is_some() {
-                return Err("verified VM initialization failed".into());
-            }
             let failure = json!({
                 "success": false,
                 "error": error.message,
@@ -525,20 +534,12 @@ fn run_execute_loaded(
             Err(error.message)
         }
         Ok(mut vm) => {
-            if let Some(loaded) = &verified {
-                vm.set_instruction_limit(loaded.instruction_limit);
-            }
             if config.quiet {
                 vm.set_emit_events(false);
             }
             let execution = match (&policy, policy_log.as_mut()) {
                 (Some(policy), Some(log)) => {
                     let guarded = PolicyHost::new(host, policy, log);
-                    let guarded = if let Some(loaded) = &verified {
-                        guarded.with_redacted_diagnostics().with_allowed_effects(loaded.allowed_effects.clone())
-                    } else {
-                        guarded
-                    };
                     let mut guarded = if config.policy_evidence { guarded.with_evidence() } else { guarded };
                     let result = vm.run(&mut guarded);
                     if guarded.recording_failed() {
@@ -564,9 +565,7 @@ fn run_execute_loaded(
                         .get("responded")
                         .and_then(Value::as_bool)
                         .unwrap_or(false);
-                    if !responded && verified.is_some() {
-                        println!("{}", json!({"success":true,"response_emitted":false}));
-                    } else if !responded {
+                    if !responded {
                         println!(
                             "{}",
                             serde_json::to_string_pretty(&result).unwrap_or_default()
@@ -593,9 +592,6 @@ fn run_execute_loaded(
                     Ok(())
                 }
                 Err(error) => {
-                    if verified.is_some() {
-                        return Err("verified program execution failed; details withheld".into());
-                    }
                     // If the error message is valid JSON (from Fail with record),
                     // write it to stdout as structured output instead of the
                     // generic failure envelope.

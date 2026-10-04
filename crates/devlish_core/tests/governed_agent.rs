@@ -268,16 +268,14 @@ fn governed_agent_execution_replays_offline_with_application_and_policy_reports(
         }
     }
     // Arrange: all material is synthetic, and only the first execution has a fake host.
-    let dir = Directory(
-        std::env::temp_dir().join(format!(
+    let dir = Directory(std::env::temp_dir().join(format!(
             "devlish-governed-agent-{}-{}",
             std::process::id(),
             std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .unwrap()
                 .as_nanos()
-        )),
-    );
+        )));
     fs::create_dir(&dir.0).unwrap();
     let program = compile(AGENT);
     let policy_package = compile(POLICY);
@@ -387,4 +385,49 @@ fn governed_agent_execution_replays_offline_with_application_and_policy_reports(
     assert!(!String::from_utf8_lossy(&first.stdout).contains("SYNTHETIC_"));
     assert_eq!(host.model_requests.len(), 1);
     assert_eq!(host.service_requests.len(), 2);
+}
+
+#[test]
+fn shared_runner_preserves_agent_decisions_and_exposes_only_completion() {
+    let cases: Value = serde_json::from_str(include_str!(
+        "../../../examples/governed_agent/plan.cases.json"
+    ))
+    .unwrap();
+    for case in cases.as_array().unwrap() {
+        let baseline = run(AGENT, case["plan"].clone(), input(), None, None);
+        let mut host = Host {
+            plan: case["plan"].clone(),
+            model_requests: vec![],
+            service_requests: vec![],
+            responses: vec![],
+            events: 0,
+            fail_service: None,
+        };
+        let mut records = Records::default();
+        let result = devlish_core::governed_run::GovernedRun::new(
+            compile(AGENT),
+            input(),
+            EffectPolicy::new(compile(POLICY)).unwrap(),
+            50_000,
+            ["llm_complete", "call_service", "respond"]
+                .map(String::from)
+                .into(),
+        )
+        .unwrap()
+        .run(&mut host, &mut records);
+        assert_eq!(result.is_ok(), case["allowed"].as_bool().unwrap());
+        assert_eq!(host.model_requests, baseline.host.model_requests);
+        assert_eq!(host.service_requests, baseline.host.service_requests);
+        assert_eq!(host.responses, baseline.host.responses);
+        assert_eq!(host.events, 0);
+        let finish = records.values.pop().unwrap();
+        assert_eq!(finish["type"], "policy_run_finished");
+        assert_eq!(records.values, baseline.records.values);
+        if let Ok(completion) = result {
+            assert_eq!(
+                serde_json::to_value(completion).unwrap(),
+                json!({"response_emitted":true,"paused":false})
+            );
+        }
+    }
 }

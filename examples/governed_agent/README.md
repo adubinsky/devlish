@@ -73,7 +73,8 @@ invalid private inputs, independently denied egress, failure at each of eight
 decision/outcome recording positions, and failure of either business tool.
 Deterministic fake-model replies reproduce the same recorded decisions.
 `policy.cases.json` adds 14 golden effect decisions, independently runnable with
-`report policy`. An integration test captures a synthetic execution and runs the
+`report policy`. The shared `GovernedRun` used by the verified CLI also runs all 18 plans and
+produces the same decisions and host calls. An integration test captures a synthetic execution and runs the
 application, policy and process reports twice. The process report reproduces the
 saved model/tool exchanges without any live effects and does not claim runtime
 attestation.
@@ -91,10 +92,21 @@ increment. Provider URLs, credentials, transport limits and service identity
 still need binding to operator-approved configuration and protected adapters.
 These example tokens are fixed allowlists, not a production tokenization system.
 
+The shared `governed_run::GovernedRun` runs the pinned program and policy with
+a finite instruction budget, disables debug events, intersects host permissions,
+redacts policy diagnostics and requires the final run record before reporting
+success. It returns only `response_emitted` and `paused`; private VM envelopes
+and checkpoint contents are inaccessible through that result. `run-verified`
+now uses this runner. Future service adapters can use the same API, but must
+first authenticate admission and create the bound start record. This API alone
+does not verify releases or authenticate its caller.
+
 A host must expose only the policy-approved response. The VM's internal context
 and results contain private inputs and untrusted model/tool results; dumping
 that envelope, raw diagnostics or debug events would bypass the intended output
-boundary. Tests disable debug events and assert what reaches the model, service,
+boundary. Responses are still immediate effects: if recording subsequently fails, an
+already delivered response cannot be retracted, and the runner returns failure.
+Tests disable debug events and assert what reaches the model, service,
 response sink and default digest-only recorder. Sensitive process-replay capture
 requires separate operator consent and protected storage.
 

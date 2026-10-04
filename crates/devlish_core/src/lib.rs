@@ -2,6 +2,7 @@ use serde::Serialize;
 use serde_json::{json, Map, Number, Value};
 use std::collections::{HashMap, HashSet};
 
+pub mod governed_run;
 pub mod integrity;
 pub mod logutil;
 pub mod policy_log;
