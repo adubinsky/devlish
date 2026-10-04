@@ -1101,6 +1101,8 @@ fn cli_tool_report_reverifies_bytes_trust_and_options_without_executing() {
     use std::{fs, process::Command};
     let (mut f, catalog) = tool_catalog_fixture();
     verify_with_catalog(&mut f, &catalog);
+    let containment = bytes(&recognized_containment());
+    f.manifest["artifacts"][5]["sha256"] = json!(sha256(&containment));
     let dir = std::env::temp_dir().join(format!(
         "devlish-catalog-cli-{}",
         hex(f.key.public_key().as_ref())
@@ -1111,6 +1113,7 @@ fn cli_tool_report_reverifies_bytes_trust_and_options_without_executing() {
         ("signature.json", f.signature()),
         ("trust.json", bytes(&f.trust)),
         ("requirements.json", bytes(&f.requirements)),
+        ("supplied-containment.json", containment.clone()),
         (
             "request.json",
             bytes(
@@ -1127,6 +1130,8 @@ fn cli_tool_report_reverifies_bytes_trust_and_options_without_executing() {
             dir.join(id),
             if id == "tool-catalog" {
                 bytes(&catalog)
+            } else if id == "containment" {
+                containment.clone()
             } else {
                 id.as_bytes().to_vec()
             },
@@ -1176,6 +1181,70 @@ fn cli_tool_report_reverifies_bytes_trust_and_options_without_executing() {
         report["tool_selection"]["tool_image_profile_verified"],
         false
     );
+    assert_eq!(
+        report["tool_selection"]["containment_profile_verified"],
+        false
+    );
+    let mut with_containment = options.to_vec();
+    with_containment.extend(["--tool-containment", "supplied-containment.json"]);
+    let checked = run(false, &with_containment);
+    assert!(
+        checked.status.success(),
+        "{}",
+        String::from_utf8_lossy(&checked.stderr)
+    );
+    assert_eq!(checked.stdout, run(false, &with_containment).stdout);
+    let checked_report: Value = serde_json::from_slice(&checked.stdout).unwrap();
+    assert_eq!(
+        checked_report["tool_selection"]["containment_profile_verified"],
+        true
+    );
+    assert_eq!(
+        checked_report["tool_selection"]["containment_profile"],
+        devlish_audit::tool_containment::PROFILE
+    );
+    for key in [
+        "containment_enforcement_verified",
+        "execution_origin_verified",
+        "policy_enforcement_verified",
+    ] {
+        assert_eq!(checked_report["tool_selection"][key], false);
+    }
+    let checked_text = run(true, &with_containment);
+    assert!(checked_text.status.success());
+    let checked_text = String::from_utf8(checked_text.stdout).unwrap();
+    assert!(checked_text.contains("Signed containment requirements recognized: Yes"));
+    assert!(checked_text.contains("Actual containment enforcement independently established: No"));
+    assert!(!checked_text.contains("/work/public.txt"));
+    fs::write(dir.join("supplied-containment.json"), b"substituted").unwrap();
+    assert!(!run(false, &with_containment).status.success());
+    assert!(run(false, &options).status.success());
+    fs::write(dir.join("supplied-containment.json"), &containment).unwrap();
+    // An authentic release may declare unsupported requirements. Membership
+    // alone can pass, while the explicitly requested profile check must fail.
+    let mut weaker = recognized_containment();
+    weaker["network"] = json!("allow");
+    let weaker = bytes(&weaker);
+    f.manifest["artifacts"][5]["sha256"] = json!(sha256(&weaker));
+    for (name, data) in [
+        ("manifest.json", bytes(&f.manifest)),
+        ("signature.json", f.signature()),
+        ("containment", weaker.clone()),
+        ("supplied-containment.json", weaker),
+    ] {
+        fs::write(dir.join(name), data).unwrap();
+    }
+    assert!(run(false, &options).status.success());
+    assert!(!run(false, &with_containment).status.success());
+    f.manifest["artifacts"][5]["sha256"] = json!(sha256(&containment));
+    for (name, data) in [
+        ("manifest.json", bytes(&f.manifest)),
+        ("signature.json", f.signature()),
+        ("containment", containment.clone()),
+        ("supplied-containment.json", containment.clone()),
+    ] {
+        fs::write(dir.join(name), data).unwrap();
+    }
     let english = run(true, &options);
     assert!(english.status.success());
     let english = String::from_utf8(english.stdout).unwrap();
@@ -1185,6 +1254,7 @@ fn cli_tool_report_reverifies_bytes_trust_and_options_without_executing() {
     for extra in [
         vec!["--tool-catalog", "tool-catalog"],
         vec!["--tool-request", "request.json"],
+        vec!["--tool-containment", "supplied-containment.json"],
         vec!["--evidence", "absent", "--prepare-receipt", "absent"],
         vec![
             "--tool-catalog",
@@ -1215,6 +1285,7 @@ fn cli_tool_report_reverifies_bytes_trust_and_options_without_executing() {
     f.trust["keys"][0]["revoked"] = json!(true);
     fs::write(dir.join("trust.json"), bytes(&f.trust)).unwrap();
     assert!(!run(false, &options).status.success());
+    assert!(!run(false, &with_containment).status.success());
     fs::remove_dir_all(dir).unwrap();
 }
 

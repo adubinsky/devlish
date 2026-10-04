@@ -58,6 +58,33 @@ impl ReleaseVerification {
         catalog_bytes: &[u8],
         request_bytes: &[u8],
     ) -> Result<serde_json::Value, String> {
+        self.verify_tool_request_inner(catalog_id, catalog_bytes, request_bytes, None)
+    }
+
+    /// Additionally validate the selected signed containment declaration. This
+    /// recognizes requirements only; it never checks a running OS or executes.
+    pub fn verify_tool_request_with_containment(
+        &self,
+        catalog_id: &str,
+        catalog_bytes: &[u8],
+        request_bytes: &[u8],
+        containment_bytes: &[u8],
+    ) -> Result<serde_json::Value, String> {
+        self.verify_tool_request_inner(
+            catalog_id,
+            catalog_bytes,
+            request_bytes,
+            Some(containment_bytes),
+        )
+    }
+
+    fn verify_tool_request_inner(
+        &self,
+        catalog_id: &str,
+        catalog_bytes: &[u8],
+        request_bytes: &[u8],
+        containment_bytes: Option<&[u8]>,
+    ) -> Result<serde_json::Value, String> {
         #[derive(Deserialize)]
         #[serde(deny_unknown_fields)]
         struct Request {
@@ -75,6 +102,9 @@ impl ReleaseVerification {
             &request.arguments,
             self.verified_evaluated_at,
         )?;
+        let containment = containment_bytes
+            .map(|bytes| selection.verify_containment(bytes))
+            .transpose()?;
         Ok(serde_json::json!({
             "format":"devlish-tool-selection-verification", "format_version":1,
             "catalog_id":catalog_id, "tool_id":selection.id(),
@@ -85,9 +115,12 @@ impl ReleaseVerification {
             "request_sha256":sha256(request_bytes),
             "evaluated_at":self.verified_evaluated_at, "admission_valid_until":selection.valid_until(),
             "catalog_membership_verified":true, "tool_artifact_snapshot_verified":true,
-            "tool_image_profile_verified":false, "containment_enforcement_verified":false,
+            "tool_image_profile_verified":false,
+            "containment_profile_verified":containment.is_some(),
+            "containment_profile":containment.as_ref().map(|profile| profile.profile()),
+            "containment_enforcement_verified":false,
             "execution_origin_verified":false, "policy_enforcement_verified":false,
-            "explanation":"Exact request arguments match an authenticated catalog entry at the operator-supplied release evaluation time. Referenced tool bytes matched the release during verification. This does not inspect executable format, authorize dispatch, evaluate Devlish policy, enforce containment or prove execution. Raw arguments and paths are omitted; digests do not encrypt low-entropy data."
+            "explanation":"Exact request arguments match an authenticated catalog entry at the operator-supplied release evaluation time. Referenced tool bytes matched the release during verification. Optional containment validation recognizes signed fixed-profile requirements only. This does not inspect executable format, authorize dispatch, evaluate Devlish policy, enforce containment or prove execution. Raw arguments and paths are omitted; digests do not encrypt low-entropy data."
         }))
     }
 

@@ -154,6 +154,28 @@ The prepared object retains the checked declaration commitment beside its sealed
 image and catalog selection. Validation happens before opening the tool path.
 It still does not apply those controls or authorize dispatch. Standard-stream
 supervision, production broker integration and governed evidence recording remain
-unfinished. The existing offline tool-request report authenticates membership and
-digests only; it does not invoke this declaration validator or claim containment
-was enforced. A valid declaration is a requirement, not proof of compliance.
+unfinished. Without `--tool-containment`, the offline tool-request report authenticates
+membership and digests only. The optional flag invokes this declaration validator;
+neither mode claims containment was enforced. A valid declaration is a requirement, not proof of compliance.
+
+
+To independently validate the requirements as well as catalog membership, add
+`--tool-containment` to the existing release-verification command:
+
+```bash
+devlish-audit --text verify-release manifest.json \
+  --signature signature.json --trust operator-trust.json \
+  --requirements operator-requirements.json --artifacts operator-artifacts.json \
+  --tool-catalog external-tools --tool-request request.json \
+  --tool-containment containment.json
+```
+
+The flag requires both tool-selection options. The supplied bytes must match the
+selected release artifact's digest and the recognized fixed schema. A freshly
+signed but unsupported declaration fails this requested check. JSON reports
+`containment_profile_verified: true` and the recognized profile only after both
+checks; without the flag that finding stays false. English output labels it
+“Signed containment requirements recognized.” Actual containment enforcement,
+executing-program identity and policy enforcement remain independently unproven.
+Repeated checks of the same inputs produce the same findings, while altered bytes
+or supplied revoked trust fail. No executable or model is invoked.

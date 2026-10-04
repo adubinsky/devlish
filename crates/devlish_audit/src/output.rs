@@ -13,6 +13,10 @@ fn quoted(value: &str) -> String {
 }
 fn label(key: &str) -> String {
     match key {
+        "containment_profile_verified" => "Signed containment requirements recognized".into(),
+        "containment_enforcement_verified" => {
+            "Actual containment enforcement independently established".into()
+        }
         "signature_verified" => "Signature valid for the trusted key and purpose".into(),
         "execution_origin_verified" => "Actual executing program independently established".into(),
         "policy_enforcement_verified" => {
