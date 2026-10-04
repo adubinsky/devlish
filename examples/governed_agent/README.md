@@ -121,3 +121,7 @@ must be bound into an approved release; these source examples do not authenticat
 a runtime or prove protected execution. Current verified-profile mode continues
 to block legacy harness/server/MCP routes. This example establishes the
 Devlish control loop and its tests, not completed production isolation.
+
+A complementary [company IP example](../company_ip/README.md) keeps internal design
+drafts local while the model orders two preapproved public excerpts. It includes
+independent publication rules, adversarial plans and repeatable offline reports.
