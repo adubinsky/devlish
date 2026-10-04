@@ -352,26 +352,14 @@ mod tests {
     }
 
     #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
-    #[test]
-    fn system_linker_static_fixture_is_accepted_without_executing_it() {
+    fn linked_static_fixture(stem: &str, assembly: &str) -> CatalogFixture {
         use std::{fs, process::Command};
         let directory =
-            std::env::temp_dir().join(format!("devlish-linked-image-{}", std::process::id()));
+            std::env::temp_dir().join(format!("devlish-linked-{stem}-{}", std::process::id()));
         fs::create_dir(&directory).unwrap();
         let source = directory.join("fixture.s");
         let binary = directory.join("fixture");
-        fs::write(
-            &source,
-            r#".text
-.global _start
-_start:
-    mov $60, %rax
-    xor %rdi, %rdi
-    syscall
-.section .note.GNU-stack,"",@progbits
-"#,
-        )
-        .unwrap();
+        fs::write(&source, assembly).unwrap();
         let linked = Command::new("cc")
             .args([
                 "-nostdlib",
@@ -390,13 +378,31 @@ _start:
             "{}",
             String::from_utf8_lossy(&linked.stderr)
         );
-        let digest = crate::sha256_hex(&fs::read(&binary).unwrap());
+        let fixture = CatalogFixture::new(&fs::read(&binary).unwrap());
+        fs::remove_dir_all(directory).unwrap();
+        fixture
+    }
+    #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
+    #[test]
+    fn system_linker_static_fixture_is_accepted_without_executing_it() {
+        let fixture = linked_static_fixture(
+            "inspect",
+            r#".text
+.global _start
+_start:
+    mov $60, %rax
+    xor %rdi, %rdi
+    syscall
+.section .note.GNU-stack,"",@progbits
+"#,
+        );
+        let binary = fixture.dir.join("tool");
+        let digest = crate::sha256_hex(&std::fs::read(&binary).unwrap());
         let snapshot = SealedToolSnapshot::from_path(&binary, &digest).unwrap();
         let image = StaticToolImage::from_snapshot(snapshot, PROFILE).unwrap();
         assert_eq!(image.sha256(), digest);
         assert!(image.entry_address() >= 4096);
-        // We linked and inspected a synthetic fixture; no child tool was run.
-        fs::remove_dir_all(directory).unwrap();
+        // This inspection test does not execute its fixture.
     }
     #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
     #[test]
@@ -576,5 +582,97 @@ _start:
                 "{error}"
             );
         }
+    }
+
+    #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
+    #[test]
+    fn isolated_synthetic_image_executes_from_the_retained_descriptor_after_path_replacement() {
+        use std::{
+            ffi::CString,
+            os::fd::{AsFd, AsRawFd},
+        };
+        // Deliberately tiny trusted test program: verify argument count, exit37.
+        // There is no network, file I/O, dynamic loader, or candidate-supplied code.
+        let fixture = linked_static_fixture(
+            "execute",
+            r#".text
+.global _start
+_start:
+    mov $37, %rdi
+    cmpq $2, (%rsp)
+    je finish
+    mov $38, %rdi
+finish:
+    mov $60, %rax
+    syscall
+.section .note.GNU-stack,"",@progbits
+"#,
+        );
+        let selected = fixture
+            .catalog
+            .select("public-grep", &["--public-only".into()], 150)
+            .unwrap();
+        let prepared = PreparedCatalogTool::load(selected).unwrap();
+        std::fs::write(
+            fixture.dir.join("tool"),
+            b"replaced pathname is not executable",
+        )
+        .unwrap();
+        let rules = crate::tool_landlock::LandlockRuleset::deny_file_access().unwrap();
+        let image_fd = prepared.image().as_fd().as_raw_fd();
+        let arguments: Vec<_> = std::iter::once(prepared.selection().id())
+            .chain(prepared.selection().arguments().iter().map(String::as_str))
+            .map(|s| CString::new(s).unwrap())
+            .collect();
+        let mut argv: Vec<_> = arguments.iter().map(|s| s.as_ptr()).collect();
+        argv.push(std::ptr::null());
+        let environment: [*const libc::c_char; 1] = [std::ptr::null()];
+        let child = unsafe { libc::fork() };
+        assert!(child >= 0);
+        if child == 0 {
+            // Disposable child: no allocations, unwinding or destructors. Only
+            // trusted setup runs before exec; no production launcher is exposed.
+            unsafe {
+                for fd in 0..3 {
+                    libc::close(fd);
+                }
+                if rules.restrict_current_thread().is_err() {
+                    libc::_exit(110);
+                }
+                if crate::tool_descriptors::close_unlisted(&[image_fd]).is_err() {
+                    libc::_exit(111);
+                }
+                libc::syscall(
+                    libc::SYS_execveat,
+                    image_fd,
+                    c"".as_ptr(),
+                    argv.as_ptr(),
+                    environment.as_ptr(),
+                    libc::AT_EMPTY_PATH,
+                );
+                libc::_exit(112);
+            }
+        }
+        let mut status = 0;
+        loop {
+            let waited = unsafe { libc::waitpid(child, &mut status, 0) };
+            if waited == child {
+                break;
+            }
+            assert_eq!(
+                std::io::Error::last_os_error().raw_os_error(),
+                Some(libc::EINTR)
+            );
+        }
+        assert!(libc::WIFEXITED(status), "child status {status}");
+        assert_eq!(
+            libc::WEXITSTATUS(status),
+            37,
+            "setup/exec or argument-count failure"
+        );
+        assert_eq!(
+            prepared.image().sha256(),
+            prepared.selection().tool_sha256()
+        );
     }
 }

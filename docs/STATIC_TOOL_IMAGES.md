@@ -50,6 +50,11 @@ fixture, then seals and inspects it without executing it. That compiler is a
 test/build dependency, not a runtime tool adapter or approved release authority.
 The hosted Linux job is required to validate these platform-specific tests.
 
+A separate [composed qualification test](TOOL_LAUNCH_QUALIFICATION.md) executes
+only a tiny synthetic fixture through a signed selection, sealed image,
+filesystem restriction and descriptor cleanup. It does not enable production
+dispatch or qualify the missing containment controls.
+
 This is not a complete ELF validator, CPU compatibility test, proof of benign
 machine code, or OS sandbox. A static program can still issue syscalls or load
 additional data/code itself. Before enabling launch, bind a signed catalog to
