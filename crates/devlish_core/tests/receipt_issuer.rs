@@ -484,7 +484,7 @@ fn final_devlish_denial_after_preflight_never_calls_backend() {
     )
     .unwrap()
     .into_bytes();
-    let issuer = f.issuer();
+    let issuer = f.issuer().with_replay_evidence();
     let mut records = Records::default();
     // Act.
     assert!(issuer
@@ -503,4 +503,292 @@ fn final_devlish_denial_after_preflight_never_calls_backend() {
     assert_eq!(records.values[1]["allow"], false);
     assert_eq!(f.backend.calls, 0);
     assert_eq!(f.files(), 1);
+    let mut evidence = vec![json!({"type":"receipt_issuance_started","format_version":1})];
+    evidence.extend(records.values);
+    let journal = rechained(&evidence);
+    let replay =
+        devlish_core::receipt_journal::replay(&f.policy, &journal, &sha256(&journal)).unwrap();
+    assert_eq!(replay["decision_count"], 2);
+    assert_eq!(replay["recorded_signing_status"], "denied");
+}
+
+fn issue_to_journal(f: &mut Fixture, capture: bool) -> (Result<(), String>, Vec<u8>) {
+    let mut issuer = f.issuer();
+    if capture {
+        issuer = issuer.with_replay_evidence();
+    }
+    let path = f.directory.join("issuer.jsonl");
+    let mut journal = devlish_core::receipt_journal::ReceiptJournal::create(&path).unwrap();
+    let result = issuer
+        .issue(
+            &f.release,
+            "session",
+            &f.log,
+            &f.request,
+            &bytes(&f.trust),
+            &mut f.backend,
+            &mut journal,
+        )
+        .map(|_| ());
+    drop(journal);
+    (result, fs::read(path).unwrap())
+}
+fn journal_records(journal: &[u8]) -> Vec<Value> {
+    std::str::from_utf8(journal)
+        .unwrap()
+        .lines()
+        .map(|line| serde_json::from_str::<Value>(line).unwrap()["record"].clone())
+        .collect()
+}
+fn rechained(records: &[Value]) -> Vec<u8> {
+    let mut previous = String::new();
+    let mut journal = Vec::new();
+    for (sequence, record) in records.iter().enumerate() {
+        let mut envelope = json!({"sequence":sequence,"previous_sha256":previous,"record":record});
+        previous = sha256(&bytes(&envelope));
+        envelope["record_sha256"] = json!(previous);
+        journal.extend(bytes(&envelope));
+        journal.push(b'\n');
+    }
+    journal
+}
+#[test]
+fn recorded_receipt_decisions_replay_offline_and_explain_their_limits() {
+    // Arrange: opt in through operator construction, never through request data.
+    let mut f = Fixture::new();
+    let (result, journal) = issue_to_journal(&mut f, true);
+    result.unwrap();
+    // Act: replay actual durable evidence without supplying a backend.
+    let report =
+        devlish_core::receipt_journal::replay(&f.policy, &journal, &sha256(&journal)).unwrap();
+    let repeated =
+        devlish_core::receipt_journal::replay(&f.policy, &journal, &sha256(&journal)).unwrap();
+    // Assert: repeatable decisions, explicitly unauthenticated authority and origin.
+    assert_eq!(report, repeated);
+    assert_eq!(report["decision_count"], 2);
+    assert_eq!(report["recorded_signing_status"], "completed");
+    assert_eq!(report["authority_authenticated"], false);
+    assert_eq!(report["receipt_signature_verified"], false);
+    assert_eq!(report["policy_enforcement_verified"], false);
+    assert_eq!(f.backend.calls, 1);
+    fs::write(f.directory.join("policy.json"), &f.policy).unwrap();
+    let output = std::process::Command::new(env!("CARGO_BIN_EXE_devlish-core"))
+        .args([
+            "report",
+            "receipt-issuer",
+            "policy.json",
+            "issuer.jsonl",
+            "--sha256",
+            &sha256(&journal),
+        ])
+        .current_dir(&f.directory)
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let cli: Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(cli["details"], report);
+    fs::write(f.directory.join("report.json"), &output.stdout).unwrap();
+    let explanation = std::process::Command::new(env!("CARGO_BIN_EXE_devlish-core"))
+        .args(["report", "explain", "report.json"])
+        .current_dir(&f.directory)
+        .output()
+        .unwrap();
+    assert!(explanation.status.success());
+    assert!(String::from_utf8_lossy(&explanation.stdout).contains("have not been authenticated"));
+    assert_eq!(
+        fs::metadata(f.directory.join("issuer.jsonl"))
+            .unwrap()
+            .permissions()
+            .mode()
+            & 0o777,
+        0o600
+    );
+    assert!(devlish_core::receipt_journal::ReceiptJournal::create(
+        &f.directory.join("issuer.jsonl")
+    )
+    .is_err());
+    assert_eq!(fs::read(f.directory.join("issuer.jsonl")).unwrap(), journal);
+}
+#[test]
+fn receipt_replay_rejects_tampering_missing_outcomes_and_rehashed_false_decisions() {
+    let mut f = Fixture::new();
+    let (result, journal) = issue_to_journal(&mut f, true);
+    result.unwrap();
+    let unterminated = &journal[..journal.len() - 1];
+    assert!(
+        devlish_core::receipt_journal::replay(&f.policy, unterminated, &sha256(unterminated))
+            .is_err()
+    );
+    let original = journal_records(&journal);
+    for mode in [
+        "decision",
+        "reason",
+        "request",
+        "authority",
+        "policy",
+        "phase",
+        "operation",
+        "outcome",
+        "signature-digest",
+        "truncated",
+        "reordered",
+        "extra",
+    ] {
+        let mut records = original.clone();
+        match mode {
+            "decision" => records[1]["allow"] = json!(false),
+            "reason" => records[1]["reason_sha256"] = json!("f".repeat(64)),
+            "request" => records[1]["request"]["tenant_id"] = json!("other"),
+            "authority" => records[2]["authority"]["key_id"] = json!("other"),
+            "policy" => records[1]["policy"]["verified_file_sha256"] = json!("f".repeat(64)),
+            "phase" => records[1]["phase"] = json!("issue_audit_receipt"),
+            "operation" => records[2]["operation_id"] = json!("f".repeat(64)),
+            "outcome" => records[3]["receipt_sha256"] = json!("f".repeat(64)),
+            "signature-digest" => records[3]["signature_sha256"] = json!("bad"),
+            "truncated" => {
+                records.pop();
+            }
+            "reordered" => records.swap(1, 2),
+            _ => records.push(records[3].clone()),
+        }
+        let changed = rechained(&records);
+        assert!(
+            devlish_core::receipt_journal::replay(&f.policy, &changed, &sha256(&journal)).is_err(),
+            "anchor {mode}"
+        );
+        assert!(
+            devlish_core::receipt_journal::replay(&f.policy, &changed, &sha256(&changed)).is_err(),
+            "replay {mode}"
+        );
+    }
+    let changed_policy = f.policy.iter().copied().chain([b' ']).collect::<Vec<_>>();
+    assert!(
+        devlish_core::receipt_journal::replay(&changed_policy, &journal, &sha256(&journal))
+            .is_err()
+    );
+}
+#[test]
+fn denied_and_uncertain_receipt_attempts_replay_without_claiming_success() {
+    for mode in ["denied", "uncertain", "invalid"] {
+        let mut f = Fixture::new();
+        if mode == "denied" {
+            f.request["tenant_id"] = json!("other");
+        } else {
+            f.backend.mode = mode;
+        }
+        let (result, journal) = issue_to_journal(&mut f, true);
+        assert!(result.is_err());
+        let replay = devlish_core::receipt_journal::replay(&f.policy, &journal, &sha256(&journal));
+        if mode == "invalid" {
+            assert!(replay.unwrap_err().contains("unresolved"));
+        } else {
+            assert_eq!(replay.unwrap()["recorded_signing_status"], mode);
+        }
+        assert_eq!(f.backend.calls, usize::from(mode != "denied"));
+    }
+}
+#[test]
+fn raw_receipt_evidence_requires_operator_opt_in() {
+    let mut f = Fixture::new();
+    let (result, journal) = issue_to_journal(&mut f, false);
+    result.unwrap();
+    for record in &journal_records(&journal)[1..3] {
+        assert!(record.get("request").is_none() && record.get("authority").is_none());
+    }
+    assert!(
+        devlish_core::receipt_journal::replay(&f.policy, &journal, &sha256(&journal))
+            .unwrap_err()
+            .contains("operator-enabled")
+    );
+}
+#[test]
+fn receipt_journal_poisoning_and_reuse_block_backend_calls() {
+    for mode in ["oversized", "reuse", "invalid-record"] {
+        let mut f = Fixture::new();
+        let issuer = f.issuer().with_replay_evidence();
+        let path = f.directory.join("journal");
+        let mut journal = devlish_core::receipt_journal::ReceiptJournal::create(&path).unwrap();
+        if mode == "invalid-record" {
+            assert!(journal.record(&json!({"type":"unexpected"})).is_err());
+        } else {
+            let mut denied = f.request.clone();
+            denied["tenant_id"] = json!("other");
+            if mode == "oversized" {
+                denied["extra"] = json!("x".repeat(1024 * 1024));
+            }
+            assert!(issuer
+                .issue(
+                    &f.release,
+                    "session",
+                    &f.log,
+                    &denied,
+                    &bytes(&f.trust),
+                    &mut f.backend,
+                    &mut journal
+                )
+                .is_err());
+        }
+        let before = fs::read(&path).unwrap();
+        assert!(issuer
+            .issue(
+                &f.release,
+                "session",
+                &f.log,
+                &f.request,
+                &bytes(&f.trust),
+                &mut f.backend,
+                &mut journal
+            )
+            .is_err());
+        assert_eq!(f.backend.calls, 0);
+        assert_eq!(fs::read(&path).unwrap(), before);
+        assert_eq!(f.files(), 1);
+    }
+}
+
+#[test]
+fn receipt_report_rejects_oversized_snapshots_before_reading_payloads() {
+    // Arrange: sparse files exceed each boundary without allocating large fixtures.
+    let f = Fixture::new();
+    fs::write(f.directory.join("policy.json"), &f.policy).unwrap();
+    fs::write(f.directory.join("journal"), b"placeholder").unwrap();
+    for (name, limit) in [
+        ("journal", 4 * 1024 * 1024u64),
+        ("policy.json", 64 * 1024 * 1024u64),
+    ] {
+        let file = fs::OpenOptions::new()
+            .write(true)
+            .open(f.directory.join(name))
+            .unwrap();
+        file.set_len(limit + 1).unwrap();
+        // Act: reject from file metadata, before hashing or parsing the payload.
+        let output = std::process::Command::new(env!("CARGO_BIN_EXE_devlish-core"))
+            .args([
+                "report",
+                "receipt-issuer",
+                "policy.json",
+                "journal",
+                "--sha256",
+                &"0".repeat(64),
+            ])
+            .current_dir(&f.directory)
+            .output()
+            .unwrap();
+        // Assert: this is a bounded-read error, not a later replay/parser error.
+        assert!(!output.status.success());
+        assert!(
+            String::from_utf8_lossy(&output.stderr)
+                .contains("input must be a regular file within the size limit"),
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        file.set_len(0).unwrap();
+        if name == "policy.json" {
+            fs::write(f.directory.join(name), &f.policy).unwrap();
+        }
+    }
 }

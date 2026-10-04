@@ -623,3 +623,13 @@ pinned key before either approval, and it records both decisions before signing.
 See the [issuer contract and tests](../examples/receipt_authority/README.md#native-in-process-issuer).
 This integration does not upgrade the independent verifier's execution-assurance
 claims or add restart recovery, tenant authentication or protected key custody.
+
+## Receipt authorization replay is a separate check
+
+`devlish report receipt-issuer` can now reproduce the Devlish decisions in an
+operator-enabled issuer journal against an independently retained digest. It
+runs no signing backend and reports denial or uncertainty separately from recorded
+completion. This compiler/VM-backed replay is deliberately separate from the
+small `devlish-audit` executable, which has no VM dependency. Combining the two
+checks still does not authenticate authority snapshots or prove protected
+execution. See [receipt authorization replay](COMPLIANCE_REPORTS.md#replay-recorded-receipt-authorization).

@@ -148,7 +148,7 @@ fn print_help() {
 Usage: devlish-core <command> [options]
 
 Commands:
-  report <kind>              Repeatable application, policy, process, and integrity reports
+  report <kind>              Repeatable application, policy, process, receipt-issuer, and integrity reports
   artifact hash|verify       Hash a file or verify its exact bytes against a trusted SHA-256
   compile <file.dvl>          Compile a Devlish source file to bytecode
   run <file>                  Run a compiled bytecode file or source file

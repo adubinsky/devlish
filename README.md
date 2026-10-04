@@ -70,7 +70,7 @@ devlish mcp [--tools-dir dir]                          Start MCP server (JSON-RP
 devlish course                                         Interactive beginner course
 devlish evidence <rule.dvl>                            Run golden cases, emit hashed evidence report
 devlish artifact hash|verify                           Inspect or verify exact file bytes
-devlish report application|policy|process|verify|explain  Tamper-evidence reports
+devlish report application|policy|process|receipt-issuer|verify|explain  Tamper-evidence reports
 devlish audit-verify <log.jsonl>                       Verify the hash chain of an audit log
 devlish replay <log.jsonl>                             Re-run a journaled run offline, verify output
 devlish release <verb>                                 Release lifecycle: propose, approve,

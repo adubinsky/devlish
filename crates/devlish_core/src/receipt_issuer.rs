@@ -1,8 +1,10 @@
 //! In-process receipt orchestration. Deployment must independently protect this
 //! host, its configuration, recorder, storage and signing backend.
 use devlish_audit::{
-    issuance::ReceiptKey, receipt::ReceiptKind, release::ReleaseVerification, sha256,
-    signing_message, Purpose, MAX_ARTIFACT_BYTES,
+    issuance::{terminal_operation_id, ReceiptKey},
+    receipt::ReceiptKind,
+    release::ReleaseVerification,
+    sha256, signing_message, Purpose, MAX_ARTIFACT_BYTES,
 };
 use devlish_vm::policy::{EffectPolicy, PolicyRecorder};
 use serde_json::{json, Value};
@@ -20,6 +22,7 @@ pub struct ReceiptIssuer {
     directory: PathBuf,
     tenant: String,
     key: ReceiptKey,
+    capture_evidence: bool,
 }
 
 pub struct IssuedReceipt {
@@ -63,7 +66,15 @@ impl ReceiptIssuer {
             directory,
             tenant,
             key,
+            capture_evidence: false,
         })
+    }
+
+    /// Operator opt-in: the protected recorder will receive raw requests and
+    /// authority snapshots for offline replay. Never derive this from a request.
+    pub fn with_replay_evidence(mut self) -> Self {
+        self.capture_evidence = true;
+        self
     }
 
     fn authorize(
@@ -71,6 +82,7 @@ impl ReceiptIssuer {
         phase: &str,
         request: &Value,
         authority: &Value,
+        operation_id: &str,
         recorder: &mut dyn PolicyRecorder,
     ) -> Result<(), String> {
         let (allow, reason) = self
@@ -78,10 +90,16 @@ impl ReceiptIssuer {
             .evaluate_with_authority(phase, request, authority)
             .unwrap_or_else(|error| (false, error));
         let diagnostic = sha256(reason.as_bytes());
-        recorder.record(&json!({"type":"receipt_authorization","phase":phase,
+        let mut record = json!({"type":"receipt_authorization","phase":phase,"operation_id":operation_id,
             "policy":self.policy.identity(),"allow":allow,"reason_sha256":diagnostic,
             "request_sha256":sha256(&serde_json::to_vec(request).map_err(|_|"invalid request")?),
-            "authority_sha256":sha256(&serde_json::to_vec(authority).map_err(|_|"invalid authority state")?)}))
+            "authority_sha256":sha256(&serde_json::to_vec(authority).map_err(|_|"invalid authority state")?)});
+        if self.capture_evidence {
+            record["request"] = request.clone();
+            record["authority"] = authority.clone();
+        }
+        recorder
+            .record(&record)
             .map_err(|_| "receipt decision recording failed; signing blocked")?;
         if !allow {
             return Err(format!(
@@ -117,7 +135,14 @@ impl ReceiptIssuer {
             "key_id":self.key.id,"key_active":true,"signer_available":backend.available(),
             "terminal_ready":true,"reservation_state":"prepared","evidence_source":"verified-history",
             "assurance_profile":"recorded-history"});
-        self.authorize("prepare_audit_receipt", request, &authority, recorder)?;
+        let operation_id = terminal_operation_id(&self.tenant, session)?;
+        self.authorize(
+            "prepare_audit_receipt",
+            request,
+            &authority,
+            &operation_id,
+            recorder,
+        )?;
         let reservation = release.reserve_terminal_receipt(
             &self.directory,
             &self.tenant,
@@ -129,8 +154,13 @@ impl ReceiptIssuer {
             return Err("reserved receipt changed after preflight; reconciliation required".into());
         }
         authority["reservation_state"] = json!("reserved");
-        self.authorize("issue_audit_receipt", request, &authority, recorder)?;
-        let operation_id = reservation.operation_id().to_owned();
+        self.authorize(
+            "issue_audit_receipt",
+            request,
+            &authority,
+            &operation_id,
+            recorder,
+        )?;
         let signature_bytes = match backend.sign(
             reservation.key_id(),
             &signing_message(Purpose::AuditReceipt, reservation.receipt()),

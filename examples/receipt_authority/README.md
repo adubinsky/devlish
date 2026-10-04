@@ -114,8 +114,8 @@ evaluates final Devlish approval. Both decisions must be recorded before the
 backend receives the domain-separated retained receipt bytes. No caller-selected
 bytes, purpose, key endpoint or tenant routing enter the backend call.
 
-Decision records contain policy identity and request/authority/reason digests,
-not raw caller payloads. The recorder must durably persist each record. Denial or
+By default, decision records contain operation identity, policy identity and
+request/authority/reason digests, not raw caller payloads. The recorder must durably persist each record. Denial or
 recording failure before signing prevents the backend call. Backend uncertainty
 or an invalid signature leaves the reservation pending. A recording failure after
 completion retains the signed result on disk and returns an error; the caller
@@ -127,8 +127,8 @@ in this increment is an ephemeral test signer. A real deployment must isolate
 credentials, authenticate the caller and host state, select fresh release/trust
 snapshots, protect the policy pin and storage, and retain evidence independently.
 The Rust API is not a boundary against malicious code in the same process.
-Offline process reports do not yet replay this receipt-issuer journal; the supplied
-Devlish policy cases are repeatable independently.
+The separate `report receipt-issuer` command can replay operator-enabled evidence;
+ordinary process reports remain scoped to application execution.
 
 ## Verify the retained issuance
 
@@ -142,3 +142,27 @@ saved records to this checker.
 This proves consistency with a freshly verified receipt and log. It does not
 replay issuer decisions or authenticate the unsigned tenant label. Saved
 verification flags cannot establish stronger assurance or bypass revocation.
+
+## Record and replay issuer decisions
+
+For one issuance attempt, the native host can create a durable
+`devlish_core::receipt_journal::ReceiptJournal` and pass it as the issuer's
+recorder. Explicitly enable `issuer.with_replay_evidence()` only when raw request
+and authority snapshots may be retained in protected storage. Default recording
+contains only digests. A closed or failed journal cannot be reused for another
+attempt, and the journal cannot authorize a backend call itself.
+
+```bash
+devlish report receipt-issuer receipt-policy.json issuer.jsonl \
+  --sha256 "$RETAINED_ISSUER_JOURNAL_SHA256" --output issuer-report.json
+devlish report explain issuer-report.json
+```
+
+The lowercase journal digest must have been retained independently. Replay uses
+the supplied compiled Devlish policy, checks both decisions and their context,
+and verifies recorded ordering and outcome binding. It never contacts a signer.
+A denial or recorded uncertainty can reproduce successfully; the report keeps
+that status separate from successful issuance. Missing outcomes fail replay and
+require reconciliation. Authority authenticity, signature verification and
+protected execution are outside this replay claim. See the
+[report guide](../../docs/COMPLIANCE_REPORTS.md#replay-recorded-receipt-authorization).

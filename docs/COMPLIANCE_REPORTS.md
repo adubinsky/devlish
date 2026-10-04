@@ -85,7 +85,7 @@ devlish report explain receipt-policy-report.json
 ```
 
 This repeats the Devlish decisions without signing receipts or contacting a key
-backend. Full receipt-issuer journal replay remains separate work.
+backend. Recorded issuer decisions have their own receipt-issuer report described below.
 
 ## Capture a process, then report it offline
 
@@ -191,3 +191,41 @@ against signed receipts and independently supplied receipt digests. It does not
 yet authenticate build provenance, provide protected receipt issuance/storage,
 or establish actual execution.
 See [Independent audit verifier](INDEPENDENT_AUDIT_VERIFIER.md) for usage and limits.
+
+## Replay recorded receipt authorization
+
+The native issuer can record one durable journal per signing attempt using
+`ReceiptJournal::create` and explicit operator opt-in through
+`ReceiptIssuer::with_replay_evidence`. This opt-in stores raw request and authority
+snapshots. Keep journals in operator-controlled storage with access appropriate
+to the input data. Default issuer records contain digests only and cannot replay.
+Files are created exclusively with mode 0600 on Unix; each append is synced, and
+creation also syncs the parent directory. Failed, out-of-order or oversized
+writes poison the recorder. Closed journals cannot accept another attempt.
+Records are limited to 1 MiB each and four records per attempt. Replay requires
+the final newline terminator and applies the 4 MiB journal/64 MiB compiled-policy
+limits while reading, before parsing candidate files.
+
+Retain the completed journal's exact SHA-256 independently, then run:
+
+```bash
+devlish report receipt-issuer receipt-policy.json issuer.jsonl \
+  --sha256 "$RETAINED_ISSUER_JOURNAL_SHA256" --output issuer-report.json
+devlish report explain issuer-report.json
+```
+
+Use a lowercase hexadecimal digest. Computing a new digest from suspect evidence
+at verification time does not establish independent retention. Replay checks the
+anchor, chain, phase order, exact policy identity, unchanged request and authority
+transition, and reruns the Devlish preflight/final decisions without a backend.
+It checks that the recorded outcome identifies the authorized operation and
+receipt. Missing outcomes remain unresolved; there is no implicit successful
+completion or automatic retry. Hash-only journals cannot pass this report.
+
+A passing report means recorded decisions reproduced. It separately identifies
+`completed`, `denied` or `uncertain` signing status; passing replay is not successful
+issuance. Authority snapshots and protected execution remain unauthenticated.
+The report does not verify a receipt signature or prove that a denied request
+never reached a compromised signer. Use `devlish-audit verify-issuance` for the
+separate cryptographic check. The Devlish-authored English explanation preserves
+these distinctions, without consulting a model.

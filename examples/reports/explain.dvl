@@ -19,6 +19,14 @@ If kind of report equals "process":
     Respond with "PASS: Offline replay reproduced a paused execution. The task has not completed."
   Respond with "PASS: Offline replay reproduced the recorded decisions and result without live tool calls. This does not independently attest the host or establish business-task correctness."
 
+If kind of report equals "receipt-issuer":
+  details equals details of report
+  If recorded_signing_status of details equals "denied":
+    Respond with "PASS: Offline replay reproduced a denied receipt request. This does not authenticate authority state or prove that no signing occurred."
+  If recorded_signing_status of details equals "uncertain":
+    Respond with "PASS: Offline replay reproduced the receipt decisions and recorded signing uncertainty. Reconcile before any retry; successful issuance is not established."
+  Respond with "PASS: Offline replay reproduced the receipt authorization decisions and recorded completion. Authority state, the receipt signature and protected execution have not been authenticated by this report."
+
 If kind of report equals "verification":
   details equals details of report
   If anchor_checked of details equals true:

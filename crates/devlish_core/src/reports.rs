@@ -32,9 +32,15 @@ fn verify(report: &Value, expected_kind: Option<&str>) -> Result<String, String>
     if report["format"] != "devlish-compliance-report"
         || report["format_version"] != 1
         || report["passed"].as_bool().is_none()
-        || !["application", "policy", "process", "verification"]
-            .iter()
-            .any(|kind| report["kind"] == *kind)
+        || ![
+            "application",
+            "policy",
+            "process",
+            "receipt-issuer",
+            "verification",
+        ]
+        .iter()
+        .any(|kind| report["kind"] == *kind)
         || expected_kind.is_some_and(|kind| report["kind"] != kind)
     {
         return Err("unsupported report format or kind".into());
@@ -53,7 +59,7 @@ fn verify(report: &Value, expected_kind: Option<&str>) -> Result<String, String>
 }
 
 pub fn run(mut args: Vec<String>) -> Result<(), String> {
-    const USAGE: &str = "Usage: devlish report application <manifest.json> | policy <compiled-policy.json> <cases.json> | process <compiled-program.json> <compiled-policy.json> <input.json> <evidence.jsonl> <application-report.json> <policy-report.json> | explain <report.json> | verify <report.json> [--sha256 <trusted-report-digest>] [--output <new-file>]";
+    const USAGE: &str = "Usage: devlish report application <manifest.json> | policy <compiled-policy.json> <cases.json> | process <compiled-program.json> <compiled-policy.json> <input.json> <evidence.jsonl> <application-report.json> <policy-report.json> | receipt-issuer <compiled-policy.json> <journal.jsonl> --sha256 <retained-journal-digest> | explain <report.json> | verify <report.json> [--sha256 <trusted-report-digest>] [--output <new-file>]";
     let mut output = None;
     if let Some(index) = args.iter().position(|s| s == "--output") {
         output = Some(PathBuf::from(
@@ -94,6 +100,19 @@ pub fn run(mut args: Vec<String>) -> Result<(), String> {
         Some("application") if args.len() == 3 => application(&args[2])?,
         Some("policy") if args.len() == 4 => policy(&args[2], &args[3])?,
         Some("process") if args.len() == 8 => process(&args[2..])?,
+        #[cfg(feature = "native")]
+        Some("receipt-issuer") if args.len() == 6 && args[4] == "--sha256" => {
+            let policy = devlish_audit::read_bounded(
+                Path::new(&args[2]),
+                devlish_audit::MAX_ARTIFACT_BYTES,
+            )?;
+            let journal = devlish_audit::read_bounded(
+                Path::new(&args[3]),
+                devlish_core::receipt_journal::MAX_JOURNAL_BYTES,
+            )?;
+            let details = devlish_core::receipt_journal::replay(&policy, &journal, &args[5])?;
+            seal("receipt-issuer", true, details)
+        }
         Some("verify") if args.len() == 3 || (args.len() == 5 && args[3] == "--sha256") => {
             let (_, report) = read_json(&args[2])?;
             let digest = verify(&report, None)?;
