@@ -923,5 +923,101 @@
       "allow": false,
       "reason": "Only audit receipt issuance is permitted."
     }
+  },
+  {
+    "name": "preflight does not authorize signing",
+    "input": {
+      "effect": "prepare_audit_receipt",
+      "request": {
+        "tenant_id": "tenant-example",
+        "session_id": "session-example",
+        "release_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+        "receipt_sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+        "key_id": "receipt-example",
+        "purpose": "audit-receipt",
+        "kind": "terminal"
+      },
+      "authority": {
+        "tenant_id": "tenant-example",
+        "session_id": "session-example",
+        "release_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+        "receipt_sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+        "key_id": "receipt-example",
+        "key_active": true,
+        "signer_available": true,
+        "terminal_ready": true,
+        "reservation_state": "prepared",
+        "evidence_source": "verified-history",
+        "assurance_profile": "recorded-history"
+      }
+    },
+    "expected": {
+      "allow": true,
+      "reason": "The prepared receipt matches authority state; exclusive reservation and final approval are still required."
+    }
+  },
+  {
+    "name": "preflight cannot reuse reserved state",
+    "input": {
+      "effect": "prepare_audit_receipt",
+      "request": {
+        "tenant_id": "tenant-example",
+        "session_id": "session-example",
+        "release_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+        "receipt_sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+        "key_id": "receipt-example",
+        "purpose": "audit-receipt",
+        "kind": "terminal"
+      },
+      "authority": {
+        "tenant_id": "tenant-example",
+        "session_id": "session-example",
+        "release_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+        "receipt_sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+        "key_id": "receipt-example",
+        "key_active": true,
+        "signer_available": true,
+        "terminal_ready": true,
+        "reservation_state": "reserved",
+        "evidence_source": "verified-history",
+        "assurance_profile": "recorded-history"
+      }
+    },
+    "expected": {
+      "allow": false,
+      "reason": "Preflight requires independently prepared receipt bytes."
+    }
+  },
+  {
+    "name": "prepared bytes cannot skip final reservation",
+    "input": {
+      "effect": "issue_audit_receipt",
+      "request": {
+        "tenant_id": "tenant-example",
+        "session_id": "session-example",
+        "release_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+        "receipt_sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+        "key_id": "receipt-example",
+        "purpose": "audit-receipt",
+        "kind": "terminal"
+      },
+      "authority": {
+        "tenant_id": "tenant-example",
+        "session_id": "session-example",
+        "release_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+        "receipt_sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+        "key_id": "receipt-example",
+        "key_active": true,
+        "signer_available": true,
+        "terminal_ready": true,
+        "reservation_state": "prepared",
+        "evidence_source": "verified-history",
+        "assurance_profile": "recorded-history"
+      }
+    },
+    "expected": {
+      "allow": false,
+      "reason": "Issuance requires an unconsumed exclusive reservation."
+    }
   }
 ]

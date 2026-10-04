@@ -8,6 +8,8 @@ pub mod policy_log;
 
 #[cfg(feature = "native")]
 pub mod service;
+#[cfg(feature = "native")]
+pub mod receipt_issuer;
 
 const FORMAT: &str = "devlish-bytecode";
 const FORMAT_VERSION: u8 = 0;

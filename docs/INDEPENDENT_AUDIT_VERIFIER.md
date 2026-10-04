@@ -519,8 +519,10 @@ terminal-receipt authorization as Devlish rules with repeatable synthetic cases.
 The VM exposes an explicit host-supplied authority input, separate from caller
 request JSON. Ordinary policy-host evaluation has no authority context.
 
-This is a policy contract, not a protected signing service. It does not acquire
-keys, authenticate authority state, reserve concurrent requests or sign receipts.
+This policy is connected to a native in-process issuer, not a protected signing
+service. The issuer performs durable reservation and calls a backend trait only
+after preflight and final Devlish approval. There is no production key backend
+or network endpoint; authority authentication remains a host responsibility.
 A service must independently derive that state, authorize a tenant-scoped key,
 reserve issuance, and sign the exact retained bytes whose digest the policy
 approved. The example documents those obligations and denies stronger execution
@@ -568,3 +570,11 @@ signature matching, wrong purpose/key, same-ID key replacement, revocation,
 relative directory binding and no-overwrite completion.
 The integration test starts from release-verified log history. Power-loss and
 production key-backend behavior have not been exercised.
+
+
+The native core's `ReceiptIssuer` now orchestrates the Devlish policy, reservation
+and backend adapter. It checks a current operator trust snapshot against the
+pinned key before either approval, and it records both decisions before signing.
+See the [issuer contract and tests](../examples/receipt_authority/README.md#native-in-process-issuer).
+This integration does not upgrade the independent verifier's execution-assurance
+claims or add restart recovery, tenant authentication or protected key custody.

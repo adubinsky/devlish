@@ -138,30 +138,14 @@ pub struct Verification {
     pub explanation: &'static str,
 }
 
-pub fn verify(
-    bytes: &[u8],
-    envelope: &[u8],
-    trust: &[u8],
-    purpose: Purpose,
-) -> Result<Verification, String> {
-    if bytes.len() as u64 > MAX_ARTIFACT_BYTES
-        || envelope.len() as u64 > MAX_METADATA_BYTES
-        || trust.len() as u64 > MAX_METADATA_BYTES
-    {
-        return Err("verification input exceeds the size limit".into());
+fn parse_trust(trust: &[u8]) -> Result<Trust, String> {
+    if trust.len() as u64 > MAX_METADATA_BYTES {
+        return Err("trust configuration exceeds the size limit".into());
     }
     let roots: Trust =
         serde_json::from_slice(trust).map_err(|e| format!("invalid trust configuration: {e}"))?;
-    let envelope: Envelope =
-        serde_json::from_slice(envelope).map_err(|e| format!("invalid signature envelope: {e}"))?;
     if roots.format != "devlish-audit-trust" || roots.format_version != 1 || roots.keys.is_empty() {
         return Err("unsupported or empty trust configuration".into());
-    }
-    if envelope.format != "devlish-detached-signature"
-        || envelope.format_version != 1
-        || envelope.algorithm != "ed25519"
-    {
-        return Err("unsupported signature format or algorithm".into());
     }
     let mut ids = BTreeSet::new();
     let mut public_keys = BTreeSet::new();
@@ -175,6 +159,30 @@ pub fn verify(
         {
             return Err("invalid or duplicate trust key or purposes".into());
         }
+    }
+    Ok(roots)
+}
+
+pub fn verify(
+    bytes: &[u8],
+    envelope: &[u8],
+    trust: &[u8],
+    purpose: Purpose,
+) -> Result<Verification, String> {
+    if bytes.len() as u64 > MAX_ARTIFACT_BYTES
+        || envelope.len() as u64 > MAX_METADATA_BYTES
+        || trust.len() as u64 > MAX_METADATA_BYTES
+    {
+        return Err("verification input exceeds the size limit".into());
+    }
+    let roots = parse_trust(trust)?;
+    let envelope: Envelope =
+        serde_json::from_slice(envelope).map_err(|e| format!("invalid signature envelope: {e}"))?;
+    if envelope.format != "devlish-detached-signature"
+        || envelope.format_version != 1
+        || envelope.algorithm != "ed25519"
+    {
+        return Err("unsupported signature format or algorithm".into());
     }
     if envelope.purpose != purpose {
         return Err("signature purpose does not match requested purpose".into());

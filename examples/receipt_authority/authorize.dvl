@@ -1,13 +1,13 @@
 Rule:
   id: audit.authorize_terminal_receipt
-  version: 1.0.0
+  version: 1.1.0
 
 Ask "Which operation is requested?" as effect
 Ask "What does the caller request?" as request
 Ask "What state did the authority independently supply?" as authority
 
 # This policy never authenticates JSON. Only the protected host may supply authority.
-If effect is not "issue_audit_receipt":
+If effect is not "issue_audit_receipt" and effect is not "prepare_audit_receipt":
   Respond with record with false as allow and "Only audit receipt issuance is permitted." as reason
 
 request_shape equals record with "text" as tenant_id and "text" as session_id and "text" as release_sha256 and "text" as receipt_sha256 and "text" as key_id and "text" as purpose and "text" as kind
@@ -34,8 +34,12 @@ If key_active of authority is not true:
   Respond with record with false as allow and "The selected receipt key is inactive or revoked." as reason
 If terminal_ready of authority is not true:
   Respond with record with false as allow and "Paused or incomplete history cannot receive a terminal receipt." as reason
-If reservation_state of authority is not "reserved":
-  Respond with record with false as allow and "Issuance requires an unconsumed exclusive reservation." as reason
+If effect equals "prepare_audit_receipt":
+  If reservation_state of authority is not "prepared":
+    Respond with record with false as allow and "Preflight requires independently prepared receipt bytes." as reason
+If effect equals "issue_audit_receipt":
+  If reservation_state of authority is not "reserved":
+    Respond with record with false as allow and "Issuance requires an unconsumed exclusive reservation." as reason
 If evidence_source of authority is not "verified-history":
   Respond with record with false as allow and "Caller-provided history is not signing authority." as reason
 If assurance_profile of authority is not "recorded-history":
@@ -51,5 +55,8 @@ If receipt_sha256 of request is not receipt_sha256 of authority:
   Respond with record with false as allow and "The request differs from the authority-prepared receipt." as reason
 If key_id of request is not key_id of authority:
   Respond with record with false as allow and "The request selects an unauthorized signing key." as reason
+
+If effect equals "prepare_audit_receipt":
+  Respond with record with true as allow and "The prepared receipt matches authority state; exclusive reservation and final approval are still required." as reason
 
 Respond with record with true as allow and "The reserved terminal receipt matches the authority state; signing records history without proving execution." as reason

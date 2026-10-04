@@ -27,6 +27,27 @@ pub struct ReceiptKey {
     pub public_key_sha256: String,
 }
 
+impl ReceiptKey {
+    /// Select a current receipt-purpose key from operator-supplied trust. Trust
+    /// authenticity, tenant scope and freshness remain the host's responsibility.
+    pub fn from_trust(id: &str, trust: &[u8]) -> Result<Self, String> {
+        identity(id)?;
+        let roots = crate::parse_trust(trust)?;
+        let key = roots
+            .keys
+            .iter()
+            .find(|key| key.id == id)
+            .ok_or("receipt key is not trusted")?;
+        if key.revoked || !key.purposes.contains(&Purpose::AuditReceipt) {
+            return Err("receipt key is revoked or not authorized for receipts".into());
+        }
+        Ok(Self {
+            id: id.into(),
+            public_key_sha256: sha256(&crate::decode::<32>(&key.public_key_hex)?),
+        })
+    }
+}
+
 /// Created only from a terminal receipt prepared against a verified release.
 /// Dropping this object deliberately leaves the reservation on disk. A crash or
 /// backend uncertainty must never silently reopen the signing opportunity.

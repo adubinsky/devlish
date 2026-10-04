@@ -1,8 +1,9 @@
 # Receipt authorization in Devlish
 
 This example makes receipt-signing decisions reviewable as Devlish rules. It is
-an executable authorization contract for DEVL-225, not a protected signer. It
-loads no key and issues no signature. Every fixture is synthetic.
+an executable authorization contract for DEVL-225. The native in-process issuer
+now connects these rules to durable reservation and a signing adapter; it is not
+a protected service. The policy itself loads no key and issues no signature. Every fixture is synthetic.
 
 `authorize.dvl` permits one narrowly scoped operation: a terminal audit receipt
 for recorded history. It compares the caller's tenant, session, release, receipt
@@ -10,10 +11,15 @@ digest and key selection against independently supplied authority state. It
 rejects revoked/inactive keys, unavailable signing, incomplete or paused runs,
 unreserved or consumed issuance, unknown fields and stronger execution claims.
 
-Run the cases from the repository root:
+The policy has two phases: `prepare_audit_receipt` approves a candidate before
+consuming a slot; `issue_audit_receipt` requires the exclusive reservation before
+signing. Preflight approval alone never authorizes a backend call.
+
+Run the cases and integration checks from the repository root:
 
 ```bash
 cargo test --locked --manifest-path crates/devlish_core/Cargo.toml --test receipt_authority
+cargo test --locked --manifest-path crates/devlish_core/Cargo.toml --test receipt_issuer
 ```
 
 `cases.json` contains the expected English decision for every scenario. The test
@@ -50,8 +56,8 @@ copied from uploaded documents or request booleans:
 | assurance_profile | Use `recorded-history`; neither this policy nor a signature proves governed execution. |
 
 The policy checks types and allowed fields; the host must validate canonical
-identities and digests before constructing the descriptor. The tests substitute
-synthetic state for that still-unimplemented protected host.
+identities and digests before constructing the descriptor. The integration tests exercise the real in-process issuer with synthetic log
+history and ephemeral test keys. A protected service remains unimplemented.
 
 ## Integration sequence
 
@@ -59,18 +65,20 @@ synthetic state for that still-unimplemented protected host.
    operator-pinned authorization policy and tenant-scoped receipt key.
 2. Verify release and log history, then prepare exact receipt bytes. Retain these
    bytes inside the service; do not accept arbitrary caller-selected bytes.
-3. Acquire an exclusive durable reservation for the session, receipt kind and
+3. Evaluate Devlish preflight against the prepared candidate and record the
+   decision. A denial creates no reservation and never reaches signing.
+4. Acquire an exclusive durable reservation for the session, receipt kind and
    digest. A conflicting or consumed reservation fails closed.
-4. Supply the requested operation and independently constructed authority state
+5. Supply the requested operation and independently constructed authority state
    separately to the Devlish policy. Errors, missing decisions and denials stop
    issuance. Persist the policy identity, authority-state commitment and decision
    in the signer's independent audit record before contacting the key backend.
-5. Sign those same retained bytes using the existing `audit-receipt` signing
+6. Sign those same retained bytes using the existing `audit-receipt` signing
    domain. Key material must never enter Devlish variables, logs or model input.
-6. Persist the result and reservation transition before responding. Retry may
+7. Persist the result and reservation transition before responding. Retry may
    return the stored identical receipt, but must not sign a competing receipt.
    A crash with uncertain backend outcome requires reconciliation, not blind retry.
-7. Retain receipt commitments outside the executor's control. A failed retention
+8. Retain receipt commitments outside the executor's control. A failed retention
    operation cannot be reported as independently anchored evidence.
 
 The pure policy cannot implement atomic reservation, prevent concurrent duplicate
@@ -78,6 +86,34 @@ issuance, authenticate a key backend, protect storage from administrators or
 prove log truth. Tests of `reserved` and `consumed` show the decision contract,
 not a working concurrency mechanism. The audit library now supplies an exclusive durable local reservation and
 validated completion primitive; see the [reservation guide](../../docs/INDEPENDENT_AUDIT_VERIFIER.md#durable-local-terminal-receipt-reservation).
-It is not yet wired to this policy or a signing service. Protected integration,
-restart reconciliation and the remaining controls stay DEVL-225/DEVL-224 work. Key provisioning, rotation, revocation and incident response likewise need
+The native in-process issuer wires it to this policy and a backend trait. There
+is no production backend, network endpoint or authenticated tenant routing.
+Protected integration, restart reconciliation and the remaining controls stay
+DEVL-225/DEVL-224 work. Key provisioning, rotation, revocation and incident response likewise need
 an operator-controlled backend; no software secret is embedded in this example.
+
+## Native in-process issuer
+
+`devlish_core::receipt_issuer::ReceiptIssuer` pins exact compiled authorization
+policy bytes and an operator-selected tenant, directory and receipt key. Each
+call rechecks the supplied current trust snapshot, prepares receipt bytes from
+the verified release/log, evaluates Devlish preflight, reserves the slot, then
+evaluates final Devlish approval. Both decisions must be recorded before the
+backend receives the domain-separated retained receipt bytes. No caller-selected
+bytes, purpose, key endpoint or tenant routing enter the backend call.
+
+Decision records contain policy identity and request/authority/reason digests,
+not raw caller payloads. The recorder must durably persist each record. Denial or
+recording failure before signing prevents the backend call. Backend uncertainty
+or an invalid signature leaves the reservation pending. A recording failure after
+completion retains the signed result on disk and returns an error; the caller
+must reconcile it before retrying. Completion still makes no independently
+verified policy-enforcement or execution-origin claim.
+
+`ReceiptSigningBackend` has no production implementation. Its only implementation
+in this increment is an ephemeral test signer. A real deployment must isolate
+credentials, authenticate the caller and host state, select fresh release/trust
+snapshots, protect the policy pin and storage, and retain evidence independently.
+The Rust API is not a boundary against malicious code in the same process.
+Offline process reports do not yet replay this receipt-issuer journal; the supplied
+Devlish policy cases are repeatable independently.
