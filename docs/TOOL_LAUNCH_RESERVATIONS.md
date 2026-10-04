@@ -48,7 +48,8 @@ failure, path replacement and symlink refusal. They do not simulate power loss.
 These records are unsigned local evidence. The returned digest can anchor a later
 check only when retained independently; it does not authenticate the writer or
 prove policy enforcement. Integration with the broker, protected admission state,
-terminal outcome recording and independent audit reporting remains required.
+production terminal-outcome integration remains required; the native completion
+primitive and independent record verification are described below.
 
 Sources: [exclusive creation and descriptor-relative access](https://man7.org/linux/man-pages/man2/open.2.html)
 and [file and directory synchronization](https://man7.org/linux/man-pages/man2/fsync.2.html).
@@ -81,8 +82,8 @@ devlish-audit --text verify-release manifest.json \
 
 Both reservation options require a tool catalog/request, and must appear together.
 The verifier freshly validates the release and selection, reads at most 8 KiB,
-checks the supplied digest, validates one reserved record and at most one linked
-consumption record, recomputes the operation identity, and compares every binding
+checks the supplied digest, validates one reserved record, at most one linked
+consumption record and then at most one linked completion record, recomputes the operation identity, and compares every binding
 to the authenticated selection. Unknown/duplicate fields and incomplete records
 are rejected. The signed containment profile remains an optional separate check.
 
@@ -95,3 +96,34 @@ report. A digest supplied by the writer with the file is not an independent anch
 A retained earlier reserved record cannot establish that no later action occurred.
 Neither reserved nor consumed evidence proves execution completion, success, or
 safe retry. This command does not launch anything or reconcile an uncertain action.
+
+
+## Durable terminal capture
+
+On Linux, `ConsumedLaunch::record_capture` takes ownership of the supervisor's
+complete `CapturedOutput`. It appends a third `completed` record and syncs the slot
+before returning `RecordedCapture`. A failed write or sync returns no capture;
+the consumed slot remains occupied and cannot be automatically retried. Crashes
+before completion persistence leave uncertainty. There is no reopen or recovery
+API. The protected host must bind the captured child to the same slot; these
+native objects do not authenticate that relationship independently.
+
+The record links to the exact consumed-record prefix and records the normal exit
+code (0–255), lengths and SHA-256 digests of both bounded streams. It contains no
+raw output. A nonzero exit is a completed capture, not a successful command.
+Stream errors, deadline expiry and abnormal exits never produce `CapturedOutput`
+and therefore cannot enter this completion API. Their slot remains uncertain.
+
+The independent verifier accepts the optional third record, rejects malformed,
+reordered, duplicate, oversized or incorrectly linked evidence, and reports the
+recorded completion and exit code. An earlier independently anchored prefix still
+cannot establish that no later action happened. The report always denies any
+claim that it authorizes disclosure or proves actual execution/policy enforcement.
+Hashes and lengths can leak information through guessing or correlation; protect
+this metadata and its anchors as audit evidence, even though raw output is omitted.
+
+The synthetic Linux broker now persists and independently verifies completion
+alongside the returned capture. Production admission/session state,
+classification, disclosure journaling and the output adapter remain required.
+The [Devlish disclosure rule](../examples/tool_output_disclosure/README.md) states
+the separate conditions for releasing output; persistence alone does not allow it.

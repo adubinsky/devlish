@@ -18,6 +18,8 @@ fn label(key: &str) -> String {
         "reservation_recorded_consumed" => {
             "Local record states the launch slot was consumed".into()
         }
+        "reservation_recorded_completed" => "Local record states capture completed".into(),
+        "output_disclosure_authorized" => "Output disclosure authorized by this report".into(),
         "reservation_writer_authenticated" => {
             "Reservation writer independently authenticated".into()
         }

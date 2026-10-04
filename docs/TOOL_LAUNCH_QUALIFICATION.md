@@ -107,5 +107,6 @@ The [tool output disclosure example](../examples/tool_output_disclosure/README.m
 adds a Devlish rule and repeatable policy reports for independently supplied public
 classifications, complete capture, recorded outcome and exact destination/content
 binding. Synthetic NPPI and company-IP cases deny release. This is policy behavior
-coverage; classification, terminal persistence and the production disclosure adapter
-remain unimplemented.
+coverage; classification and the production disclosure adapter remain unimplemented. The
+native terminal-capture persistence primitive is exercised by the synthetic Linux
+broker and checked by the independent verifier; production integration remains.

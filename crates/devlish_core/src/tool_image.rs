@@ -1063,6 +1063,9 @@ finish:
             assert_eq!(captured.stdout(), b"public build output\n");
             assert_eq!(captured.stderr(), b"completed\n");
         }
+        // Capture ownership moves into persistence; failed persistence cannot
+        // return output for disclosure. The denial case never consumed a slot.
+        let recorded = consumed.map(|token| token.record_capture(captured).unwrap());
         // Restart-style reopening cannot repeat this logical effect, regardless
         // of whether it executed or stopped at the authorization boundary.
         drop(reservation);
@@ -1081,10 +1084,19 @@ finish:
             .filter(|line| !line.is_empty())
             .map(|line| serde_json::from_slice(line).unwrap())
             .collect();
-        if let Some(consumed) = consumed {
-            assert_eq!(records.len(), 2);
+        if let Some(recorded) = recorded {
+            assert_eq!(records.len(), 3);
             assert_eq!(records[1]["state"], "consumed");
-            assert_eq!(devlish_audit::sha256(&bytes), consumed.evidence_sha256());
+            assert_eq!(records[2]["state"], "completed");
+            assert_eq!(records[2]["exit_code"], 37);
+            assert_eq!(recorded.capture().stdout(), b"public build output\n");
+            assert_eq!(devlish_audit::sha256(&bytes), recorded.evidence_sha256());
+            let report = prepared.selection().verify_launch_reservation(
+                &bytes, recorded.evidence_sha256()).unwrap();
+            assert_eq!(report["reservation_recorded_completed"], true);
+            assert_eq!(report["recorded_completion"]["recorded_exit_code"], 37);
+            assert_eq!(report["output_disclosure_authorized"], false);
+            assert_eq!(report["execution_origin_verified"], false);
         } else {
             assert_eq!(records.len(), 1);
             assert_eq!(records[0]["state"], "reserved");

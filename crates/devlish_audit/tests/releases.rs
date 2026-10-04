@@ -1274,6 +1274,34 @@ fn cli_tool_report_reverifies_bytes_trust_and_options_without_executing() {
     assert!(slot_text.contains("Local record states the launch slot was consumed: Yes"));
     assert!(slot_text.contains("Reservation writer independently authenticated: No"));
     assert!(!slot_text.contains("/work/public.txt"));
+    // The same CLI verifies a terminal claim while refusing to turn it into
+    // execution proof or a disclosure decision.
+    let first_record: Value = serde_json::from_slice(reservation.split(|b| *b == b'\n').next().unwrap()).unwrap();
+    let terminal = json!({"state":"completed","operation_id":first_record["operation_id"],
+        "consumed_sha256":reservation_digest,"exit_code":37,
+        "stdout_bytes":0,"stdout_sha256":sha256(b""),
+        "stderr_bytes":0,"stderr_sha256":sha256(b"")});
+    let mut completed = reservation.clone();
+    completed.extend_from_slice(&serde_json::to_vec(&terminal).unwrap());
+    completed.push(b'\n');
+    let completed_digest = sha256(&completed);
+    fs::write(dir.join("slot.jsonl"), &completed).unwrap();
+    let mut with_completed = with_reservation.clone();
+    *with_completed.last_mut().unwrap() = &completed_digest;
+    let terminal_report = run(false, &with_completed);
+    assert!(terminal_report.status.success());
+    assert_eq!(terminal_report.stdout, run(false, &with_completed).stdout);
+    let terminal_report: Value = serde_json::from_slice(&terminal_report.stdout).unwrap();
+    let terminal_report = &terminal_report["tool_selection"]["launch_reservation"];
+    assert_eq!(terminal_report["reservation_recorded_completed"], true);
+    assert_eq!(terminal_report["recorded_completion"]["recorded_exit_code"], 37);
+    assert_eq!(terminal_report["output_disclosure_authorized"], false);
+    let terminal_text = run(true, &with_completed);
+    assert!(terminal_text.status.success());
+    let terminal_text = String::from_utf8(terminal_text.stdout).unwrap();
+    assert!(terminal_text.contains("Local record states capture completed: Yes"));
+    assert!(terminal_text.contains("Output disclosure authorized by this report: No"));
+    assert!(!run(false, &with_reservation).status.success());
     fs::write(
         dir.join("slot.jsonl"),
         &reservation[..reservation.len() - 1],
@@ -1705,5 +1733,62 @@ fn launch_reservation_rejects_broken_consumption_links_duplicates_and_partial_re
         assert!(selection
             .verify_launch_reservation(&evidence, &sha256(&evidence))
             .is_err());
+    }
+}
+
+#[test]
+fn anchored_terminal_capture_is_a_claim_not_execution_or_disclosure_authority() {
+    let (mut fixture, catalog) = tool_catalog_fixture();
+    let release = verify_with_catalog(&mut fixture, &catalog);
+    let catalog = release.tool_catalog("tool-catalog", &bytes(&catalog)).unwrap();
+    let arguments = vec!["--fixed-strings".into(), "--".into(), "published".into(), "/work/public.txt".into()];
+    let selection = catalog.select("public-grep", &arguments, 150).unwrap();
+    let consumed = launch_reservation_fixture(&selection, true);
+    // Obtain the actual fixture identity, independently of its concrete labels.
+    let reserved: Value = serde_json::from_slice(consumed.split(|b| *b == b'\n').next().unwrap()).unwrap();
+    let marker = json!({"state":"completed","operation_id":reserved["operation_id"],
+        "consumed_sha256":sha256(&consumed),"exit_code":37,
+        "stdout_bytes":b"synthetic NPPI".len(),"stdout_sha256":sha256(b"synthetic NPPI"),
+        "stderr_bytes":0,"stderr_sha256":sha256(b"")});
+    let assemble = |marker: &Value| {
+        let mut evidence = consumed.clone();
+        evidence.extend_from_slice(&serde_json::to_vec(marker).unwrap());
+        evidence.push(b'\n'); evidence
+    };
+    let evidence = assemble(&marker);
+    let report = selection.verify_launch_reservation(&evidence, &sha256(&evidence)).unwrap();
+    assert_eq!(report["reservation_recorded_consumed"], true);
+    assert_eq!(report["reservation_recorded_completed"], true);
+    assert_eq!(report["recorded_completion"]["recorded_exit_code"], 37);
+    for flag in ["reservation_writer_authenticated", "execution_origin_verified", "policy_enforcement_verified", "output_disclosure_authorized"] {
+        assert_eq!(report[flag], false);
+    }
+    assert_eq!(report, selection.verify_launch_reservation(&evidence, &sha256(&evidence)).unwrap());
+    assert!(!serde_json::to_string(&report).unwrap().contains("synthetic NPPI"));
+    assert!(selection.verify_launch_reservation(&consumed, &sha256(&evidence)).is_err());
+    let earlier = selection.verify_launch_reservation(&consumed, &sha256(&consumed)).unwrap();
+    assert_eq!(earlier["reservation_recorded_completed"], false);
+    assert!(earlier["recorded_completion"].is_null());
+
+    for (key, value) in [
+        ("state", json!("success")), ("operation_id", json!("other")),
+        ("consumed_sha256", json!(sha256(b"other"))), ("exit_code", json!(-1)),
+        ("exit_code", json!(256)), ("exit_code", json!(0.5)),
+        ("stdout_bytes", json!(65537)), ("stderr_bytes", json!(-1)),
+        ("stdout_sha256", json!("f".repeat(63))), ("stderr_sha256", json!(sha256(b"nonempty"))),
+        ("stdout_sha256", json!("F".repeat(64))), ("raw_output", json!("must be rejected")),
+    ] {
+        let mut altered = marker.clone(); altered[key] = value;
+        let evidence = assemble(&altered);
+        assert!(selection.verify_launch_reservation(&evidence, &sha256(&evidence)).is_err(), "{key}");
+    }
+    let duplicate = String::from_utf8(serde_json::to_vec(&marker).unwrap()).unwrap().replacen('{', "{\"exit_code\":0,", 1);
+    for malformed in [
+        evidence[..evidence.len()-1].to_vec(),
+        [evidence.clone(), b"{}\n".to_vec()].concat(),
+        [consumed.clone(), duplicate.into_bytes(), b"\n".to_vec()].concat(),
+        [launch_reservation_fixture(&selection, false), serde_json::to_vec(&marker).unwrap(), b"\n".to_vec()].concat(),
+    ] {
+        assert!(selection.verify_launch_reservation(&malformed, &sha256(&malformed)).is_err());
     }
 }

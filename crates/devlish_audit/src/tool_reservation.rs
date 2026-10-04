@@ -62,6 +62,19 @@ struct Consumed {
     reserved_sha256: String,
 }
 
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct Completed {
+    state: String,
+    operation_id: String,
+    consumed_sha256: String,
+    exit_code: u8,
+    stdout_bytes: u64,
+    stdout_sha256: String,
+    stderr_bytes: u64,
+    stderr_sha256: String,
+}
+
 impl ToolSelection<'_> {
     /// The digest must be supplied independently for the intended attempt.
     /// This validates exact bytes and metadata, never authorization or execution.
@@ -80,7 +93,7 @@ impl ToolSelection<'_> {
             return Err("launch reservation is incomplete".into());
         }
         let lines: Vec<_> = bytes[..bytes.len() - 1].split(|b| *b == b'\n').collect();
-        if !(1..=2).contains(&lines.len())
+        if !(1..=3).contains(&lines.len())
             || lines.iter().any(|line| line.is_empty())
             || lines[0].len() + 1 > MAX_RESERVED_RECORD_BYTES
         {
@@ -114,7 +127,7 @@ impl ToolSelection<'_> {
         {
             return Err("launch reservation does not match authenticated tool selection".into());
         }
-        if lines.len() == 2 {
+        if lines.len() >= 2 {
             let consumed: Consumed = serde_json::from_slice(lines[1])
                 .map_err(|_| "invalid launch consumption record")?;
             if consumed.state != "consumed"
@@ -124,14 +137,44 @@ impl ToolSelection<'_> {
                 return Err("launch consumption does not match reserved bytes".into());
             }
         }
+        let completion = if lines.len() == 3 {
+            let completed: Completed =
+                serde_json::from_slice(lines[2]).map_err(|_| "invalid launch completion record")?;
+            let valid_stream = |size: u64, digest: &str| {
+                size <= crate::tool_containment::STREAM_BYTES
+                    && digest.len() == 64
+                    && digest
+                        .bytes()
+                        .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
+                    && (size != 0 || digest == sha256(b""))
+            };
+            if completed.state != "completed"
+                || completed.operation_id != reserved.operation_id
+                || completed.consumed_sha256
+                    != sha256(&bytes[..lines[0].len() + lines[1].len() + 2])
+                || !valid_stream(completed.stdout_bytes, &completed.stdout_sha256)
+                || !valid_stream(completed.stderr_bytes, &completed.stderr_sha256)
+            {
+                return Err(
+                    "launch completion does not match consumed bytes or bounded capture".into(),
+                );
+            }
+            Some(json!({"recorded_exit_code":completed.exit_code,
+                "stdout_bytes":completed.stdout_bytes,"stdout_sha256":completed.stdout_sha256,
+                "stderr_bytes":completed.stderr_bytes,"stderr_sha256":completed.stderr_sha256}))
+        } else {
+            None
+        };
         Ok(json!({
             "format":"devlish-tool-launch-reservation-verification", "format_version":1,
             "reservation_sha256":retained_sha256, "operation_id":reserved.operation_id,
             "reservation_bytes_match_anchor":true,"reservation_binding_verified":true,
-            "reservation_recorded_consumed":lines.len()==2,
+            "reservation_recorded_consumed":lines.len()>=2,
+            "reservation_recorded_completed":lines.len()==3,"recorded_completion":completion,
+            "output_disclosure_authorized":false,
             "reservation_writer_authenticated":false,"execution_origin_verified":false,
             "policy_enforcement_verified":false,
-            "explanation":"Exact bytes match the independently supplied digest and authenticated catalog selection. A reserved or consumed record does not establish whether execution happened, completed or complied with policy. The local writer is not authenticated. A retained earlier reservation cannot prove that no later action occurred. Raw arguments, paths and tenant/session identifiers are omitted."
+            "explanation":"Exact bytes match the independently supplied digest and authenticated catalog selection. Recorded reservation, consumption and completion are local claims, not proof that execution happened, completed or complied with policy. Output commitments do not authorize disclosure. The local writer is not authenticated. A retained earlier reservation cannot prove that no later action occurred. Raw arguments, paths and tenant/session identifiers are omitted."
         }))
     }
 }

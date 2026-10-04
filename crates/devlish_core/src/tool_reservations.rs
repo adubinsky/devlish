@@ -1,5 +1,7 @@
 //! Durable one-attempt slots for a future governed tool launcher.
 //! Storage bookkeeping is not policy authority or proof of execution.
+#[cfg(target_os = "linux")]
+pub use unix::RecordedCapture;
 #[cfg(unix)]
 pub use unix::{ConsumedLaunch, ReservedLaunch, ToolReservations};
 
@@ -44,15 +46,87 @@ mod unix {
     /// Evidence that this object persisted a consumption marker. This is not
     /// authorization to launch, nor evidence that a process actually executed.
     pub struct ConsumedLaunch {
-        operation: String,
+        reservation: ReservedLaunch,
         evidence_sha256: String,
     }
     impl ConsumedLaunch {
         pub fn operation_id(&self) -> &str {
-            &self.operation
+            &self.reservation.operation
         }
         pub fn evidence_sha256(&self) -> &str {
             &self.evidence_sha256
+        }
+    }
+
+    /// Capture returned only after its terminal record has been synced. It
+    /// still requires independent Devlish disclosure approval before any send.
+    #[cfg(target_os = "linux")]
+    pub struct RecordedCapture {
+        capture: crate::tool_streams::CapturedOutput,
+        evidence_sha256: String,
+    }
+    #[cfg(target_os = "linux")]
+    impl RecordedCapture {
+        pub fn capture(&self) -> &crate::tool_streams::CapturedOutput {
+            &self.capture
+        }
+        pub fn evidence_sha256(&self) -> &str {
+            &self.evidence_sha256
+        }
+    }
+
+    impl ConsumedLaunch {
+        /// The protected host must bind this capture to this operation's child.
+        /// Ownership withholds and drops the capture on persistence failure.
+        /// No return value proves execution origin or authorizes disclosure.
+        #[cfg(target_os = "linux")]
+        pub fn record_capture(
+            self,
+            capture: crate::tool_streams::CapturedOutput,
+        ) -> Result<RecordedCapture, &'static str> {
+            let digest =
+                self.record_completed(capture.exit_code(), capture.stdout(), capture.stderr())?;
+            Ok(RecordedCapture {
+                capture,
+                evidence_sha256: digest,
+            })
+        }
+
+        #[cfg(any(target_os = "linux", test))]
+        fn record_completed(
+            mut self,
+            exit_code: i32,
+            stdout: &[u8],
+            stderr: &[u8],
+        ) -> Result<String, &'static str> {
+            if !(0..=255).contains(&exit_code)
+                || stdout.len() as u64 > devlish_audit::tool_containment::STREAM_BYTES
+                || stderr.len() as u64 > devlish_audit::tool_containment::STREAM_BYTES
+            {
+                return Err("invalid bounded terminal capture; slot must not be retried");
+            }
+            let mut marker = serde_json::to_vec(&json!({
+                "state":"completed", "operation_id":self.reservation.operation,
+                "consumed_sha256":self.evidence_sha256,"exit_code":exit_code,
+                "stdout_bytes":stdout.len(),"stdout_sha256":sha256(stdout),
+                "stderr_bytes":stderr.len(),"stderr_sha256":sha256(stderr),
+            }))
+            .map_err(|_| "invalid completion marker")?;
+            marker.push(b'\n');
+            if self.reservation.reserved_bytes.len() + marker.len()
+                > devlish_audit::tool_reservation::MAX_RESERVATION_BYTES as usize
+            {
+                return Err("terminal evidence exceeds size limit; slot must not be retried");
+            }
+            self.reservation
+                .file
+                .write_all(&marker)
+                .and_then(|()| self.reservation.file.sync_all())
+                .map_err(|_| {
+                    "terminal outcome persistence uncertain; withhold output and do not retry"
+                })?;
+            self.reservation.reserved_bytes.extend_from_slice(&marker);
+            Ok(sha256(&self.reservation.reserved_bytes))
         }
     }
 
@@ -184,8 +258,8 @@ mod unix {
                 .map_err(|_| "launch consumption uncertain; slot must not be retried")?;
             self.reserved_bytes.extend_from_slice(&marker);
             Ok(ConsumedLaunch {
-                operation: self.operation,
                 evidence_sha256: sha256(&self.reserved_bytes),
+                reservation: self,
             })
         }
     }
@@ -268,6 +342,63 @@ mod unix {
             let restarted = directory.open();
             for id in 1..=3 {
                 assert!(reserve(&restarted, id, "changed-release-tool-or-arguments").is_err());
+            }
+        }
+
+        #[test]
+        fn terminal_record_commits_both_streams_without_raw_output_or_retry() {
+            let directory = Directory::new();
+            let store = directory.open();
+            let consumed = reserve(&store, 1, "original").unwrap().consume().unwrap();
+            let prior_digest = consumed.evidence_sha256().to_owned();
+            let digest = consumed
+                .record_completed(37, b"synthetic NPPI", b"synthetic company IP")
+                .unwrap();
+            let bytes = fs::read(directory.slot(1)).unwrap();
+            assert_eq!(sha256(&bytes), digest);
+            let text = String::from_utf8(bytes).unwrap();
+            assert!(!text.contains("synthetic NPPI"));
+            assert!(!text.contains("synthetic company IP"));
+            let terminal: Value = serde_json::from_str(text.lines().nth(2).unwrap()).unwrap();
+            assert_eq!(terminal["consumed_sha256"], prior_digest);
+            assert_eq!(terminal["exit_code"], 37);
+            assert_eq!(terminal["stdout_sha256"], sha256(b"synthetic NPPI"));
+            assert_eq!(terminal["stderr_sha256"], sha256(b"synthetic company IP"));
+            assert!(reserve(&directory.open(), 1, "retry").is_err());
+        }
+
+        #[test]
+        fn terminal_write_failure_and_invalid_capture_burn_the_slot() {
+            let directory = Directory::new();
+            let store = directory.open();
+            let mut consumed = reserve(&store, 1, "original").unwrap().consume().unwrap();
+            consumed.reservation.file = File::open(directory.slot(1)).unwrap();
+            assert!(consumed.record_completed(0, b"private", b"").is_err());
+            assert_eq!(
+                fs::read_to_string(directory.slot(1))
+                    .unwrap()
+                    .lines()
+                    .count(),
+                2
+            );
+            for (id, exit, out, err) in [
+                (2, -1, vec![], vec![]),
+                (3, 256, vec![], vec![]),
+                (4, 0, vec![0; 65537], vec![]),
+                (5, 0, vec![], vec![0; 65537]),
+            ] {
+                let consumed = reserve(&store, id, "original").unwrap().consume().unwrap();
+                assert!(consumed.record_completed(exit, &out, &err).is_err());
+                assert_eq!(
+                    fs::read_to_string(directory.slot(id))
+                        .unwrap()
+                        .lines()
+                        .count(),
+                    2
+                );
+            }
+            for id in 1..=5 {
+                assert!(reserve(&directory.open(), id, "retry").is_err());
             }
         }
 
