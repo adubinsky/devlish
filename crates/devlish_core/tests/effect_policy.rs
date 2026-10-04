@@ -149,6 +149,7 @@ fn every_current_tool_effect_passes_the_policy_gate() {
         guarded.write_file(&empty).unwrap_err(),
         guarded.read_file(&empty).unwrap_err(),
         guarded.call_service(&empty).unwrap_err(),
+        guarded.run_tool(&empty).unwrap_err(),
         guarded
             .http_request("GET", "https://example.com", &empty, &empty)
             .unwrap_err(),
@@ -173,7 +174,7 @@ fn every_current_tool_effect_passes_the_policy_gate() {
     assert!(errors
         .iter()
         .all(|error| error.starts_with("Policy denied")));
-    assert_eq!(records.records.len(), 18);
+    assert_eq!(records.records.len(), 19);
     assert_eq!(host.writes, 0);
 }
 

@@ -294,6 +294,17 @@ impl HostEffects for PolicyHost<'_> {
             |value| json!(value),
         )
     }
+    fn run_tool(&mut self, request: &Value) -> Result<Value, String> {
+        self.invoke(
+            "run_tool",
+            request.clone(),
+            |host| {
+                crate::tool_request::validate(request)?;
+                host.run_tool(request)
+            },
+            |value| json!(value),
+        )
+    }
     fn http_request(
         &mut self,
         method: &str,

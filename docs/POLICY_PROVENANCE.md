@@ -36,6 +36,11 @@ Implemented locally:
   build-input claims and exact output coverage. These are Devlish detached signatures,
   not verified GitHub CI/Sigstore attestations or proof of build execution.
 
+- A declared `run_tool` effect with exact catalog-ID permissions, Devlish policy
+  interception, bounded request transport, recording and offline replay. The
+  [catalog-tool example](../examples/catalog_tool/README.md) uses a fake adapter;
+  verified native admission refuses this effect until a qualified launcher exists.
+
 Not implemented yet: trusted CI build attestations, enforced external-process launch,
 OS isolation, production signed-receipt issuance and independent storage,
 and mandatory enforcement on every entry point. The existing release registry's author/approver names are labels, not

@@ -1509,3 +1509,20 @@ fn active_session_cannot_start_another_effect_after_authority_expires() {
     assert_eq!(records.last().unwrap()["record"]["success"], false);
     assert_process_replays_with_runtime(&f, std::env::current_exe().unwrap(), Some(until - 1));
 }
+
+#[test]
+fn catalog_tool_effect_is_not_admitted_without_a_qualified_native_launcher() {
+    let mut f = Fixture::new();
+    replace_json(
+        &mut f,
+        "tool-catalog",
+        json!({"format":"devlish-tool-catalog","format_version":1,"host_effects":["run_tool"]}),
+    );
+    replace_json(
+        &mut f,
+        "permissions",
+        json!({"format":"devlish-runtime-permissions","format_version":1,"allowed_effects":["run_tool"],"instruction_limit":1000}),
+    );
+    assert!(!f.run().status.success());
+    f.assert_no_dispatch();
+}

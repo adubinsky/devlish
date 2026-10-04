@@ -290,6 +290,11 @@ enum StatementKind {
         provider: Option<String>,
         expect_json: bool,
     },
+    /// Catalog-backed external effect: `Run catalog tool <request> as <dest>`
+    RunTool {
+        request: Expression,
+        dest: String,
+    },
     /// Journaled wall clock: `Get the current time as <dest>`
     ClockNow {
         dest: String,
@@ -1384,7 +1389,8 @@ fn rename_symbols_in_statement(statement: &mut Statement, rename: &HashMap<Strin
             rename_string(store_as)
         }
         StatementKind::Bind { target_name, .. } => rename_string(target_name),
-        StatementKind::HttpRequest { dest, .. }
+        StatementKind::RunTool { dest, .. }
+        | StatementKind::HttpRequest { dest, .. }
         | StatementKind::XlsxReadRows { dest, .. }
         | StatementKind::FileExists { dest, .. }
         | StatementKind::FileStat { dest, .. }
@@ -1794,7 +1800,8 @@ fn collect_defined_symbols(statement: &Statement, symbols: &mut HashSet<String>)
         StatementKind::FileGlob { dest, .. } => {
             symbols.insert(dest.clone());
         }
-        StatementKind::LlmComplete { dest, .. }
+        StatementKind::RunTool { dest, .. }
+        | StatementKind::LlmComplete { dest, .. }
         | StatementKind::ClockNow { dest, .. }
         | StatementKind::RandomDraw { dest, .. } => {
             symbols.insert(dest.clone());
@@ -2139,6 +2146,7 @@ fn each_expression_in_statement(statement: &Statement, visit: &mut impl FnMut(&E
         StatementKind::XlsxReadRows { path, .. } => visit(path),
         StatementKind::Checkpoint { prompt, .. } => visit(prompt),
         StatementKind::LlmComplete { prompt, .. } => visit(prompt),
+        StatementKind::RunTool { request, .. } => visit(request),
         StatementKind::ClockNow { .. } => {}
         StatementKind::RandomDraw { low, high, .. } => {
             if let Some(low) = low {
@@ -2277,6 +2285,7 @@ fn each_expression_in_statement_mut(
         StatementKind::XlsxReadRows { path, .. } => visit(path),
         StatementKind::Checkpoint { prompt, .. } => visit(prompt),
         StatementKind::LlmComplete { prompt, .. } => visit(prompt),
+        StatementKind::RunTool { request, .. } => visit(request),
         StatementKind::ClockNow { .. } => {}
         StatementKind::RandomDraw { low, high, .. } => {
             if let Some(low) = low {
@@ -2383,6 +2392,7 @@ fn child_statement_blocks(statement: &Statement) -> Vec<&[Statement]> {
         | StatementKind::LlmComplete { .. }
         | StatementKind::ClockNow { .. }
         | StatementKind::RandomDraw { .. }
+        | StatementKind::RunTool { .. }
         | StatementKind::FileCopy { .. }
         | StatementKind::FileMove { .. }
         | StatementKind::FileMkdir { .. }
@@ -2447,6 +2457,7 @@ fn child_statement_blocks_mut(statement: &mut Statement) -> Vec<&mut Vec<Stateme
         | StatementKind::LlmComplete { .. }
         | StatementKind::ClockNow { .. }
         | StatementKind::RandomDraw { .. }
+        | StatementKind::RunTool { .. }
         | StatementKind::FileCopy { .. }
         | StatementKind::FileMove { .. }
         | StatementKind::FileMkdir { .. }
@@ -2862,6 +2873,18 @@ fn parse_manifest_permission(line: &str) -> Option<ManifestPermission> {
         return Some(ManifestPermission {
             kind: "write_file".to_string(),
             scope: None,
+        });
+    }
+    if lower == "run catalog tools" {
+        return Some(ManifestPermission {
+            kind: "run_tool".to_string(),
+            scope: None,
+        });
+    }
+    if let Some(rest) = strip_prefix_ci(line, "Run catalog tool ") {
+        return Some(ManifestPermission {
+            kind: "run_tool".to_string(),
+            scope: Some(rest.trim().trim_matches('"').to_string()),
         });
     }
     // "Call language models" must precede the generic "Call <service> service"
@@ -3552,6 +3575,36 @@ fn parse_flat_statement(line_number: usize, line: &str) -> Result<Statement, Com
             StatementKind::Require {
                 condition: parse_condition_expression(rest.trim()),
                 message: None,
+            },
+        ));
+    }
+
+    // The request contains only a catalog ID and an argv list, never a shell.
+    if let Some(rest) = strip_prefix_ci(line, "Run catalog tool ") {
+        // Record expressions also contain `as`; the final unquoted delimiter
+        // names the result. Reuse the established quote-aware scanner.
+        let mut remaining = rest;
+        let mut split = None;
+        while let Some((_, right)) = split_once_ci_outside_quotes(remaining, " as ") {
+            split = Some((&rest[..rest.len() - right.len() - 4], right));
+            remaining = right;
+        }
+        let (request, dest) = split.ok_or_else(|| {
+            CompileError::single(line_number, "Expected tool request as <name>", line)
+        })?;
+        if request.trim().is_empty() || dest.trim().is_empty() {
+            return Err(CompileError::single(
+                line_number,
+                "Expected tool request as <name>",
+                line,
+            ));
+        }
+        return Ok(statement(
+            line_number,
+            line,
+            StatementKind::RunTool {
+                request: parse_expression(request.trim()),
+                dest: sanitize_name(dest.trim()),
             },
         ));
     }
@@ -6145,6 +6198,30 @@ impl BytecodeCompiler {
                 );
                 self.record_effect("llm_complete", statement, vec![]);
             }
+            StatementKind::RunTool { request, dest } => {
+                let request_reg = self.compile_expression(request, statement);
+                // Parsing has sanitized this symbol; preserve module mangling.
+                let dest_sym = dest.clone();
+                let dest_reg = self.next_register();
+                self.emit(
+                    "RUN_TOOL",
+                    map(vec![
+                        ("request", string_value(&request_reg)),
+                        ("dest", string_value(&dest_reg)),
+                    ]),
+                    Some(statement),
+                );
+                self.register_symbol(&dest_sym);
+                self.emit(
+                    "STORE",
+                    map(vec![
+                        ("symbol", string_value(&dest_sym)),
+                        ("value", string_value(&dest_reg)),
+                    ]),
+                    Some(statement),
+                );
+                self.record_effect("run_tool", statement, vec![]);
+            }
             StatementKind::ClockNow { dest, clock_kind } => {
                 let dest_sym = sanitize_name(dest);
                 let dest_reg = self.next_register();
@@ -7181,6 +7258,13 @@ impl BytecodeCompiler {
                 .is_some_and(|kind| kind == "file_read")
         }) {
             imports.push("read_file".to_string());
+        }
+        if self
+            .effects
+            .iter()
+            .any(|effect| effect["kind"] == "run_tool")
+        {
+            imports.push("run_tool".to_string());
         }
         imports
     }

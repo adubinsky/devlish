@@ -525,6 +525,9 @@ impl HostEffects for ReplayHost {
     fn call_service(&mut self, request: &Value) -> Result<Value, String> {
         self.invoke("call_service", request.clone())
     }
+    fn run_tool(&mut self, request: &Value) -> Result<Value, String> {
+        self.invoke("run_tool", request.clone())
+    }
     fn http_request(
         &mut self,
         method: &str,

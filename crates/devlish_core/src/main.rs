@@ -1709,6 +1709,12 @@ impl<H: HostEffects> HostEffects for JournalingHost<H> {
         result
     }
 
+    fn run_tool(&mut self, request: &Value) -> Result<Value, String> {
+        let result = self.inner.run_tool(request);
+        self.journal_value("run_tool", request.clone(), &result);
+        result
+    }
+
     fn http_request(
         &mut self,
         method: &str,
@@ -1960,6 +1966,10 @@ impl HostEffects for ReplayHost {
 
     fn call_service(&mut self, request: &Value) -> Result<Value, String> {
         self.next("call_service", request)
+    }
+
+    fn run_tool(&mut self, request: &Value) -> Result<Value, String> {
+        self.next("run_tool", request)
     }
 
     fn http_request(
