@@ -210,6 +210,11 @@ mod linux {
                         if !libc::WIFEXITED(status) {
                             return Err("tool ended without ordinary exit");
                         }
+                        // EOF and exit can be observed after descheduling in
+                        // this iteration. Recheck at the release boundary.
+                        if now() >= self.deadline {
+                            return Err("tool wall deadline exceeded");
+                        }
                         return Ok(CapturedOutput {
                             exit_code: libc::WEXITSTATUS(status),
                             stdout,

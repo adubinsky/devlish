@@ -15,7 +15,8 @@ stdio cannot clobber another source descriptor.
 The parent drains both outputs while delivering input, rather than writing all
 input before reading output. It handles partial operations and interrupted calls,
 closes stdin when delivery completes, and checks child status and time while
-polling. Input sends use MSG_NOSIGNAL to avoid changing global signal handling.
+polling, and checks the deadline again immediately before returning a capture.
+A deterministic clock regression covers expiry during the final iteration. Input sends use MSG_NOSIGNAL to avoid changing global signal handling.
 Delivery means bytes accepted by the local transport, not proof the program read
 or used them.
 
