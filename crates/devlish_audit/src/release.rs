@@ -47,6 +47,8 @@ pub enum Role {
 #[serde(deny_unknown_fields)]
 pub struct Requirements {
     #[serde(default)]
+    pub build_requirements: Option<crate::build::BuildRequirements>,
+    #[serde(default)]
     pub require_recorded_controls: bool,
     pub format: String,
     pub format_version: u32,
@@ -89,12 +91,24 @@ pub struct ReleaseVerification {
     pub artifact_count: usize,
     pub release_requirements_verified: bool,
     pub artifact_snapshots_verified: bool,
+    #[serde(rename = "admission_valid_until")]
+    verified_valid_until: u64,
+    pub builder_statements_required: bool,
+    pub builder_statements_authenticated: bool,
+    pub builder_statements: Vec<Verification>,
     pub build_provenance_verified: bool,
     pub execution_origin_verified: bool,
     pub policy_enforcement_verified: bool,
     pub explanation: &'static str,
 }
-fn digest(value: &str) -> Result<(), String> {
+impl ReleaseVerification {
+    /// Exclusive dispatch deadline of the authenticated admission inputs.
+    pub fn admission_valid_until(&self) -> u64 {
+        self.verified_valid_until
+    }
+}
+
+pub(crate) fn digest(value: &str) -> Result<(), String> {
     if value.len() != 64
         || !value
             .bytes()
@@ -171,6 +185,9 @@ pub fn verify_release(
     if r.revoked_manifest_sha256.contains(&signed.artifact_sha256) {
         return Err("release manifest is revoked".into());
     }
+    if let Some(build) = &r.build_requirements {
+        build.validate()?;
+    }
     let mut ids = BTreeSet::new();
     let mut roles = BTreeSet::new();
     for artifact in &m.artifacts {
@@ -203,6 +220,7 @@ pub fn verify_release(
     }
     let mut verified_artifacts = Vec::new();
     let mut verified_permissions = Vec::new();
+    let mut build_bundles = Vec::new();
     for artifact in &m.artifacts {
         let snapshot = resolve(&artifact.id)?;
         if snapshot.len() as u64 > crate::MAX_ARTIFACT_BYTES || sha256(&snapshot) != artifact.sha256
@@ -213,6 +231,12 @@ pub fn verify_release(
             if let Some(permissions) = crate::controls::Permissions::parse(&snapshot) {
                 verified_permissions.push((artifact.sha256.clone(), permissions));
             }
+        }
+        if artifact.role == Role::BuildAttestation && r.build_requirements.is_some() {
+            if snapshot.len() as u64 > MAX_METADATA_BYTES {
+                return Err("build bundle exceeds metadata limit".into());
+            }
+            build_bundles.push(snapshot.clone());
         }
         let canonical = if matches!(artifact.role, Role::Policy | Role::Program) {
             serde_json::from_slice::<serde_json::Value>(&snapshot)
@@ -228,6 +252,22 @@ pub fn verify_release(
             canonical,
         ));
     }
+    let mut verified_valid_until = m.valid_until.min(r.revocations_valid_until);
+    let builder_statements = match &r.build_requirements {
+        Some(build) => {
+            let verified = crate::build::verify_bundles(
+                &build_bundles,
+                build,
+                &m,
+                &signed,
+                trust,
+                r.evaluated_at,
+            )?;
+            verified_valid_until = verified_valid_until.min(verified.valid_until);
+            verified.signatures
+        }
+        None => Vec::new(),
+    };
     Ok(ReleaseVerification {
         require_recorded_controls: r.require_recorded_controls,
         verified_scope_digest: crate::admission::scope_digest(&r),
@@ -240,8 +280,12 @@ pub fn verify_release(
         release_id: m.release_id, sequence: m.sequence, evaluated_at: r.evaluated_at,
         minimum_sequence: r.minimum_sequence, artifact_count: m.artifacts.len(),
         release_requirements_verified: true, artifact_snapshots_verified: true,
+        verified_valid_until,
+        builder_statements_required: r.build_requirements.is_some(),
+        builder_statements_authenticated: r.build_requirements.is_some(),
+        builder_statements,
         build_provenance_verified: false, execution_origin_verified: false,
         policy_enforcement_verified: false,
-        explanation: "Release signature, operator requirements, and supplied artifact snapshots agree at the supplied evaluation time. Requirements, clock, revocation freshness and rollback floor must be independently protected. This does not advance a persistent rollback floor, authenticate build attestations, interpret tool permissions, or prove that these bytes executed or enforced policy.",
+        explanation: "Release signature, operator requirements, and supplied artifact snapshots agree at the supplied evaluation time. Builder statements are authenticated only when explicitly required; authenticated claims do not prove actual build execution, complete source discovery or reproducibility. Requirements, clock, revocation freshness and rollback floor require independent protection. This does not advance a persistent rollback floor or prove that these bytes executed or enforced policy.",
     })
 }

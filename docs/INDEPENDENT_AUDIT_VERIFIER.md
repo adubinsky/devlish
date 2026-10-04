@@ -63,7 +63,8 @@ The separately provisioned operator trust configuration is:
 }
 ```
 
-Purposes are `release-artifact`, `audit-evidence` and `audit-receipt`. Each key must have a unique
+Purposes are `release-artifact`, `release-manifest`, `build-statement`,
+`audit-evidence` and `audit-receipt`. Each key must have a unique
 ID and public key, a nonempty list of distinct allowed purposes, and an explicit
 revocation flag. Unknown fields and duplicate JSON fields are rejected.
 
@@ -911,3 +912,111 @@ They have not been executed or qualified on Linux. The recipe lists ownership,
 bootstrap, debugger/loader, credential, interruption and availability acceptance
 checks, and distinguishes requested restrictions from observed enforcement.
 It does not increase the verifier's execution-assurance claims.
+
+### Separately authenticated builder statements
+
+Operator release requirements may now include `build_requirements`. When present,
+all `build-attestation` artifacts must contain supported, builder-signed bundles.
+The builder key must be authorized by this operator configuration, unrevoked,
+permitted for `build-statement`, and different from the release approval key.
+Key separation is checked using public-key digests, not just key labels.
+
+This authenticates claims and links approved bytes. It does not yet verify
+GitHub OIDC/Sigstore identity, a protected CI job, discovery of the complete source
+closure, an actual compiler invocation, or reproducibility. Accordingly,
+`builder_statements_authenticated` may be true while `build_provenance_verified`,
+`execution_origin_verified` and `policy_enforcement_verified` remain false.
+
+The optional operator object has this shape; replace every placeholder with an
+independently approved value, not a value copied blindly from the candidate:
+
+```json
+{
+  "build_requirements": {
+    "authorized_builder_keys": ["toolchain-builder", "policy-builder"],
+    "toolchain": {
+      "workflow": "approved-toolchain-build-workflow",
+      "build_definition_sha256": "<64 lowercase hex characters>",
+      "dependencies_sha256": "<64 lowercase hex characters>",
+      "builder_image_sha256": "<64 lowercase hex characters>",
+      "options_sha256": "<64 lowercase hex characters>"
+    },
+    "policy": {
+      "workflow": "approved-policy-build-workflow",
+      "build_definition_sha256": "<64 lowercase hex characters>",
+      "dependencies_sha256": "<64 lowercase hex characters>",
+      "builder_image_sha256": "<64 lowercase hex characters>",
+      "options_sha256": "<64 lowercase hex characters>"
+    }
+  }
+}
+```
+
+Builder workflows are pinned independently for toolchain and policy builds. They
+need not equal the release workflow. The authorized builder-key list applies to
+both build kinds; phase-specific key permissions are not implemented. The four
+input digests name the operator's expected build definition, dependency evidence,
+builder image and options record. The verifier compares these signed claims to
+expected digests; it does not fetch images, execute tools or discover dependencies.
+Omitting `build_requirements` or setting it to null keeps legacy behavior: build
+artifacts are hash checked as opaque bytes, with authenticated-builder status false.
+An empty key list in a configured object is rejected, not treated as an opt-out.
+
+A bundle is at most 64 KiB and has exactly these top-level fields:
+
+```json
+{
+  "format": "devlish-build-bundle",
+  "format_version": 1,
+  "statement": "<exact UTF-8 JSON statement text, preserving whitespace>",
+  "signature": {
+    "format": "devlish-detached-signature",
+    "format_version": 1,
+    "algorithm": "ed25519",
+    "key_id": "policy-builder",
+    "purpose": "build-statement",
+    "signature_hex": "<signature over the exact statement bytes with the Devlish purpose prefix>"
+  }
+}
+```
+
+The statement text must parse as this strict schema:
+
+| Field | Required meaning |
+| --- | --- |
+| `format`, `format_version` | `devlish-build-statement`, `1` |
+| `kind` | `toolchain` or `policy` |
+| `repository`, `commit`, `release_workflow`, `target` | Match the release manifest; commit is a 40- or 64-character lowercase Git object ID |
+| `valid_from`, `valid_until` | Unix seconds; evaluation time is inside the half-open validity interval |
+| `source_closure_sha256` | Digest of a supplied, verified `source-closure` artifact |
+| `compiler_sha256` | Required approved compiler digest for policy builds; absent or null for toolchain builds |
+| `inputs` | Exactly the operator's corresponding toolchain or policy input object above |
+| `subjects` | Nonempty array of `{ "id": "artifact-id", "sha256": "..." }` |
+
+Toolchain subjects may cover only runtime/compiler artifacts. Policy subjects may
+cover only program/policy artifacts. Every such artifact in the release must be
+covered exactly once across all bundles; subject IDs and digests must match the
+supplied verified snapshots. Unknown, missing, duplicate or mismatched subjects
+fail admission. Whitespace changes after signing invalidate the statement signature;
+duplicate/unknown JSON fields in the bundle, signature or statement are rejected.
+
+Build the statement and detached signature separately, then embed the exact
+statement text and signature object in the bundle. Add its exact digest under a
+`build-attestation` role in the release manifest and sign that manifest using the
+separate release authority. Use the existing `verify-release` command and native
+verified profile; both consume these requirements. Standalone `verify --purpose
+build-statement` checks a signature only, without scope, inputs or output coverage.
+
+Tests sign synthetic toolchain and policy statements with separate ephemeral keys.
+They reject changed statement bytes, wrong purposes/authorities, revoked builders,
+wrong repository/commit/workflows/target, unapproved inputs/source/compiler,
+missing/duplicate outputs, expiry, oversized bundles and ambiguous signature fields.
+A native CLI test admits a complete synthetic build chain, then rejects a fresh
+execution before logging or dispatch after builder revocation. No production
+builder, CI signing backend or real build attestation is provisioned by these tests.
+
+The report’s `admission_valid_until` is the earliest expiry among the release,
+revocation information, and all required builder statements. Native sessions
+recheck this exclusive deadline before dispatch, including when an admitted
+session has been held in memory. This is an admission deadline, not a promise
+to interrupt an already running effect at expiry.

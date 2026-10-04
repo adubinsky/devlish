@@ -1276,3 +1276,141 @@ fn verified_http_missing_or_unsafe_mounted_token_never_uses_environment() {
         assert_eq!(fs::read_dir(&logs).unwrap().count(), 0);
     }
 }
+
+#[test]
+fn required_builder_statements_reject_opaque_evidence_before_native_dispatch() {
+    let mut f = Fixture::new();
+    f.manifest["commit"] = json!("a".repeat(40));
+    f.requirements["commit"] = f.manifest["commit"].clone();
+    let inputs = json!({"workflow":"synthetic-build","build_definition_sha256":sha256(b"definition"),"dependencies_sha256":sha256(b"dependencies"),"builder_image_sha256":sha256(b"image"),"options_sha256":sha256(b"options")});
+    f.requirements["build_requirements"] =
+        json!({"authorized_builder_keys":["builder"],"toolchain":inputs,"policy":inputs});
+    f.save();
+    let result = f.run();
+    assert!(!result.status.success());
+    assert!(String::from_utf8_lossy(&result.stderr).contains("verified execution rejected"));
+    f.assert_no_dispatch();
+}
+
+fn require_synthetic_builder(f: &mut Fixture) {
+    let generated = Ed25519KeyPair::generate_pkcs8(&SystemRandom::new()).unwrap();
+    let builder = Ed25519KeyPair::from_pkcs8(generated.as_ref()).unwrap();
+    f.manifest["commit"] = json!("a".repeat(40));
+    f.requirements["commit"] = f.manifest["commit"].clone();
+    let inputs = json!({"workflow":"synthetic-build","build_definition_sha256":sha256(b"definition"),"dependencies_sha256":sha256(b"dependencies"),"builder_image_sha256":sha256(b"image"),"options_sha256":sha256(b"options")});
+    f.requirements["build_requirements"] =
+        json!({"authorized_builder_keys":["builder"],"toolchain":inputs,"policy":inputs});
+    let mut trust: Value =
+        serde_json::from_slice(&fs::read(f.dir.join("trust.json")).unwrap()).unwrap();
+    trust["keys"].as_array_mut().unwrap().push(json!({"id":"builder","public_key_hex":hex(builder.public_key().as_ref()),"purposes":["build-statement"],"revoked":false}));
+    fs::write(f.dir.join("trust.json"), bytes(&trust)).unwrap();
+    let digest = |id: &str| {
+        f.manifest["artifacts"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|a| a["id"] == id)
+            .unwrap()["sha256"]
+            .clone()
+    };
+    let source = digest("source-closure");
+    let compiler = digest("compiler");
+    let subjects: Vec<_> = [vec!["runtime", "compiler"], vec!["program", "policy"]]
+        .into_iter()
+        .map(|ids| {
+            ids.into_iter()
+                .map(|id| json!({"id":id,"sha256":digest(id)}))
+                .collect::<Vec<_>>()
+        })
+        .collect();
+    for (i, kind) in ["toolchain", "policy"].into_iter().enumerate() {
+        let statement=serde_json::to_string(&json!({"format":"devlish-build-statement","format_version":1,"kind":kind,"repository":f.manifest["repository"],"commit":f.manifest["commit"],"release_workflow":f.manifest["workflow"],"target":f.manifest["target"],"valid_from":f.manifest["valid_from"],"valid_until":f.manifest["valid_until"],"source_closure_sha256":source,"compiler_sha256":if kind=="policy" {compiler.clone()} else {Value::Null},"inputs":inputs,"subjects":subjects[i]})).unwrap();
+        let signature = json!({"format":"devlish-detached-signature","format_version":1,"algorithm":"ed25519","key_id":"builder","purpose":"build-statement","signature_hex":hex(builder.sign(&signing_message(Purpose::BuildStatement,statement.as_bytes())).as_ref())});
+        let bundle = bytes(
+            &json!({"format":"devlish-build-bundle","format_version":1,"statement":statement,"signature":signature}),
+        );
+        let id = if i == 0 {
+            "build-attestation"
+        } else {
+            "policy-build"
+        };
+        fs::write(f.dir.join(id), &bundle).unwrap();
+        let artifact = json!({"id":id,"role":"build-attestation","sha256":sha256(&bundle)});
+        if i == 0 {
+            *f.manifest["artifacts"]
+                .as_array_mut()
+                .unwrap()
+                .iter_mut()
+                .find(|a| a["id"] == id)
+                .unwrap() = artifact;
+        } else {
+            f.manifest["artifacts"]
+                .as_array_mut()
+                .unwrap()
+                .push(artifact);
+            f.profile["artifacts"]
+                .as_array_mut()
+                .unwrap()
+                .push(json!({"id":id,"path":id}));
+        }
+    }
+    f.save();
+}
+
+#[test]
+fn native_admission_requires_current_builder_authority_before_effects() {
+    let mut f = Fixture::new();
+    require_synthetic_builder(&mut f);
+    let accepted = f.run();
+    assert!(
+        accepted.status.success(),
+        "{}",
+        String::from_utf8_lossy(&accepted.stderr)
+    );
+    assert!(String::from_utf8_lossy(&accepted.stdout).contains("verified success"));
+    let mut trust: Value =
+        serde_json::from_slice(&fs::read(f.dir.join("trust.json")).unwrap()).unwrap();
+    trust["keys"][1]["revoked"] = json!(true);
+    fs::write(f.dir.join("trust.json"), bytes(&trust)).unwrap();
+    let denied = f.command(&[
+        "run-verified",
+        "--policy-log",
+        "revoked-builder.jsonl",
+        "--session-id",
+        "revoked-builder",
+    ]);
+    assert!(!denied.status.success());
+    assert!(denied.stdout.is_empty());
+    assert!(!f.dir.join("revoked-builder.jsonl").exists());
+}
+
+#[test]
+fn held_session_cannot_dispatch_after_builder_statement_expires() {
+    let mut f = library_fixture();
+    let release_expiry = f.manifest["valid_until"].clone();
+    let expires = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_secs()
+        + 10;
+    f.manifest["valid_until"] = json!(expires);
+    require_synthetic_builder(&mut f);
+    f.manifest["valid_until"] = release_expiry;
+    f.save();
+    let session = devlish_core::verified_session::VerifiedSession::admit(
+        &f.dir.join("profile.json"),
+        "held-builder",
+        false,
+    )
+    .unwrap();
+    let deadline = std::time::UNIX_EPOCH + std::time::Duration::from_secs(expires);
+    if let Ok(remaining) = deadline.duration_since(std::time::SystemTime::now()) {
+        std::thread::sleep(remaining);
+    }
+    let log = f.dir.join("expired-builder.jsonl");
+    let mut host = LibraryHost::default();
+    assert!(session.execute(json!({}), &log, &mut host).is_err());
+    assert!(!log.exists());
+    assert!(host.responses.is_empty());
+    assert_eq!(host.events, 0);
+}

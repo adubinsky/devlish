@@ -96,7 +96,7 @@ impl VerifiedSession {
         let manifest_bytes = read(&profile.manifest, MAX_METADATA_BYTES)?;
         let requirements_bytes = read(&profile.requirements, MAX_METADATA_BYTES)?;
         // Validate the original typed document before modifying evaluation time.
-        let typed_requirements =
+        let _typed_requirements =
             serde_json::from_slice::<devlish_audit::release::Requirements>(&requirements_bytes)
                 .map_err(|e| format!("invalid requirements: {e}"))?;
         let mut requirements: Value =
@@ -212,9 +212,7 @@ impl VerifiedSession {
                 .ok_or("missing program mapping")?,
             evidence,
             admitted_at: now,
-            expires_at: manifest
-                .valid_until
-                .min(typed_requirements.revocations_valid_until),
+            expires_at: release.admission_valid_until(),
             llm_route: controls.llm_route,
             instruction_limit: controls.instruction_limit,
             effect_budget: controls.effect_budget.clone(),

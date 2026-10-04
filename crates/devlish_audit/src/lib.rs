@@ -5,6 +5,7 @@ use std::{collections::BTreeSet, fs::OpenOptions, io::Read, path::Path};
 
 pub mod admission;
 pub mod binding;
+pub mod build;
 mod controls;
 pub mod issuance;
 pub mod receipt;
@@ -18,6 +19,7 @@ pub const MAX_METADATA_BYTES: u64 = 64 * 1024;
 pub enum Purpose {
     ReleaseArtifact,
     ReleaseManifest,
+    BuildStatement,
     AuditEvidence,
     AuditReceipt,
 }
@@ -26,15 +28,17 @@ impl Purpose {
         match value {
             "release-manifest" => Ok(Self::ReleaseManifest),
             "release-artifact" => Ok(Self::ReleaseArtifact),
+            "build-statement" => Ok(Self::BuildStatement),
             "audit-evidence" => Ok(Self::AuditEvidence),
             "audit-receipt" => Ok(Self::AuditReceipt),
-            _ => Err("purpose must be release-manifest, release-artifact, audit-evidence or audit-receipt".into()),
+            _ => Err("purpose must be release-manifest, release-artifact, build-statement, audit-evidence or audit-receipt".into()),
         }
     }
     fn name(self) -> &'static str {
         match self {
             Self::ReleaseManifest => "release-manifest",
             Self::ReleaseArtifact => "release-artifact",
+            Self::BuildStatement => "build-statement",
             Self::AuditEvidence => "audit-evidence",
             Self::AuditReceipt => "audit-receipt",
         }
@@ -56,7 +60,7 @@ struct TrustedKey {
     purposes: Vec<Purpose>,
     revoked: bool,
 }
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 struct Envelope {
     format: String,
