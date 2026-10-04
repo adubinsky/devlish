@@ -33,6 +33,33 @@ unknown/revoked key, unauthorized purpose or an invalid signature returns JSON
 with `signature_verified: false` and a nonzero exit code. No unsigned fallback
 exists. All three options are required and may appear in any order.
 
+## Plain-English findings
+
+Put `--text` before any verifier command to render its fresh result in English:
+
+```bash
+/opt/devlish/runtime/devlish-audit --text verify evidence.txt \
+  --signature signature.json --trust operator-trust.json --purpose audit-evidence
+```
+
+The same option works with `verify-release`, `verify-log`, `verify-issuance`, and
+receipt preparation. It changes presentation only: verification, required inputs,
+file creation behavior and exit codes remain unchanged. JSON is still the default.
+There is no command that accepts a saved report and treats its booleans as verified.
+
+Findings remain separate: an authorized signature may be valid while log integrity,
+replay, completion, actual execution and policy enforcement remain unestablished.
+`Yes` and `No` preserve the underlying result; absent values say `Not supplied or
+not established`, and empty evidence lists say `None supplied`. Operation completion
+is not a blanket compliance certification. Nested release, report and receipt
+results retain their separate sections, including hashes and trust assumptions.
+
+Rendering is deterministic for identical results. Candidate-supplied strings are
+quoted with control and non-ASCII characters escaped so they cannot insert fake
+finding lines, terminal commands or bidirectional display controls. Failed commands
+produce an explicit unverified failure and a nonzero exit code. Offline trust and
+revocation data still need independent protection and freshness controls.
+
 ## Signature and trust format
 
 The signature envelope contains exactly these fields:

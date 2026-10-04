@@ -171,6 +171,21 @@ fn cli_verifies_without_running_candidate_and_rejects_bad_arguments() {
     let report: Value = serde_json::from_slice(&output.stdout).unwrap();
     assert_eq!(report["signature_verified"], true);
     assert_eq!(report["execution_origin_verified"], false);
+    let plain = || {
+        Command::new(env!("CARGO_BIN_EXE_devlish-audit"))
+            .current_dir(&dir)
+            .arg("--text")
+            .args(args)
+            .output()
+            .unwrap()
+    };
+    let text = plain();
+    assert!(text.status.success());
+    assert_eq!(text.stdout, plain().stdout);
+    let findings = String::from_utf8(text.stdout).unwrap();
+    assert!(findings.contains("Signature valid for the trusted key and purpose: Yes"));
+    assert!(findings.contains("Actual executing program independently established: No"));
+    assert!(findings.contains("Actual policy enforcement independently established: No"));
     fs::write(dir.join("candidate"), b"changed").unwrap();
     let output = Command::new(env!("CARGO_BIN_EXE_devlish-audit"))
         .current_dir(&dir)
@@ -180,6 +195,11 @@ fn cli_verifies_without_running_candidate_and_rejects_bad_arguments() {
     assert!(!output.status.success());
     let report: Value = serde_json::from_slice(&output.stdout).unwrap();
     assert_eq!(report["signature_verified"], false);
+    let rejected_text = plain();
+    assert!(!rejected_text.status.success());
+    let rejected_text = String::from_utf8(rejected_text.stdout).unwrap();
+    assert!(rejected_text.contains("Assurance: unverified"));
+    assert!(!rejected_text.contains("Signature valid for the trusted key and purpose: Yes"));
     let output = Command::new(env!("CARGO_BIN_EXE_devlish-audit"))
         .args([
             "verify",

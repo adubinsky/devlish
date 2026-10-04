@@ -1,7 +1,8 @@
+mod output;
 use devlish_audit::{read_bounded, verify, Purpose, MAX_ARTIFACT_BYTES, MAX_METADATA_BYTES};
 use serde_json::json;
 use std::{collections::BTreeMap, path::Path};
-const USAGE: &str = "Usage: devlish-audit verify-issuance <log.jsonl> --pending <pending.json> --completed <completed.json> --trust <operator-trust.json> --expectations <operator-expectations.json>\n       devlish-audit init-admission <new-state.json> --requirements <operator-requirements.json>\n       devlish-audit verify-release <manifest.json> --signature <signature.json> --trust <operator-trust.json> --requirements <operator-requirements.json> --artifacts <operator-artifacts.json> [--evidence <evidence.json> | --prepare-receipt <request.json>]\n       devlish-audit verify <file> --signature <signature.json> --trust <operator-trust.json> --purpose <release-manifest|release-artifact|build-statement|audit-evidence|audit-receipt>\n       devlish-audit verify-log <log.jsonl> --receipt <receipt.json> --signature <signature.json> --trust <operator-trust.json> --receipt-sha256 <retained-digest> --session-id <expected-session> --release-sha256 <expected-release-digest>";
+const USAGE: &str = "Plain-English findings: put --text before any command. JSON remains the default.\nUsage: devlish-audit verify-issuance <log.jsonl> --pending <pending.json> --completed <completed.json> --trust <operator-trust.json> --expectations <operator-expectations.json>\n       devlish-audit init-admission <new-state.json> --requirements <operator-requirements.json>\n       devlish-audit verify-release <manifest.json> --signature <signature.json> --trust <operator-trust.json> --requirements <operator-requirements.json> --artifacts <operator-artifacts.json> [--evidence <evidence.json> | --prepare-receipt <request.json>]\n       devlish-audit verify <file> --signature <signature.json> --trust <operator-trust.json> --purpose <release-manifest|release-artifact|build-statement|audit-evidence|audit-receipt>\n       devlish-audit verify-log <log.jsonl> --receipt <receipt.json> --signature <signature.json> --trust <operator-trust.json> --receipt-sha256 <retained-digest> --session-id <expected-session> --release-sha256 <expected-release-digest>";
 fn run(args: &[String]) -> Result<serde_json::Value, String> {
     if args.first().map(String::as_str) == Some("verify-issuance") {
         if args.len() != 10 {
@@ -233,16 +234,25 @@ fn run(args: &[String]) -> Result<serde_json::Value, String> {
     serde_json::to_value(verify(&bytes, &signature, &trust, purpose)?).map_err(|e| e.to_string())
 }
 fn main() {
-    let args: Vec<_> = std::env::args().skip(1).collect();
+    let mut args: Vec<_> = std::env::args().skip(1).collect();
+    let text = args.first().is_some_and(|arg| arg == "--text");
+    if text {
+        args.remove(0);
+    }
     if args.len() == 1 && ["--help", "-h"].contains(&args[0].as_str()) {
         println!("{USAGE}");
         return;
     }
     match run(&args) {
+        Ok(report) if text => print!("{}", output::success(&report)),
         Ok(report) => println!(
             "{}",
             serde_json::to_string_pretty(&report).expect("report serializes")
         ),
+        Err(error) if text => {
+            print!("{}", output::failure(&error));
+            std::process::exit(1);
+        }
         Err(error) => {
             println!(
                 "{}",
