@@ -5,6 +5,7 @@ use std::{collections::BTreeSet, fs::OpenOptions, io::Read, path::Path};
 
 pub mod admission;
 pub mod binding;
+pub mod issuance;
 pub mod receipt;
 pub mod release;
 

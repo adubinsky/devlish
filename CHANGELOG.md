@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Independent audit verification
+- Reserve terminal receipt issuance durably in operator-owned Unix storage; concurrent/abandoned slots fail closed and completion validates exact bytes, reserved key, purpose and revocation without loading private keys.
 - Add Devlish-authored terminal-receipt authorization rules and synthetic cases, with a separate host authority input and no signing backend or execution-assurance claim.
 - Add a standalone offline verifier for exact-byte Ed25519 signatures, explicit operator trust keys, revocation flags, and signature-purpose separation.
 - Verify signed checkpoints and terminal receipts against independently supplied digests and policy-log chains, while distinguishing recorded history from actual execution assurance.

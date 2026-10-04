@@ -525,3 +525,46 @@ A service must independently derive that state, authorize a tenant-scoped key,
 reserve issuance, and sign the exact retained bytes whose digest the policy
 approved. The example documents those obligations and denies stronger execution
 assurance claims.
+
+## Durable local terminal-receipt reservation
+
+`ReleaseVerification::reserve_terminal_receipt` validates and prepares a terminal
+receipt before creating an exclusive reservation in an existing private directory.
+The directory is operator-selected, belongs to the service identity and must have
+no group/other permission bits. This Unix-only library primitive does not create
+a signing endpoint or load private keys.
+
+The reservation name commits to tenant, session and terminal kind. Release digest,
+receipt bytes and signing key do not change that name, so switching them cannot
+open a competing terminal slot for the same tenant/session. The pending record
+stores exact prepared bytes and their digest, plus the operator-selected key ID
+and public-key fingerprint (`ReceiptKey`). Changing the key behind the same ID
+cannot complete an existing reservation. The checked directory is resolved to an
+absolute path before reservation, so subsequent working-directory changes do
+not redirect completion. Exclusive creation, file sync and
+directory sync complete before a reservation is returned. Partial records and
+abandoned reservations block later acquisition; they are never silently deleted.
+
+The non-cloneable reservation provides the bytes to a separately authorized
+backend. `complete` consumes the reservation and verifies its returned signature
+against those retained bytes, the reserved key ID and fingerprint, the audit-receipt domain and
+current explicit trust. Only then does it exclusively persist a completion
+record. Both records remain in place. Failure, including a failed completion
+write, leaves the slot unavailable pending operator reconciliation. There is no
+automatic retry, release/reset operation or restart recovery API yet.
+
+This is durable local state under operator custody, not a protected service.
+The caller must choose the directory, authenticate tenant/session and authorize
+signing through the Devlish policy before contacting a backend. The primitive
+itself does not verify that policy ran; completion explicitly records
+`signer_authorization_verified: false`. Directory ownership/mode checks do not
+prove administrator resistance, safe ACLs, ancestor custody or immutable storage.
+A user who can remove/replace service state can defeat its guarantees. Independent
+receipt retention, backend reconciliation and protected execution remain open.
+
+Tests cover concurrent reservation, different tenant/session isolation, changed
+receipt/key conflicts, abandonment, unsafe directory/identities, exact-byte
+signature matching, wrong purpose/key, same-ID key replacement, revocation,
+relative directory binding and no-overwrite completion.
+The integration test starts from release-verified log history. Power-loss and
+production key-backend behavior have not been exercised.

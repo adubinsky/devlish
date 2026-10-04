@@ -437,7 +437,7 @@ fn release_binding_checks_reports_receipts_and_recorded_identities() {
         ("evidence.json", bytes(&evidence)),
         ("app.json", app),
         ("policy.json", policy),
-        ("log.jsonl", log),
+        ("log.jsonl", log.clone()),
         ("receipt.json", receipt),
         ("receipt.sig.json", sig),
     ] {
@@ -508,6 +508,41 @@ fn release_binding_checks_reports_receipts_and_recorded_identities() {
         prepared
     );
     assert!(!prepare().status.success(), "must not overwrite receipt");
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let receipt_key = devlish_audit::issuance::ReceiptKey {
+            id: "release".into(),
+            public_key_sha256: sha256(f.key.public_key().as_ref()),
+        };
+        let authority_dir = dir.join("authority");
+        fs::create_dir(&authority_dir).unwrap();
+        fs::set_permissions(&authority_dir, fs::Permissions::from_mode(0o700)).unwrap();
+        assert!(release
+            .reserve_terminal_receipt(
+                &authority_dir,
+                "tenant",
+                "test-session",
+                &receipt_key,
+                b"invalid log"
+            )
+            .is_err());
+        assert_eq!(fs::read_dir(&authority_dir).unwrap().count(), 0);
+        let reservation = release
+            .reserve_terminal_receipt(&authority_dir, "tenant", "test-session", &receipt_key, &log)
+            .unwrap();
+        assert_eq!(reservation.receipt(), prepared);
+        assert_eq!(reservation.receipt_sha256(), sha256(&prepared));
+        assert_eq!(reservation.key_id(), "release");
+        let signature = bytes(
+            &json!({"format":"devlish-detached-signature","format_version":1,"algorithm":"ed25519","key_id":"release","purpose":"audit-receipt",
+            "signature_hex":hex(f.key.sign(&signing_message(Purpose::AuditReceipt,reservation.receipt())).as_ref())}),
+        );
+        reservation.complete(&signature, &bytes(&f.trust)).unwrap();
+        assert!(release
+            .reserve_terminal_receipt(&authority_dir, "tenant", "test-session", &receipt_key, &log)
+            .is_err());
+    }
     fs::remove_dir_all(dir).unwrap();
 }
 

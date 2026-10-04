@@ -76,6 +76,8 @@ synthetic state for that still-unimplemented protected host.
 The pure policy cannot implement atomic reservation, prevent concurrent duplicate
 issuance, authenticate a key backend, protect storage from administrators or
 prove log truth. Tests of `reserved` and `consumed` show the decision contract,
-not a working concurrency mechanism. Those controls remain DEVL-225/DEVL-224
-work. Key provisioning, rotation, revocation and incident response likewise need
+not a working concurrency mechanism. The audit library now supplies an exclusive durable local reservation and
+validated completion primitive; see the [reservation guide](../../docs/INDEPENDENT_AUDIT_VERIFIER.md#durable-local-terminal-receipt-reservation).
+It is not yet wired to this policy or a signing service. Protected integration,
+restart reconciliation and the remaining controls stay DEVL-225/DEVL-224 work. Key provisioning, rotation, revocation and incident response likewise need
 an operator-controlled backend; no software secret is embedded in this example.

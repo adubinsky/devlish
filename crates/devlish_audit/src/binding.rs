@@ -180,6 +180,20 @@ impl ReleaseVerification {
         Ok(receipt)
     }
 
+    /// Reserve a terminal receipt from checked history in operator-owned storage.
+    /// This neither authorizes the signing backend nor proves execution origin.
+    pub fn reserve_terminal_receipt(
+        &self,
+        directory: &std::path::Path,
+        tenant: &str,
+        session: &str,
+        key: &crate::issuance::ReceiptKey,
+        log: &[u8],
+    ) -> Result<crate::issuance::ReceiptReservation, String> {
+        let receipt = self.prepare_receipt(log, session, crate::receipt::ReceiptKind::Terminal)?;
+        crate::issuance::reserve(directory, tenant, session, key, receipt)
+    }
+
     pub fn bind_receipt(
         &self,
         log: &[u8],
