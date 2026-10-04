@@ -22,6 +22,8 @@ pub mod tool_descriptors;
 #[cfg(feature = "native")]
 pub mod tool_limits;
 #[cfg(feature = "native")]
+pub mod tool_syscalls;
+#[cfg(feature = "native")]
 pub mod receipt_issuer;
 #[cfg(feature = "native")]
 pub mod receipt_journal;

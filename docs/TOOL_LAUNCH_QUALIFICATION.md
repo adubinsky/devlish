@@ -11,7 +11,7 @@ assurance separate from the complete launch boundary.
 | Restricted initial image | Static Linux x86-64 ELF profile | Qualify CPU/kernel assumptions and inherited loader/personality state |
 | Filesystem data access | Empty Landlock ABI-3 allowlist primitive | Additional syscall restrictions; separate approved input profile if files are needed |
 | Inherited capabilities | Close unlisted descriptors in a disposable child | Configure and bound standard I/O; authenticate every retained descriptor |
-| Network, IPC, process creation and later execution | Not implemented | Enforce and adversarially test before enabling dispatch |
+| Network, IPC, process creation and later execution | Minimal syscall gate (see TOOL_SYSCALL_GATE.md), not integrated | Qualify initial-exec broker and complete launch integration before enabling dispatch |
 | Resource and output limits | Fixed child resource ceilings (see TOOL_RESOURCE_LIMITS.md) | Wall deadline, bounded output, process controls, termination and cleanup |
 | Policy, disclosure and evidence | Declared tool effect, Devlish policy and replay tested with fake adapters | Connect real launcher, record identity/outcome commitments, release only approved output |
 
