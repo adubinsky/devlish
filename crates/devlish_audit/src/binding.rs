@@ -142,7 +142,7 @@ impl ReleaseVerification {
         Ok(binding)
     }
 
-    fn check_recorded_release(&self, log: &[u8]) -> Result<(), String> {
+    fn check_recorded_release(&self, log: &[u8]) -> Result<bool, String> {
         let start: Value = serde_json::from_slice(
             log.split(|b| *b == b'\n')
                 .next()
@@ -164,7 +164,28 @@ impl ReleaseVerification {
                 return Err("effect decision policy differs from run policy".into());
             }
         }
-        Ok(())
+        let Some(binding) = record.get("verified_release") else {
+            return Ok(false);
+        };
+        for (role, field) in [
+            (Role::Permissions, "permissions_sha256"),
+            (Role::ToolCatalog, "catalog_sha256"),
+            (Role::Containment, "containment_sha256"),
+        ] {
+            if !self.matches(role, &binding[field], false) {
+                return Err("recorded control artifact differs from verified release".into());
+            }
+        }
+        if binding["runtime_file_sha256"] != record["runtime_file_sha256"] {
+            return Err("recorded control runtime differs from log runtime".into());
+        }
+        let permissions = self
+            .verified_permissions
+            .iter()
+            .find(|(digest, _)| binding["permissions_sha256"] == *digest)
+            .ok_or("signed permission snapshot has unsupported control semantics")?;
+        permissions.1.check(binding, log)?;
+        Ok(true)
     }
 
     /// Prepare unsigned receipt bytes after validating the recorded history and
@@ -214,9 +235,9 @@ impl ReleaseVerification {
                 release_sha256: &self.verified_manifest_digest,
             },
         )?;
-        self.check_recorded_release(log)?;
+        result.recorded_controls_match_release = self.check_recorded_release(log)?;
         result.release_manifest_verified = true;
-        result.explanation = "Receipt and log identities match the release verified in this process under supplied operator requirements. Recorded runtime, policy and program identities are signer assertions, not proof of actual execution. Replay, protected signing and execution are not verified.";
+        result.explanation = "Receipt and log identities match the verified release. When recorded_controls_match_release is true, recorded limits match signed permissions and recorded allowed effects respect their allowlist and attempt budgets. These are checks of signer assertions, not proof of execution, instruction counts, Devlish policy replay or protected signing.";
         Ok(result)
     }
 }

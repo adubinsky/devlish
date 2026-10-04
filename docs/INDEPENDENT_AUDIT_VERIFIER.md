@@ -811,3 +811,32 @@ with the field omitted or null retain their instruction limit without a separate
 effect-count cap. Adding a budget changes the signed permission bytes and requires
 an approved release. The finite agent example explicitly requests one model call,
 two service calls and one public response.
+
+### Independent recorded-control consistency
+
+Release-bound receipt verification now reports `recorded_controls_match_release`.
+It is true only when the log supplies verified-release control metadata and the
+independent verifier checks that:
+
+- Permission, catalog and containment digests belong to the verified signed release.
+- The recorded runtime digest agrees with the run identity.
+- The effect allowlist, instruction limit and optional attempt budget match the
+  signed permission snapshot; allowlist ordering may differ, duplicates may not.
+- Every recorded allowed effect belongs to that allowlist and falls within the
+  total and per-effect attempt budgets. Denied attempts consume these counters too.
+
+The checks use retained verified permission data, without reopening artifacts,
+loading a VM or consulting a model. Receipt preparation applies the same checks
+before reservation/signing. The verifier streams records and keeps counters only
+for signed per-effect limits. Supported permission metadata is limited to 64 KiB;
+release hashing still accepts larger opaque artifacts but cannot give them this
+control-consistency assurance. An unsupported permission format or inconsistent
+claimed controls causes release-bound receipt verification to fail.
+
+Standalone receipt signature/chain verification and older logs without control
+metadata leave this flag false. Removing metadata cannot earn the stronger flag.
+The flag describes the consistency of recorded assertions with an approved release.
+It does not prove that instructions or effects actually ran, that the instruction
+limit was observed, that the Devlish policy allowed those calls, or that filesystem
+and network containment was enforced. Execution origin, policy enforcement and
+policy replay remain separate, unverified claims in this independent verifier.

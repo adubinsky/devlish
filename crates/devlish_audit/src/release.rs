@@ -71,6 +71,8 @@ pub struct ReleaseVerification {
     #[serde(skip)]
     pub(crate) verified_artifacts: Vec<(String, Role, String, Option<String>)>,
     #[serde(skip)]
+    pub(crate) verified_permissions: Vec<(String, crate::controls::Permissions)>,
+    #[serde(skip)]
     pub(crate) verified_manifest_digest: String,
     pub format: &'static str,
     pub format_version: u32,
@@ -196,11 +198,17 @@ pub fn verify_release(
         }
     }
     let mut verified_artifacts = Vec::new();
+    let mut verified_permissions = Vec::new();
     for artifact in &m.artifacts {
         let snapshot = resolve(&artifact.id)?;
         if snapshot.len() as u64 > crate::MAX_ARTIFACT_BYTES || sha256(&snapshot) != artifact.sha256
         {
             return Err(format!("artifact digest or size mismatch: {}", artifact.id));
+        }
+        if artifact.role == Role::Permissions {
+            if let Some(permissions) = crate::controls::Permissions::parse(&snapshot) {
+                verified_permissions.push((artifact.sha256.clone(), permissions));
+            }
         }
         let canonical = if matches!(artifact.role, Role::Policy | Role::Program) {
             serde_json::from_slice::<serde_json::Value>(&snapshot)
@@ -220,6 +228,7 @@ pub fn verify_release(
         verified_scope_digest: crate::admission::scope_digest(&r),
         verified_sequence: m.sequence,
         verified_artifacts,
+        verified_permissions,
         verified_manifest_digest: signed.artifact_sha256.clone(),
         format: "devlish-release-verification", format_version: 1,
         manifest_signature: signed, requirements_sha256: sha256(requirements),

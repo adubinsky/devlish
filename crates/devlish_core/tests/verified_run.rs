@@ -461,6 +461,50 @@ fn assert_process_replays(f: &Fixture) {
     assert_eq!(one.stdout, two.stdout);
     let report: Value = serde_json::from_slice(&one.stdout).unwrap();
     assert_eq!(report["passed"], true);
+    // Independently bind a receipt to a real CLI log, including budget denials.
+    let mut trust: Value =
+        serde_json::from_slice(&fs::read(f.dir.join("trust.json")).unwrap()).unwrap();
+    trust["keys"][0]["purposes"] = json!(["release-manifest", "audit-receipt"]);
+    // Standalone verification uses explicit current operator evaluation time.
+    let mut requirements = f.requirements.clone();
+    requirements["evaluated_at"] = json!(SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_secs());
+    let release = devlish_audit::release::verify_release(
+        &bytes(&f.manifest),
+        &fs::read(f.dir.join("signature.json")).unwrap(),
+        &bytes(&trust),
+        &bytes(&requirements),
+        |id| {
+            fs::read(if id == "runtime" {
+                PathBuf::from(env!("CARGO_BIN_EXE_devlish-core"))
+            } else {
+                f.dir.join(id)
+            })
+            .map_err(|e| e.to_string())
+        },
+    )
+    .unwrap();
+    let log = fs::read(f.dir.join("run.jsonl")).unwrap();
+    let start: Value = serde_json::from_slice(log.split(|b| *b == b'\n').next().unwrap()).unwrap();
+    let session = start["record"]["session_id"].as_str().unwrap();
+    let receipt = release
+        .prepare_receipt(&log, session, devlish_audit::receipt::ReceiptKind::Terminal)
+        .unwrap();
+    let signature = json!({"format":"devlish-detached-signature","format_version":1,"algorithm":"ed25519","key_id":"test-release","purpose":"audit-receipt","signature_hex":hex(f.key.sign(&signing_message(Purpose::AuditReceipt,&receipt)).as_ref())});
+    let bound = release
+        .bind_receipt(
+            &log,
+            &receipt,
+            &bytes(&signature),
+            &bytes(&trust),
+            &sha256(&receipt),
+            session,
+        )
+        .unwrap();
+    assert!(bound.recorded_controls_match_release);
+    assert!(!bound.execution_origin_verified && !bound.policy_enforcement_verified);
 }
 
 fn model_route() -> Value {

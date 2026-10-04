@@ -580,3 +580,201 @@ fn durable_admission_rejects_rollback_equivocation_and_concurrent_runs() {
     assert!(newer.admit(&path).is_err());
     std::fs::remove_dir_all(dir).unwrap();
 }
+
+#[test]
+fn recorded_controls_match_signed_permissions_and_counts_not_execution() {
+    let mut f = Fixture::new();
+    let policy = br#"{"rule":"nppi"}"#.to_vec();
+    let program = br#"{"rule":"agent"}"#.to_vec();
+    let permissions = bytes(
+        &json!({"format":"devlish-runtime-permissions","format_version":1,"allowed_effects":["respond","clock_now"],"instruction_limit":1000,"effect_budget":{"total":3,"per_effect":{"clock_now":1}}}),
+    );
+    let mut snapshots = std::collections::BTreeMap::new();
+    for artifact in f.manifest["artifacts"].as_array_mut().unwrap() {
+        let id = artifact["id"].as_str().unwrap().to_owned();
+        let data = match id.as_str() {
+            "policy" => policy.clone(),
+            "permissions" => permissions.clone(),
+            _ => id.as_bytes().to_vec(),
+        };
+        artifact["sha256"] = json!(sha256(&data));
+        snapshots.insert(id, data);
+    }
+    snapshots.insert("program".into(), program.clone());
+    f.manifest["artifacts"]
+        .as_array_mut()
+        .unwrap()
+        .push(json!({"id":"program","role":"program","sha256":sha256(&program)}));
+    f.trust["keys"][0]["purposes"] = json!(["release-manifest", "audit-receipt"]);
+    let release = verify_release(
+        &bytes(&f.manifest),
+        &f.signature(),
+        &bytes(&f.trust),
+        &bytes(&f.requirements),
+        |id| Ok(snapshots[id].clone()),
+    )
+    .unwrap();
+    let canonical = |b: &[u8]| {
+        sha256(&serde_json::to_vec_pretty(&serde_json::from_slice::<Value>(b).unwrap()).unwrap())
+    };
+    let identity = json!({"artifact_sha256":canonical(&policy)});
+    let start = json!({"type":"policy_run_started","format_version":3,"session_id":"controls","runtime_file_sha256":sha256(b"runtime"),"policy":identity,"program_sha256":canonical(&program),"verified_release":{
+        "session_id":"controls","release_manifest_sha256":sha256(&bytes(&f.manifest)),"runtime_file_sha256":sha256(b"runtime"),"permissions_sha256":sha256(&permissions),"catalog_sha256":sha256(b"tool-catalog"),"containment_sha256":sha256(b"containment"),"allowed_effects":["clock_now","respond"],"instruction_limit":1000,"effect_budget":{"total":3,"per_effect":{"clock_now":1}}
+    }});
+    let make_log = |start: Value, effects: &[(&str, bool)]| {
+        let mut records = vec![start];
+        for (index, (kind, allow)) in effects.iter().enumerate() {
+            records.push(json!({"type":"effect_decision","effect_id":index+1,"effect":kind,"allow":allow,"policy":identity}));
+            if *allow {
+                records.push(json!({"type":"effect_outcome","effect_id":index+1,"effect":kind,"outcome":{"status":"succeeded"}}));
+            }
+        }
+        records.push(json!({"type":"policy_run_finished","success":true,"paused":false}));
+        let mut previous = String::new();
+        let mut log = vec![];
+        for (sequence, record) in records.into_iter().enumerate() {
+            let mut envelope =
+                json!({"sequence":sequence,"previous_sha256":previous,"record":record});
+            previous = sha256(&bytes(&envelope));
+            envelope["record_sha256"] = json!(previous);
+            log.extend(bytes(&envelope));
+            log.push(b'\n');
+        }
+        log
+    };
+    let log = make_log(
+        start.clone(),
+        &[("clock_now", true), ("clock_now", false), ("respond", true)],
+    );
+    let receipt = release
+        .prepare_receipt(
+            &log,
+            "controls",
+            devlish_audit::receipt::ReceiptKind::Terminal,
+        )
+        .unwrap();
+    let signature = bytes(
+        &json!({"format":"devlish-detached-signature","format_version":1,"algorithm":"ed25519","key_id":"release","purpose":"audit-receipt","signature_hex":hex(f.key.sign(&signing_message(Purpose::AuditReceipt,&receipt)).as_ref())}),
+    );
+    let result = release
+        .bind_receipt(
+            &log,
+            &receipt,
+            &signature,
+            &bytes(&f.trust),
+            &sha256(&receipt),
+            "controls",
+        )
+        .unwrap();
+    assert!(result.recorded_controls_match_release);
+    assert!(
+        !result.execution_origin_verified
+            && !result.policy_enforcement_verified
+            && !result.replay_verified
+    );
+    for (field, replacement) in [
+        ("permissions_sha256", json!("a".repeat(64))),
+        ("catalog_sha256", json!("a".repeat(64))),
+        ("containment_sha256", json!("a".repeat(64))),
+        ("runtime_file_sha256", json!("a".repeat(64))),
+        ("instruction_limit", json!(1001)),
+        (
+            "allowed_effects",
+            json!(["respond", "clock_now", "write_file"]),
+        ),
+        (
+            "allowed_effects",
+            json!(["respond", "clock_now", "respond"]),
+        ),
+        (
+            "effect_budget",
+            json!({"total":4,"per_effect":{"clock_now":1}}),
+        ),
+        ("effect_budget", Value::Null),
+    ] {
+        let mut changed = start.clone();
+        changed["verified_release"][field] = replacement;
+        assert!(
+            release
+                .prepare_receipt(
+                    &make_log(changed, &[]),
+                    "controls",
+                    devlish_audit::receipt::ReceiptKind::Terminal
+                )
+                .is_err(),
+            "{field}"
+        );
+    }
+    for effects in [
+        vec![("clock_now", true), ("clock_now", true)],
+        vec![("clock_now", false), ("clock_now", true)],
+        vec![("write_file", true)],
+        vec![
+            ("respond", false),
+            ("respond", false),
+            ("respond", false),
+            ("respond", true),
+        ],
+    ] {
+        assert!(
+            release
+                .prepare_receipt(
+                    &make_log(start.clone(), &effects),
+                    "controls",
+                    devlish_audit::receipt::ReceiptKind::Terminal
+                )
+                .is_err(),
+            "{effects:?}"
+        );
+        // Even a correctly signed fabricated receipt cannot promote these assertions.
+        let bad_log = make_log(start.clone(), &effects);
+        let lines: Vec<_> = bad_log
+            .split(|b| *b == b'\n')
+            .filter(|line| !line.is_empty())
+            .collect();
+        let tail: Value = serde_json::from_slice(lines.last().unwrap()).unwrap();
+        let receipt = bytes(
+            &json!({"format":"devlish-audit-receipt","format_version":1,"kind":"terminal","session_id":"controls","release_manifest_sha256":sha256(&bytes(&f.manifest)),"log_file_sha256":sha256(&bad_log),"log_head_sha256":tail["record_sha256"],"record_count":lines.len()}),
+        );
+        let signature = bytes(
+            &json!({"format":"devlish-detached-signature","format_version":1,"algorithm":"ed25519","key_id":"release","purpose":"audit-receipt","signature_hex":hex(f.key.sign(&signing_message(Purpose::AuditReceipt,&receipt)).as_ref())}),
+        );
+        assert!(release
+            .bind_receipt(
+                &bad_log,
+                &receipt,
+                &signature,
+                &bytes(&f.trust),
+                &sha256(&receipt),
+                "controls"
+            )
+            .is_err());
+    }
+    // An older log without claimed controls can bind identities but gets no control assurance.
+    let mut legacy = start;
+    legacy.as_object_mut().unwrap().remove("verified_release");
+    let legacy = make_log(legacy, &[]);
+    let receipt = release
+        .prepare_receipt(
+            &legacy,
+            "controls",
+            devlish_audit::receipt::ReceiptKind::Terminal,
+        )
+        .unwrap();
+    let signature = bytes(
+        &json!({"format":"devlish-detached-signature","format_version":1,"algorithm":"ed25519","key_id":"release","purpose":"audit-receipt","signature_hex":hex(f.key.sign(&signing_message(Purpose::AuditReceipt,&receipt)).as_ref())}),
+    );
+    assert!(
+        !release
+            .bind_receipt(
+                &legacy,
+                &receipt,
+                &signature,
+                &bytes(&f.trust),
+                &sha256(&receipt),
+                "controls"
+            )
+            .unwrap()
+            .recorded_controls_match_release
+    );
+}
