@@ -77,3 +77,25 @@ memory, not on matching pointer numbers alone. Ordinary tracing protection may
 reset on exec; it is not hostile-admin or runtime-memory attestation. Production
 needs a broker bound to governed admission, protected identity, signed controls,
 durable effect recording, bounded I/O and cancellation before dispatch can open.
+
+## Devlish decision at the synthetic broker boundary
+
+The catalog fixture signs the exact compiled bytes of
+`examples/tool_execution_authority/authorize.dvl` as its policy artifact and
+retains that policy after release verification. The broker test derives the
+request commitments from its prepared selection and evaluates the Devlish rule
+before issuing the first continuation. It changes the reserved grant to consumed
+before replying, and evaluates the later request with candidate-phase state.
+Native code still unconditionally denies every subsequent execution request.
+
+`devlish_authority_denial_prevents_entry_into_the_synthetic_tool` substitutes a
+private-export tool identity in the proposed request. The Devlish rule denies it;
+the broker returns EPERM to trusted setup, which exits before candidate entry.
+The test requires an unconsumed grant, the setup-refusal exit status, empty output
+and completed reaping. Denied input is not delivered.
+
+These are synthetic, test-owned authority values at the fixture's evaluation time.
+A JSON `protected-launcher` label is not authentication. Production admission locks,
+a separately governed tool-effect decision, authenticated setup state, durable
+reservation and policy-approved disclosure are still required. This test adds no
+production broker API and does not establish independent execution attestation.

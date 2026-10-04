@@ -450,6 +450,7 @@ _start:
     struct CatalogFixture {
         dir: std::path::PathBuf,
         catalog: devlish_audit::tool_catalog::VerifiedToolCatalog,
+        authorization_policy: devlish_vm::policy::EffectPolicy,
     }
     impl CatalogFixture {
         fn new(tool: &[u8]) -> Self {
@@ -475,6 +476,15 @@ _start:
                     "image_profile":PROFILE,"containment_id":"containment","allowed_arguments":[["--public-only"]]
                 }]}),
             );
+            let policy_bytes = crate::compile_source_to_json(
+                include_str!("../../../examples/tool_execution_authority/authorize.dvl"),
+                crate::CompileOptions {
+                    source_path: None,
+                    search_paths: vec![],
+                },
+            )
+            .unwrap()
+            .into_bytes();
             let mut snapshots = std::collections::BTreeMap::new();
             let artifacts: Vec<_> = [
                 "runtime",
@@ -493,6 +503,7 @@ _start:
                     "tool" => tool.to_vec(),
                     "tool-catalog" => catalog.clone(),
                     "containment" => CONTAINMENT.to_vec(),
+                    "policy" => policy_bytes.clone(),
                     _ => role.as_bytes().to_vec(),
                 };
                 let artifact = json!({"id":role,"role":role,"sha256":sha256(&snapshot)});
@@ -502,25 +513,25 @@ _start:
             .collect();
             let manifest = bytes(
                 &json!({"format":"devlish-release-manifest","format_version":1,
-                "release_id":"synthetic","environment":"test","target":devlish_audit::tool_catalog::STATIC_TARGET,
-                "sequence":1,"valid_from":100,"valid_until":200,"repository":"synthetic","commit":"synthetic",
-                "workflow":"test","policy_id":"test","policy_version":"1","artifacts":artifacts}),
+                    "release_id":"synthetic","environment":"test","target":devlish_audit::tool_catalog::STATIC_TARGET,
+                    "sequence":1,"valid_from":100,"valid_until":200,"repository":"synthetic","commit":"synthetic",
+                    "workflow":"test","policy_id":"harness.authorize_initial_tool_exec","policy_version":"1.0.0","artifacts":artifacts}),
             );
             let requirements = bytes(
                 &json!({"format":"devlish-release-requirements","format_version":1,
-                "environment":"test","target":devlish_audit::tool_catalog::STATIC_TARGET,"repository":"synthetic",
-                "commit":"synthetic","workflow":"test","policy_id":"test","policy_version":"1",
-                "minimum_sequence":1,"evaluated_at":150,"revocations_valid_from":100,"revocations_valid_until":200,
-                "revoked_manifest_sha256":[],"authorized_release_keys":["test"]}),
+                    "environment":"test","target":devlish_audit::tool_catalog::STATIC_TARGET,"repository":"synthetic",
+                    "commit":"synthetic","workflow":"test","policy_id":"harness.authorize_initial_tool_exec","policy_version":"1.0.0",
+                    "minimum_sequence":1,"evaluated_at":150,"revocations_valid_from":100,"revocations_valid_until":200,
+                    "revoked_manifest_sha256":[],"authorized_release_keys":["test"]}),
             );
             let trust = bytes(
                 &json!({"format":"devlish-audit-trust","format_version":1,"keys":[{
-                "id":"test","public_key_hex":hex(key.public_key().as_ref()),"purposes":["release-manifest"],"revoked":false}]}),
+                    "id":"test","public_key_hex":hex(key.public_key().as_ref()),"purposes":["release-manifest"],"revoked":false}]}),
             );
             let signature = bytes(
                 &json!({"format":"devlish-detached-signature","format_version":1,
-                "algorithm":"ed25519","key_id":"test","purpose":"release-manifest",
-                "signature_hex":hex(key.sign(&signing_message(Purpose::ReleaseManifest, &manifest)).as_ref())}),
+                    "algorithm":"ed25519","key_id":"test","purpose":"release-manifest",
+                    "signature_hex":hex(key.sign(&signing_message(Purpose::ReleaseManifest, &manifest)).as_ref())}),
             );
             let release = devlish_audit::release::verify_release(
                 &manifest,
@@ -530,9 +541,16 @@ _start:
                 |id| Ok(snapshots[id].clone()),
             )
             .unwrap();
+            // Exactly these policy bytes were included in the verified synthetic
+            // release above. This fixture does not assert real build provenance.
+            let mut authorization_policy =
+                devlish_vm::policy::EffectPolicy::new(serde_json::from_slice(&policy_bytes).unwrap())
+                    .unwrap();
+            authorization_policy.set_file_digest(sha256(&policy_bytes));
             Self {
                 dir,
                 catalog: release.tool_catalog("tool-catalog", &catalog).unwrap(),
+                authorization_policy,
             }
         }
     }
@@ -540,6 +558,42 @@ _start:
         fn drop(&mut self) {
             std::fs::remove_dir_all(&self.dir).unwrap();
         }
+    }
+    #[test]
+    fn synthetic_catalog_retains_the_signed_devlish_authorization_policy() {
+        let fixture = CatalogFixture::new(b"synthetic image");
+        let cases: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../examples/tool_execution_authority/cases.json"
+        ))
+        .unwrap();
+        let input = &cases[0]["input"];
+        let decision = fixture
+            .authorization_policy
+            .evaluate_with_authority(
+                input["effect"].as_str().unwrap(),
+                &input["request"],
+                &input["authority"],
+            )
+            .unwrap();
+        assert!(decision.0);
+        assert_eq!(
+            fixture.authorization_policy.identity()["rule"]["id"],
+            "harness.authorize_initial_tool_exec"
+        );
+        assert!(
+            fixture.authorization_policy.identity()["verified_file_sha256"]
+                .as_str()
+                .unwrap()
+                .len()
+                == 64
+        );
+        assert!(
+            !fixture
+                .authorization_policy
+                .evaluate(input["effect"].as_str().unwrap(), &input["request"])
+                .unwrap()
+                .0
+        );
     }
     #[test]
     fn preparation_binds_signed_selection_to_image_or_refuses_unsupported_platform() {
@@ -701,6 +755,17 @@ finish:
     #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
     #[test]
     fn synthetic_broker_allows_initial_image_and_denies_absolute_path_reexecution() {
+        synthetic_broker_with_devlish_authority(false);
+    }
+
+    #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
+    #[test]
+    fn devlish_authority_denial_prevents_entry_into_the_synthetic_tool() {
+        synthetic_broker_with_devlish_authority(true);
+    }
+
+    #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
+    fn synthetic_broker_with_devlish_authority(substitute_request: bool) {
         use crate::tool_broker_test_support as broker;
         use std::{
             ffi::CString,
@@ -708,7 +773,7 @@ finish:
         };
         broker::check_notification_sizes();
         let fixture = linked_static_fixture(
-            "broker",
+            if substitute_request { "broker-deny" } else { "broker-allow" },
             r#".text
     .global _start
     _start:
@@ -773,7 +838,12 @@ finish:
             .unwrap();
         let prepared = PreparedCatalogTool::load(selected, CONTAINMENT).unwrap();
         let rules = crate::tool_landlock::LandlockRuleset::deny_file_access().unwrap();
-        let streams = crate::tool_streams::ToolStreams::new(b"public build output\n").unwrap();
+        let streams = crate::tool_streams::ToolStreams::new(if substitute_request {
+            b""
+        } else {
+            b"public build output\n"
+        })
+        .unwrap();
         let [parent_socket, child_socket] = broker::socket_pair();
         let image_fd = prepared.image().as_fd().as_raw_fd();
         let transfer_fd = child_socket.as_raw_fd();
@@ -840,6 +910,31 @@ finish:
         drop(child_socket);
         let listener = broker::receive_listener(&parent_socket);
         drop(parent_socket);
+        let selection = prepared.selection();
+        let request = serde_json::json!({
+            "session_id": "synthetic-broker-session",
+            "tool_id": selection.id(),
+            "release_sha256": selection.manifest_sha256(),
+            "catalog_sha256": selection.catalog_sha256(),
+            "tool_sha256": selection.tool_sha256(),
+            "arguments_sha256": devlish_audit::sha256(&serde_json::to_vec(selection.arguments()).unwrap()),
+            "containment_sha256": selection.containment_sha256(),
+        });
+        let mut authority = request.clone();
+        authority["phase"] = serde_json::json!("trusted-initial-setup");
+        authority["reservation_state"] = serde_json::json!("reserved");
+        authority["evidence_source"] = serde_json::json!("protected-launcher");
+        // Test-owned state, not caller-supplied authentication. This fixture
+        // verifies release admission at its synthetic time 150. Full production
+        // admission locks, effect policy and durable reservations remain separate.
+        authority["admission_active"] = serde_json::json!(true);
+        authority["policy_allowed"] = serde_json::json!(true);
+        authority["controls_ready"] = serde_json::json!(true);
+        authority["notification_matched"] = serde_json::json!(false);
+        let mut proposed = request.clone();
+        if substitute_request {
+            proposed["tool_id"] = serde_json::json!("private-record-export");
+        }
         let mut authorization_consumed = false;
         for ordinal in 0..2 {
             let request = broker::notification(&listener);
@@ -852,13 +947,35 @@ finish:
                 assert_eq!(request.data.args[..5], expected_arguments);
                 // This is the known trusted fork continuation, not a generic
                 // pointer-based approval for candidate-supplied memory.
+                authority["notification_matched"] = serde_json::json!(true);
+                let decision = fixture
+                    .authorization_policy
+                    .evaluate_with_authority("continue_initial_tool_exec", &proposed, &authority)
+                    .unwrap();
+                assert_eq!(decision.0, !substitute_request);
                 assert!(std::time::Instant::now() < streams.deadline());
+                if !decision.0 {
+                    broker::reply(&listener, request.id, false);
+                    break;
+                }
                 authorization_consumed = true;
+                authority["reservation_state"] = serde_json::json!("consumed");
                 broker::reply(&listener, request.id, true);
             } else {
                 assert!(authorization_consumed);
                 assert_eq!(request.data.args[0], u64::MAX);
                 assert_eq!(request.data.args[4], 0);
+                authority["phase"] = serde_json::json!("candidate-executing");
+                authority["notification_matched"] = serde_json::json!(false);
+                assert!(
+                    !fixture
+                        .authorization_policy
+                        .evaluate_with_authority("continue_initial_tool_exec", &proposed, &authority)
+                        .unwrap()
+                        .0
+                );
+                // The native broker always denies subsequent requests, even if
+                // an authorization policy were to make a different suggestion.
                 broker::reply(&listener, request.id, false);
             }
         }
@@ -868,9 +985,17 @@ finish:
         drop(listener);
         let owned_pid = child.0.take().unwrap();
         let captured = unsafe { streams.collect(owned_pid) }.unwrap();
-        assert_eq!(captured.exit_code(), 37);
-        assert_eq!(captured.stdout(), b"public build output\n");
-        assert_eq!(captured.stderr(), b"completed\n");
+        if substitute_request {
+            assert!(!authorization_consumed);
+            assert_eq!(captured.exit_code(), 114);
+            assert!(captured.stdout().is_empty());
+            assert!(captured.stderr().is_empty());
+        } else {
+            assert!(authorization_consumed);
+            assert_eq!(captured.exit_code(), 37);
+            assert_eq!(captured.stdout(), b"public build output\n");
+            assert_eq!(captured.stderr(), b"completed\n");
+        }
         let mut status = 0;
         assert_eq!(
             unsafe { libc::waitpid(pid, &mut status, libc::WNOHANG) },
