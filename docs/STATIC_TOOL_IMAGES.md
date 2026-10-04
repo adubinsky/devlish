@@ -31,7 +31,9 @@ The typed image exposes the retained digest, entry address, declared load size,
 profile and borrowed descriptor. It cannot be constructed from an unsealed file
 or a caller-supplied inspection report. Inspection does not authenticate the
 expected digest's authority: the caller still needs protected release/catalog
-approval.
+approval. [Signed catalog selections](SIGNED_TOOL_CATALOGS.md) bind those
+commitments to a logical ID and exact argument vector; they still do not launch
+the image or qualify containment.
 
 ## Verification and remaining work
 

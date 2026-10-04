@@ -2,7 +2,7 @@
 //! must consume. This is not a launch capability or complete ELF validator.
 use crate::tool_snapshot::SealedToolSnapshot;
 
-pub const PROFILE: &str = "devlish-linux-static-x86_64-v1";
+pub const PROFILE: &str = devlish_audit::tool_catalog::STATIC_PROFILE;
 
 #[derive(Debug)]
 pub struct StaticToolImage {

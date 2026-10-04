@@ -71,6 +71,10 @@ pub struct Requirements {
 }
 #[derive(Debug, Serialize)]
 pub struct ReleaseVerification {
+    #[serde(skip)]
+    pub(crate) verified_target: String,
+    #[serde(skip)]
+    pub(crate) verified_evaluated_at: u64,
     #[serde(rename = "recorded_controls_required")]
     pub(crate) require_recorded_controls: bool,
     #[serde(skip)]
@@ -277,6 +281,8 @@ pub fn verify_release(
         None => Vec::new(),
     };
     Ok(ReleaseVerification {
+        verified_target: m.target.clone(),
+        verified_evaluated_at: r.evaluated_at,
         require_recorded_controls: r.require_recorded_controls,
         verified_scope_digest: crate::admission::scope_digest(&r),
         verified_sequence: m.sequence,

@@ -834,3 +834,214 @@ fn recorded_control_requirement_is_explicit_boolean_operator_configuration() {
         true
     );
 }
+
+
+fn tool_catalog_fixture() -> (Fixture, Value) {
+    let mut fixture = Fixture::new();
+    fixture.manifest["target"] = json!(devlish_audit::tool_catalog::STATIC_TARGET);
+    fixture.requirements["target"] = fixture.manifest["target"].clone();
+    let catalog = json!({"format":"devlish-external-tool-catalog","format_version":1,
+    "target":devlish_audit::tool_catalog::STATIC_TARGET,"tools":[{
+        "id":"public-grep","artifact_id":"tool","path":"/opt/devlish/tools/grep",
+        "image_profile":devlish_audit::tool_catalog::STATIC_PROFILE,
+        "containment_id":"containment",
+        "allowed_arguments":[["--fixed-strings","--","published","/work/public.txt"]]
+    }]});
+    (fixture, catalog)
+}
+fn verify_with_catalog(
+    f: &mut Fixture,
+    catalog: &Value,
+) -> devlish_audit::release::ReleaseVerification {
+    let snapshot = bytes(catalog);
+    f.manifest["artifacts"][3]["sha256"] = json!(sha256(&snapshot));
+    verify_release(
+        &bytes(&f.manifest),
+        &f.signature(),
+        &bytes(&f.trust),
+        &bytes(&f.requirements),
+        |id| {
+            Ok(if id == "tool-catalog" {
+                snapshot.clone()
+            } else {
+                id.as_bytes().to_vec()
+            })
+        },
+    )
+    .unwrap()
+}
+#[test]
+fn signed_catalog_selects_exact_arguments_and_retains_release_commitments() {
+    let (mut f, catalog) = tool_catalog_fixture();
+    let release = verify_with_catalog(&mut f, &catalog);
+    let verified = release
+        .tool_catalog("tool-catalog", &bytes(&catalog))
+        .unwrap();
+    let arguments: Vec<String> = ["--fixed-strings", "--", "published", "/work/public.txt"]
+        .map(str::to_string)
+        .into();
+    let selection = verified.select("public-grep", &arguments, 150).unwrap();
+    assert_eq!(selection.id(), "public-grep");
+    assert_eq!(selection.path(), "/opt/devlish/tools/grep");
+    assert_eq!(selection.arguments(), arguments);
+    assert_eq!(selection.artifact_id(), "tool");
+    assert_eq!(
+        selection.image_profile(),
+        devlish_audit::tool_catalog::STATIC_PROFILE
+    );
+    assert_eq!(selection.containment_id(), "containment");
+    assert_eq!(selection.tool_sha256(), sha256(b"tool"));
+    assert_eq!(selection.containment_sha256(), sha256(b"containment"));
+    assert_eq!(selection.catalog_sha256(), sha256(&bytes(&catalog)));
+    assert_eq!(selection.manifest_sha256(), sha256(&bytes(&f.manifest)));
+    assert_eq!(selection.valid_until(), 200);
+    assert!(!release.execution_origin_verified && !release.policy_enforcement_verified);
+    for id in ["Public-grep", "grep", "/usr/bin/grep", ""] {
+        assert!(verified.select(id, &arguments, 150).is_err());
+    }
+    for args in [
+        vec!["-R", "/work/private"],
+        vec!["--fixed-strings", "--", "published", "/work/nppi.csv"],
+        vec![
+            "--fixed-strings",
+            "--",
+            "published",
+            "/work/company-secret.txt",
+        ],
+        vec!["$(cat /work/private)"],
+        vec![],
+    ] {
+        assert!(verified
+            .select(
+                "public-grep",
+                &args.into_iter().map(str::to_string).collect::<Vec<_>>(),
+                150
+            )
+            .is_err());
+    }
+}
+#[test]
+fn catalog_uses_private_release_state_not_mutable_report_fields() {
+    let (mut f, catalog) = tool_catalog_fixture();
+    f.requirements["revocations_valid_until"] = json!(180);
+    let mut release = verify_with_catalog(&mut f, &catalog);
+    let digest = sha256(&bytes(&f.manifest));
+    release.evaluated_at = 0;
+    release.manifest_signature.artifact_sha256 = "f".repeat(64);
+    release.release_requirements_verified = false;
+    let verified = release
+        .tool_catalog("tool-catalog", &bytes(&catalog))
+        .unwrap();
+    let args = catalog["tools"][0]["allowed_arguments"][0]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|s| s.as_str().unwrap().to_string())
+        .collect::<Vec<_>>();
+    assert!(verified.select("public-grep", &args, 149).is_err());
+    assert!(verified.select("public-grep", &args, 180).is_err());
+    let selected = verified.select("public-grep", &args, 179).unwrap();
+    assert_eq!(selected.valid_until(), 180);
+    assert_eq!(selected.manifest_sha256(), digest);
+}
+#[test]
+fn replaced_catalog_wrong_id_role_or_release_is_rejected() {
+    let (mut f, mut catalog) = tool_catalog_fixture();
+    let release = verify_with_catalog(&mut f, &catalog);
+    assert!(release.tool_catalog("tool", &bytes(&catalog)).is_err());
+    assert!(release.tool_catalog("missing", &bytes(&catalog)).is_err());
+    catalog["tools"][0]["path"] = json!("/tmp/attacker");
+    assert!(release
+        .tool_catalog("tool-catalog", &bytes(&catalog))
+        .is_err());
+    let other = verify_with_catalog(&mut f, &catalog);
+    assert!(other
+        .tool_catalog("tool-catalog", &vec![b' '; 65537])
+        .is_err());
+}
+#[test]
+fn signed_catalog_rejects_unsafe_paths_profiles_and_artifact_roles() {
+    let (mut f, baseline) = tool_catalog_fixture();
+    for (field, bad) in [
+        ("id", "../grep"),
+        ("id", ""),
+        ("artifact_id", "runtime"),
+        ("artifact_id", "missing"),
+        ("containment_id", "tool"),
+        ("containment_id", "missing"),
+        ("path", "grep"),
+        ("path", "/"),
+        ("path", "/tmp//grep"),
+        ("path", "/tmp/../grep"),
+        ("path", "/tmp/./grep"),
+        ("path", "/tmp/grep/"),
+        ("path", "/tmp/grep\0"),
+        ("image_profile", "dynamic"),
+        ("environment", "LD_PRELOAD=attacker"),
+    ] {
+        let mut catalog = baseline.clone();
+        catalog["tools"][0][field] = json!(bad);
+        let release = verify_with_catalog(&mut f, &catalog);
+        assert!(
+            release
+                .tool_catalog("tool-catalog", &bytes(&catalog))
+                .is_err(),
+            "{field} {bad:?}"
+        );
+    }
+    for (field, value) in [
+        ("target", json!("aarch64-unknown-linux-gnu")),
+        ("format_version", json!(2)),
+        ("format", json!("devlish-tool-catalog")),
+        ("tools", json!([])),
+    ] {
+        let mut catalog = baseline.clone();
+        catalog[field] = value;
+        let release = verify_with_catalog(&mut f, &catalog);
+        assert!(release
+            .tool_catalog("tool-catalog", &bytes(&catalog))
+            .is_err());
+    }
+}
+#[test]
+fn signed_catalog_rejects_duplicate_ids_arguments_and_transport_overflow() {
+    let (mut f, baseline) = tool_catalog_fixture();
+    let mut duplicate = baseline.clone();
+    duplicate["tools"]
+        .as_array_mut()
+        .unwrap()
+        .push(baseline["tools"][0].clone());
+    let release = verify_with_catalog(&mut f, &duplicate);
+    assert!(release
+        .tool_catalog("tool-catalog", &bytes(&duplicate))
+        .is_err());
+    for arguments in [
+        json!([]),
+        json!([["x"], ["x"]]),
+        json!([["\0"]]),
+        json!([["x".repeat(4097)]]),
+        json!([vec!["x"; 65]]),
+        json!([vec!["x".repeat(4096); 5]]),
+        json!([null]),
+        json!([[1]]),
+    ] {
+        let mut catalog = baseline.clone();
+        catalog["tools"][0]["allowed_arguments"] = arguments;
+        let release = verify_with_catalog(&mut f, &catalog);
+        assert!(release
+            .tool_catalog("tool-catalog", &bytes(&catalog))
+            .is_err());
+    }
+    // The maximum accepted argument bytes are UTF-8 bytes, not characters.
+    let mut catalog = baseline;
+    catalog["tools"][0]["allowed_arguments"] = json!([
+        vec!["é".repeat(2048); 4],
+        vec![""; 64],
+        Vec::<String>::new()
+    ]);
+    let release = verify_with_catalog(&mut f, &catalog);
+    let verified = release
+        .tool_catalog("tool-catalog", &bytes(&catalog))
+        .unwrap();
+    assert!(verified.select("public-grep", &[], 150).is_ok());
+}
