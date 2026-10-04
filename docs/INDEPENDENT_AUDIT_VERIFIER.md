@@ -374,6 +374,7 @@ Without this environment variable, existing development commands still work.
   "permissions_id": "permissions",
   "catalog_id": "tool-catalog",
   "containment_id": "containment",
+  "allow_raw_evidence": false,
   "artifacts": [
     {"id": "agent", "path": "agent.dvlc.json"},
     {"id": "policy", "path": "policy.dvlc.json"}
@@ -400,7 +401,9 @@ DEVLISH_VERIFIED_PROFILE=operator-profile.json devlish-core run-verified \
 
 The execution command accepts only input, a new policy-log path, session ID and
 optional `--policy-evidence`. It selects neither a different policy nor a
-provider override. Raw evidence capture is sensitive and remains opt-in.
+provider override. Raw evidence capture requires both `allow_raw_evidence: true`
+in the operator profile and the caller flag. The profile setting defaults to
+false; a forbidden evidence request fails before log creation or dispatch.
 Execution uses the host clock instead of the requirements document's historical
 evaluation time. The start record includes both the original requirements
 hash and the effective requirements hash, release identity and session ID.
@@ -476,6 +479,35 @@ For `run-verified`, only a policy-approved Respond emits program data to stdout.
 Automatic VM result/context dumps and raw errors are suppressed. Admission
 errors emit a diagnostic digest. Policy decision reasons are represented by
 fixed text plus a reason digest in ordinary logs. Debug event output and the
-legacy audit sink are disabled. An explicit `--policy-evidence` still captures
+legacy audit sink are disabled. An operator-authorized `--policy-evidence` captures
 sensitive inputs and exchanges for replay and needs protected storage. These
 changes apply to the verified CLI profile, not ordinary development commands.
+
+## Prepare an unsigned receipt from checked history
+
+`verify-release` can prepare receipt bytes instead of checking an existing
+signature. Supply `--prepare-receipt receipt-request.json` (mutually exclusive
+with `--evidence`):
+
+```json
+{
+  "log": "run.jsonl",
+  "session_id": "session-001",
+  "kind": "terminal",
+  "output": "unsigned-receipt.json"
+}
+```
+
+The verifier first checks the release and artifact snapshots. It then validates
+the full log chain and effect ordering, requires a recorded session, and checks
+runtime/policy/program identities against the release. Head, count, log digest
+and release digest are derived by the verifier. A caller cannot supply those
+fields through this request. `terminal` requires a finished, unpaused run;
+`checkpoint` may describe incomplete history and uncertain effects.
+
+Output uses exclusive creation, private Unix permissions and synced writes.
+No private key is loaded and nothing is signed. The result explicitly reports
+`receipt_signed: false` and `signer_authorized: false`. A separate authority
+must authorize signing and independently retain the receipt digest. Fabricated
+but internally consistent logs remain possible without protected execution;
+receipt preparation does not change that trust limit.

@@ -1,4 +1,5 @@
 //! Operator-selected verified CLI admission. Does not protect against host admin.
+use super::VerifiedInputs;
 use devlish_audit::{
     read_bounded,
     release::{verify_release, Manifest, Role},
@@ -13,13 +14,6 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
-pub(super) struct VerifiedInputs {
-    pub program: Value,
-    pub policy: EffectPolicy,
-    pub log_context: Value,
-    pub instruction_limit: u64,
-    pub allowed_effects: std::collections::BTreeSet<String>,
-}
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct Profile {
@@ -37,6 +31,8 @@ struct Profile {
     permissions_id: String,
     catalog_id: String,
     containment_id: String,
+    #[serde(default)]
+    allow_raw_evidence: bool,
 }
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -89,6 +85,9 @@ pub(super) fn run(args: Vec<String>) -> Result<(), String> {
         .map_err(|e| format!("invalid verified profile: {e}"))?;
     if profile.format != "devlish-verified-profile" || profile.format_version != 1 {
         return Err("unsupported verified profile".into());
+    }
+    if evidence && !profile.allow_raw_evidence {
+        return Err("operator profile does not permit raw policy evidence".into());
     }
     let base = path.parent().unwrap_or(Path::new("."));
     let read = |p: &Path, limit| read_bounded(&base.join(p), limit);

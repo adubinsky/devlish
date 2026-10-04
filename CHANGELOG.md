@@ -10,7 +10,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Independent audit verification
 - Add a standalone offline verifier for exact-byte Ed25519 signatures, explicit operator trust keys, revocation flags, and signature-purpose separation.
 - Verify signed checkpoints and terminal receipts against independently supplied digests and policy-log chains, while distinguishing recorded history from actual execution assurance.
-- Add synthetic signing examples, adversarial verification tests, and an independent-verifier guide. Protected receipt issuance, signed release approval, and runtime attestation remain future work.
+- Add synthetic signing examples, adversarial verification tests, and an independent-verifier guide. Protected receipt issuance and runtime attestation remain future work.
+- Verify signed release manifests, operator scope, expiry, revocation and artifact identities; bind them to audit reports and receipts.
+- Add native `run-verified` admission with a durable local rollback floor, signed effect permissions and instruction limits, and operator-gated sensitive evidence. Unsupported governed entry points fail closed.
+- Prepare unsigned receipt bytes from verified log history for a separate signing authority; preparation does not prove execution or authorize signing.
+- Keep native signature verification out of the browser compiler dependency graph.
 - Reject named pipes promptly when checking artifact and report inputs instead of waiting indefinitely for a writer.
 
 ### Policy enforcement and tamper-evidence reports

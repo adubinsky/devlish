@@ -27,8 +27,12 @@ Implemented locally:
   receipts against format-3 log chains and independently supplied receipt digests.
   This does not establish protected receipt issuance or actual execution.
 
-Not implemented yet: runtime-enforced signed releases, trusted CI build
-attestations, signed release identities, enforced external-process launch,
+- Signed release manifest verification and native `run-verified` admission bind
+  approved runtime/program/policy bytes, scope and controls to a session, with
+  a durable local rollback floor. These checks assume an operator-controlled
+  profile, environment and state directory.
+
+Not implemented yet: trusted CI build attestations, enforced external-process launch,
 OS isolation, production signed-receipt issuance and independent storage,
 and mandatory enforcement on every entry point. The existing release registry's author/approver names are labels, not
 cryptographic identities. This document specifies those remaining links.
@@ -132,8 +136,10 @@ devlish run /opt/devlish/workflows/loan-review.dvlc.json \
 
 The same hash command can measure the Devlish runtime, but trusting an unverified
 runtime to attest to itself is circular. Bootstrap with an independently trusted
-verifier or deployment system. Program and runtime digest enforcement against a
-signed manifest is still a required future step.
+verifier or deployment system. The native `run-verified` command now enforces
+program and runtime digests against a signed manifest. It does not protect
+process memory or prevent a host administrator from replacing local trust
+configuration. See [verified CLI admission](INDEPENDENT_AUDIT_VERIFIER.md#operator-selected-execution-and-durable-admission).
 
 ## External programs: `ls`, `grep`, and successors
 

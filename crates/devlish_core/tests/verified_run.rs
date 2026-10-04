@@ -1,3 +1,5 @@
+#![cfg(feature = "native")]
+
 use devlish_audit::{hex, sha256, signing_message, Purpose};
 use devlish_core::{compile_source_to_json, CompileOptions};
 use ring::{
@@ -365,8 +367,25 @@ fn unsupported_containment_and_uncatalogued_effects_fail_before_execution() {
 }
 
 #[test]
-fn verified_evidence_replays_with_release_permissions_and_redacted_diagnostics() {
+fn raw_evidence_requires_operator_opt_in_before_dispatch() {
     let f = Fixture::new();
+    let result = f.command(&[
+        "run-verified",
+        "--policy-log",
+        "run.jsonl",
+        "--session-id",
+        "test-session",
+        "--policy-evidence",
+    ]);
+    assert!(!result.status.success());
+    f.assert_no_dispatch();
+}
+
+#[test]
+fn verified_evidence_replays_with_release_permissions_and_redacted_diagnostics() {
+    let mut f = Fixture::new();
+    f.profile["allow_raw_evidence"] = json!(true);
+    f.save();
     let result = f.command(&[
         "run-verified",
         "--policy-log",

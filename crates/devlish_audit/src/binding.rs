@@ -142,26 +142,7 @@ impl ReleaseVerification {
         Ok(binding)
     }
 
-    pub fn bind_receipt(
-        &self,
-        log: &[u8],
-        receipt: &[u8],
-        signature: &[u8],
-        trust: &[u8],
-        retained_digest: &str,
-        session: &str,
-    ) -> Result<ReceiptVerification, String> {
-        let mut result = verify_receipt(
-            log,
-            receipt,
-            signature,
-            trust,
-            ExpectedReceipt {
-                sha256: retained_digest,
-                session_id: session,
-                release_sha256: &self.verified_manifest_digest,
-            },
-        )?;
+    fn check_recorded_release(&self, log: &[u8]) -> Result<(), String> {
         let start: Value = serde_json::from_slice(
             log.split(|b| *b == b'\n')
                 .next()
@@ -183,6 +164,43 @@ impl ReleaseVerification {
                 return Err("effect decision policy differs from run policy".into());
             }
         }
+        Ok(())
+    }
+
+    /// Prepare unsigned receipt bytes after validating the recorded history and
+    /// matching its identities to this verified release. Not signing authority.
+    pub fn prepare_receipt(
+        &self,
+        log: &[u8],
+        session: &str,
+        kind: crate::receipt::ReceiptKind,
+    ) -> Result<Vec<u8>, String> {
+        let receipt = crate::receipt::prepare(log, session, &self.verified_manifest_digest, kind)?;
+        self.check_recorded_release(log)?;
+        Ok(receipt)
+    }
+
+    pub fn bind_receipt(
+        &self,
+        log: &[u8],
+        receipt: &[u8],
+        signature: &[u8],
+        trust: &[u8],
+        retained_digest: &str,
+        session: &str,
+    ) -> Result<ReceiptVerification, String> {
+        let mut result = verify_receipt(
+            log,
+            receipt,
+            signature,
+            trust,
+            ExpectedReceipt {
+                sha256: retained_digest,
+                session_id: session,
+                release_sha256: &self.verified_manifest_digest,
+            },
+        )?;
+        self.check_recorded_release(log)?;
         result.release_manifest_verified = true;
         result.explanation = "Receipt and log identities match the release verified in this process under supplied operator requirements. Recorded runtime, policy and program identities are signer assertions, not proof of actual execution. Replay, protected signing and execution are not verified.";
         Ok(result)

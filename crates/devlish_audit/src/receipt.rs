@@ -5,7 +5,7 @@ use crate::{
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 struct Receipt {
     format: String,
@@ -19,7 +19,7 @@ struct Receipt {
 }
 #[derive(Clone, Copy, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
-enum ReceiptKind {
+pub enum ReceiptKind {
     Checkpoint,
     Terminal,
 }
@@ -99,6 +99,69 @@ pub fn verify_receipt(
     if receipt_data.log_file_sha256 != sha256(log) {
         return Err("log bytes do not match signed receipt".into());
     }
+    let LogState {
+        previous,
+        count,
+        pending,
+        finish,
+        host_session_bound,
+    } = inspect_log(log, expected.session_id, expected.release_sha256)?;
+    if count == 0 || count != receipt_data.record_count || previous != receipt_data.log_head_sha256
+    {
+        return Err("log count or head does not match signed receipt".into());
+    }
+    let terminal = receipt_data.kind == ReceiptKind::Terminal;
+    if terminal && !matches!(finish, Some((_, false))) {
+        return Err("terminal receipt requires a finished, unpaused run".into());
+    }
+    Ok(ReceiptVerification {
+        format: "devlish-log-verification",
+        format_version: 1,
+        receipt_signature: signature,
+        log_chain_verified: true,
+        retained_receipt_digest_matched: true,
+        receipt_sha256: sha256(receipt),
+        session_id: receipt_data.session_id,
+        session_binding_source: if host_session_bound {
+            "receipt-signer-and-recorded-host-session"
+        } else {
+            "receipt-signer; format-3 log has no host session ID"
+        },
+        release_manifest_sha256: receipt_data.release_manifest_sha256,
+        release_manifest_verified: false,
+        log_head_sha256: previous,
+        record_count: count,
+        unmatched_intent_count: u64::from(pending.is_some()),
+        terminal_receipt_verified: terminal,
+        recorded_execution_succeeded: finish.map(|f| f.0),
+        recorded_execution_completed: matches!(finish, Some((_, false))),
+        replay_verified: false,
+        execution_origin_verified: false,
+        policy_enforcement_verified: false,
+        explanation: concat!(
+            "The signed receipt matches the supplied independent digest and this log snapshot. ",
+            "This checks recorded history, not actual execution. Session and release association ",
+            "are signer assertions; release approval, replay, custody of the retained digest, ",
+            "and protected execution are not verified here."
+        ),
+    })
+}
+
+pub(crate) struct LogState {
+    pub previous: String,
+    pub count: u64,
+    pub pending: Option<(u64, String)>,
+    pub finish: Option<(bool, bool)>,
+    pub host_session_bound: bool,
+}
+pub(crate) fn inspect_log(
+    log: &[u8],
+    session_id: &str,
+    release_sha256: &str,
+) -> Result<LogState, String> {
+    if log.len() as u64 > MAX_ARTIFACT_BYTES {
+        return Err("log exceeds size limit".into());
+    }
     let text = std::str::from_utf8(log).map_err(|_| "log must be UTF-8")?;
     if !text.ends_with('\n') {
         return Err("log ends in an incomplete record".into());
@@ -130,7 +193,7 @@ pub fn verify_receipt(
         match record["type"].as_str() {
             Some("policy_run_started") if count == 0 && record["format_version"] == 3 => {
                 if let Some(session) = record.get("session_id") {
-                    if session.as_str() != Some(expected.session_id) {
+                    if session.as_str() != Some(session_id) {
                         return Err("log session differs from expected receipt session".into());
                     }
                     host_session_bound = true;
@@ -138,8 +201,7 @@ pub fn verify_receipt(
                 if let Some(binding) = record.get("verified_release") {
                     if !host_session_bound
                         || binding["session_id"] != record["session_id"]
-                        || binding["release_manifest_sha256"].as_str()
-                            != Some(expected.release_sha256)
+                        || binding["release_manifest_sha256"].as_str() != Some(release_sha256)
                     {
                         return Err("log verified release differs from receipt".into());
                     }
@@ -198,43 +260,47 @@ pub fn verify_receipt(
         previous = envelope.record_sha256;
         count += 1;
     }
-    if count == 0 || count != receipt_data.record_count || previous != receipt_data.log_head_sha256
-    {
-        return Err("log count or head does not match signed receipt".into());
+
+    if count == 0 {
+        return Err("empty log".into());
     }
-    let terminal = receipt_data.kind == ReceiptKind::Terminal;
-    if terminal && !matches!(finish, Some((_, false))) {
+    Ok(LogState {
+        previous,
+        count,
+        pending,
+        finish,
+        host_session_bound,
+    })
+}
+
+/// Unsigned bytes, suitable only for a separately authorized receipt signer.
+/// This does not claim origin or truth of the supplied recorded history.
+pub(crate) fn prepare(
+    log: &[u8],
+    session: &str,
+    release: &str,
+    kind: ReceiptKind,
+) -> Result<Vec<u8>, String> {
+    decode::<32>(release)?;
+    if session.is_empty() || session.len() > 256 {
+        return Err("invalid session identity".into());
+    }
+    let state = inspect_log(log, session, release)?;
+    if !state.host_session_bound {
+        return Err("receipt preparation requires a recorded host session".into());
+    }
+    if kind == ReceiptKind::Terminal && !matches!(state.finish, Some((_, false))) {
         return Err("terminal receipt requires a finished, unpaused run".into());
     }
-    Ok(ReceiptVerification {
-        format: "devlish-log-verification",
+    let receipt = Receipt {
+        format: "devlish-audit-receipt".into(),
         format_version: 1,
-        receipt_signature: signature,
-        log_chain_verified: true,
-        retained_receipt_digest_matched: true,
-        receipt_sha256: sha256(receipt),
-        session_id: receipt_data.session_id,
-        session_binding_source: if host_session_bound {
-            "receipt-signer-and-recorded-host-session"
-        } else {
-            "receipt-signer; format-3 log has no host session ID"
-        },
-        release_manifest_sha256: receipt_data.release_manifest_sha256,
-        release_manifest_verified: false,
-        log_head_sha256: previous,
-        record_count: count,
-        unmatched_intent_count: u64::from(pending.is_some()),
-        terminal_receipt_verified: terminal,
-        recorded_execution_succeeded: finish.map(|f| f.0),
-        recorded_execution_completed: matches!(finish, Some((_, false))),
-        replay_verified: false,
-        execution_origin_verified: false,
-        policy_enforcement_verified: false,
-        explanation: concat!(
-            "The signed receipt matches the supplied independent digest and this log snapshot. ",
-            "This checks recorded history, not actual execution. Session and release association ",
-            "are signer assertions; release approval, replay, custody of the retained digest, ",
-            "and protected execution are not verified here."
-        ),
-    })
+        kind,
+        session_id: session.into(),
+        release_manifest_sha256: release.into(),
+        log_file_sha256: sha256(log),
+        log_head_sha256: state.previous,
+        record_count: state.count,
+    };
+    serde_json::to_vec_pretty(&receipt).map_err(|e| e.to_string())
 }

@@ -1,7 +1,7 @@
 use devlish_audit::{read_bounded, verify, Purpose, MAX_ARTIFACT_BYTES, MAX_METADATA_BYTES};
 use serde_json::json;
 use std::{collections::BTreeMap, path::Path};
-const USAGE: &str = "Usage: devlish-audit init-admission <new-state.json> --requirements <operator-requirements.json>\n       devlish-audit verify-release <manifest.json> --signature <signature.json> --trust <operator-trust.json> --requirements <operator-requirements.json> --artifacts <operator-artifacts.json> [--evidence <evidence.json>]\n       devlish-audit verify <file> --signature <signature.json> --trust <operator-trust.json> --purpose <release-manifest|release-artifact|audit-evidence|audit-receipt>\n       devlish-audit verify-log <log.jsonl> --receipt <receipt.json> --signature <signature.json> --trust <operator-trust.json> --receipt-sha256 <retained-digest> --session-id <expected-session> --release-sha256 <expected-release-digest>";
+const USAGE: &str = "Usage: devlish-audit init-admission <new-state.json> --requirements <operator-requirements.json>\n       devlish-audit verify-release <manifest.json> --signature <signature.json> --trust <operator-trust.json> --requirements <operator-requirements.json> --artifacts <operator-artifacts.json> [--evidence <evidence.json> | --prepare-receipt <request.json>]\n       devlish-audit verify <file> --signature <signature.json> --trust <operator-trust.json> --purpose <release-manifest|release-artifact|audit-evidence|audit-receipt>\n       devlish-audit verify-log <log.jsonl> --receipt <receipt.json> --signature <signature.json> --trust <operator-trust.json> --receipt-sha256 <retained-digest> --session-id <expected-session> --release-sha256 <expected-release-digest>";
 fn run(args: &[String]) -> Result<serde_json::Value, String> {
     if args.first().map(String::as_str) == Some("init-admission") {
         if args.len() != 4 || args[2] != "--requirements" {
@@ -27,6 +27,7 @@ fn run(args: &[String]) -> Result<serde_json::Value, String> {
                 "--requirements",
                 "--artifacts",
                 "--evidence",
+                "--prepare-receipt",
             ]
             .contains(&pair[0].as_str())
                 || options.insert(pair[0].as_str(), pair[1].as_str()).is_some()
@@ -71,6 +72,51 @@ fn run(args: &[String]) -> Result<serde_json::Value, String> {
                 )
             },
         )?;
+        if let Some(request_path) = options.get("--prepare-receipt") {
+            #[derive(serde::Deserialize)]
+            #[serde(deny_unknown_fields)]
+            struct Request {
+                log: String,
+                session_id: String,
+                kind: devlish_audit::receipt::ReceiptKind,
+                output: String,
+            }
+            let path = Path::new(request_path);
+            let request: Request = serde_json::from_slice(&read_bounded(path, MAX_METADATA_BYTES)?)
+                .map_err(|e| format!("invalid receipt preparation request: {e}"))?;
+            let base = path.parent().unwrap_or(Path::new("."));
+            let log = read_bounded(&base.join(&request.log), MAX_ARTIFACT_BYTES)?;
+            let receipt = report.prepare_receipt(&log, &request.session_id, request.kind)?;
+            let mut options = std::fs::OpenOptions::new();
+            options.write(true).create_new(true);
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::OpenOptionsExt;
+                options.mode(0o600);
+            }
+            let output = base.join(&request.output);
+            let mut file = options
+                .open(&output)
+                .map_err(|e| format!("cannot create new unsigned receipt: {e}"))?;
+            use std::io::Write;
+            file.write_all(&receipt)
+                .and_then(|_| file.sync_all())
+                .map_err(|e| e.to_string())?;
+            #[cfg(unix)]
+            std::fs::File::open(
+                output
+                    .parent()
+                    .filter(|p| !p.as_os_str().is_empty())
+                    .unwrap_or(Path::new(".")),
+            )
+            .and_then(|dir| dir.sync_all())
+            .map_err(|e| e.to_string())?;
+            return Ok(
+                json!({"release":report,"receipt_sha256":devlish_audit::sha256(&receipt),
+                "receipt_signed":false,"signer_authorized":false,"execution_origin_verified":false,
+                "explanation":"Unsigned receipt prepared from checked recorded history. A separately authorized signer and independent retention are still required."}),
+            );
+        }
         if let Some(evidence_path) = options.get("--evidence") {
             #[derive(serde::Deserialize)]
             #[serde(deny_unknown_fields)]

@@ -123,6 +123,9 @@ See [Effect policies](docs/EFFECT_POLICY.md),
 Devlish's compiler, VM, model providers or service host. It authenticates exact
 bytes under operator-supplied Ed25519 trust keys, and checks signed receipts
 against format-3 policy logs and independently supplied receipt digests.
-It does not execute artifacts or prove runtime integrity. Protected signing,
-independent receipt custody and authenticated release loading remain separate
-work. See [Independent audit verifier](docs/INDEPENDENT_AUDIT_VERIFIER.md).
+It also checks signed release manifests and binds approved artifact identities
+to reports and receipts. The native `run-verified` command consumes verified
+program and policy buffers with a durable local rollback floor. The browser
+compiler excludes this native crypto dependency. Neither component proves
+runtime memory integrity. Protected signing, independent receipt custody and
+protected execution remain separate work. See [Independent audit verifier](docs/INDEPENDENT_AUDIT_VERIFIER.md).

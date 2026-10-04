@@ -11,12 +11,21 @@ use std::process::ExitCode;
 
 mod harness;
 mod reports;
+#[cfg(feature = "native")]
 mod verified_run;
 mod serve;
 
 use devlish_core::logutil;
 
 const VERSION: &str = "0.1.0";
+
+struct VerifiedInputs {
+    program: Value,
+    policy: EffectPolicy,
+    log_context: Value,
+    instruction_limit: u64,
+    allowed_effects: std::collections::BTreeSet<String>,
+}
 
 pub(crate) fn devlish_search_paths_for(source_path: Option<&Path>) -> Vec<String> {
     let mut paths = Vec::new();
@@ -99,8 +108,11 @@ fn run(args: Vec<String>) -> Result<(), String> {
         "artifact" => run_artifact(args),
         "compile" => run_compile(args),
         "run" => run_execute(args),
+        #[cfg(feature = "native")]
         "run-verified" => verified_run::run(args).map_err(|error| format!(
             "verified execution rejected; diagnostic sha256: {}", sha256_hex(error.as_bytes()))),
+        #[cfg(not(feature = "native"))]
+        "run-verified" => Err("verified execution requires the native feature".into()),
         "disassemble" => run_disassemble(args),
         "validate" => run_validate(args),
         "lint" => run_lint(args),
@@ -338,7 +350,7 @@ fn run_execute(args: Vec<String>) -> Result<(), String> {
 
 fn run_execute_loaded(
     args: Vec<String>,
-    verified: Option<verified_run::VerifiedInputs>,
+    verified: Option<VerifiedInputs>,
 ) -> Result<(), String> {
     let config = RunConfig::parse(args)?;
     if config.policy.is_some() != config.policy_log.is_some() {

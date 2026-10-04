@@ -286,7 +286,7 @@ fn release_binding_checks_reports_receipts_and_recorded_identities() {
     let canonical = |data: &[u8]| {
         sha256(&serde_json::to_vec_pretty(&serde_json::from_slice::<Value>(data).unwrap()).unwrap())
     };
-    let start = json!({"type":"policy_run_started","format_version":3,"runtime_file_sha256":sha256(b"runtime"),
+    let start = json!({"type":"policy_run_started","format_version":3,"session_id":"test-session","runtime_file_sha256":sha256(b"runtime"),
         "policy":{"artifact_sha256":canonical(policy_bytes)},"program_sha256":canonical(program_bytes)});
     let sign_log = |start: Value, manifest_digest: String| {
         let mut log = Vec::new();
@@ -335,6 +335,50 @@ fn release_binding_checks_reports_receipts_and_recorded_identities() {
         .bind_run_reports(&app, &policy, &bytes(&wrong_start))
         .is_err());
     assert!(result.release_manifest_verified);
+    let prepared = release
+        .prepare_receipt(
+            &log,
+            "test-session",
+            devlish_audit::receipt::ReceiptKind::Terminal,
+        )
+        .unwrap();
+    let prepared_value: Value = serde_json::from_slice(&prepared).unwrap();
+    assert_eq!(prepared_value["log_file_sha256"], sha256(&log));
+    assert_eq!(prepared_value["record_count"], 2);
+    assert_eq!(prepared_value["release_manifest_sha256"], digest);
+    assert_eq!(
+        prepared,
+        release
+            .prepare_receipt(
+                &log,
+                "test-session",
+                devlish_audit::receipt::ReceiptKind::Terminal
+            )
+            .unwrap()
+    );
+    let prefix = &log[..=log.iter().position(|b| *b == b'\n').unwrap()];
+    assert!(release
+        .prepare_receipt(
+            prefix,
+            "test-session",
+            devlish_audit::receipt::ReceiptKind::Checkpoint
+        )
+        .is_ok());
+    assert!(release
+        .prepare_receipt(
+            prefix,
+            "test-session",
+            devlish_audit::receipt::ReceiptKind::Terminal
+        )
+        .is_err());
+    assert!(release
+        .prepare_receipt(
+            &log,
+            "wrong-session",
+            devlish_audit::receipt::ReceiptKind::Terminal
+        )
+        .is_err());
+
     assert!(!result.execution_origin_verified && !result.policy_enforcement_verified);
     for field in ["runtime_file_sha256", "program_sha256", "policy"] {
         let mut other = start.clone();
@@ -429,6 +473,41 @@ fn release_binding_checks_reports_receipts_and_recorded_identities() {
     assert_eq!(result["receipt"]["release_manifest_verified"], true);
     fs::write(dir.join("app.json"), application(&sha256(b"different"))).unwrap();
     assert!(!run().status.success());
+    fs::write(dir.join("prepare.json"),bytes(&json!({"log":"log.jsonl","session_id":"test-session","kind":"terminal","output":"unsigned-receipt.json"}))).unwrap();
+    let prepare = || {
+        Command::new(env!("CARGO_BIN_EXE_devlish-audit"))
+            .current_dir(&dir)
+            .args([
+                "verify-release",
+                "manifest.json",
+                "--signature",
+                "signature.json",
+                "--trust",
+                "trust.json",
+                "--requirements",
+                "requirements.json",
+                "--artifacts",
+                "artifacts.json",
+                "--prepare-receipt",
+                "prepare.json",
+            ])
+            .output()
+            .unwrap()
+    };
+    let output = prepare();
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stdout)
+    );
+    let output: Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(output["receipt_signed"], false);
+    assert_eq!(output["signer_authorized"], false);
+    assert_eq!(
+        fs::read(dir.join("unsigned-receipt.json")).unwrap(),
+        prepared
+    );
+    assert!(!prepare().status.success(), "must not overwrite receipt");
     fs::remove_dir_all(dir).unwrap();
 }
 
