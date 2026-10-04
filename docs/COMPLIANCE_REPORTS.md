@@ -5,6 +5,17 @@ and an English explanation. The machine-readable report states exactly what
 passed. Its name does not imply legal certification or coverage of every
 possible behavior of an application.
 
+Fractional evidence values must retain their exact IEEE-754 representation when
+JSON is read back. The VM and independent verifier enable `serde_json`'s
+`float_roundtrip` feature; native and browser runtimes inherit it through the VM.
+The default fast parser can otherwise round some fractional clock results to a
+neighboring value and make an untouched record fail its hash check. Regression
+tests cover fixed clock-sized values and a signed receipt containing one such
+value. This does not make floating-point arithmetic arbitrary-precision or
+change the requirement to verify original evidence bytes. Do not repair old
+evidence by rehashing it; newly built runtime/verifier binaries require fresh
+release approval.
+
 | Command | What it establishes |
 | --- | --- |
 | `report application` | Listed files match the expected digests in a supplied manifest |

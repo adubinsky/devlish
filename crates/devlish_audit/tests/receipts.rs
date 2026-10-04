@@ -95,6 +95,18 @@ fn terminal_receipt_authenticates_history_without_proving_execution() {
             && !report.release_manifest_verified
     );
 }
+
+#[test]
+fn signed_fractional_clock_evidence_keeps_its_original_record_hash() {
+    let mut history = records();
+    // Without float_roundtrip this decimal parses one IEEE-754 value lower,
+    // changing the envelope hash even though the log bytes were untouched.
+    history[2]["exchange"] = json!({"ok":f64::from_bits(4745299267831201801)});
+    let fixture = Fixture::new(&history, "terminal");
+    let verified = fixture.check().unwrap();
+    assert!(verified.log_chain_verified && verified.terminal_receipt_verified);
+    assert!(!verified.execution_origin_verified);
+}
 #[test]
 fn missing_tail_and_whole_history_replacement_fail_against_retained_receipt() {
     let mut f = Fixture::new(&records(), "terminal");
