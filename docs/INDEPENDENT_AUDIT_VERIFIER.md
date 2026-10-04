@@ -1027,9 +1027,17 @@ builder, CI signing backend or real build attestation is provisioned by these te
 
 The report’s `admission_valid_until` is the earliest expiry among the release,
 revocation information, and all required builder statements. Native sessions
-recheck this exclusive deadline before dispatch, including when an admitted
-session has been held in memory. This is an admission deadline, not a promise
-to interrupt an already running effect at expiry.
+recheck this exclusive deadline before starting a session and immediately before
+each policy-approved host effect, after its decision record is persisted. This
+includes sessions held in memory and subsequent tools after a slow model call.
+A failed clock/expiry check permanently blocks later host effects for that run,
+even if Devlish catches the failure or the clock subsequently appears valid.
+Backward clock movement between checks also fails closed. The failed dispatch
+has an ordinary failed effect outcome; replay uses that recorded result without
+consulting the current wall clock. A caught failure may let pure Devlish computation
+finish, but it cannot reopen host dispatch. This does not interrupt an effect
+already in progress, undo it, reload revocation lists during a run, or guarantee
+that the host clock is trustworthy.
 
 ### Including the independent verifier in a release
 

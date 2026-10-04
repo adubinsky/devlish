@@ -49,6 +49,7 @@ pub struct GovernedRun {
     allowed_effects: BTreeSet<String>,
     capture_evidence: bool,
     effect_budget: Option<devlish_vm::effect_budget::EffectBudget>,
+    dispatch_guard: Option<Box<dyn FnMut() -> Result<(), String>>>,
 }
 impl GovernedRun {
     pub fn new(
@@ -70,7 +71,19 @@ impl GovernedRun {
             allowed_effects,
             capture_evidence: false,
             effect_budget: None,
+            dispatch_guard: None,
         })
+    }
+
+    /// Install an operator-owned native dispatch precondition. It cannot grant
+    /// an effect denied by Devlish policy or release permissions.
+    #[cfg(feature = "native")]
+    pub(crate) fn with_dispatch_guard(
+        mut self,
+        guard: Box<dyn FnMut() -> Result<(), String>>,
+    ) -> Self {
+        self.dispatch_guard = Some(guard);
+        self
     }
 
     pub fn with_effect_budget(
@@ -99,6 +112,11 @@ impl GovernedRun {
         let guarded = PolicyHost::new(host, &self.policy, recorder)
             .with_redacted_diagnostics()
             .with_allowed_effects(self.allowed_effects);
+        let guarded = if let Some(guard) = self.dispatch_guard {
+            guarded.with_dispatch_guard(guard)
+        } else {
+            guarded
+        };
         let guarded = if let Some(budget) = self.effect_budget {
             guarded.with_effect_budget(budget)
         } else {
@@ -113,6 +131,7 @@ impl GovernedRun {
         if guarded.recording_failed() {
             return Err(RunError::Recording);
         }
+        drop(guarded);
         let (result_value, completion) = match result {
             Ok(value) => {
                 let completion = Completion {

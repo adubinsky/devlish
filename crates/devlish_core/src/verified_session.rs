@@ -253,11 +253,12 @@ impl VerifiedSession {
         log_path: &Path,
         host: &mut dyn devlish_vm::HostEffects,
     ) -> Result<crate::governed_run::Completion, String> {
-        let now = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .map_err(|e| e.to_string())?
-            .as_secs();
-        check_dispatch_time(self.admitted_at, self.expires_at, now)?;
+        let guard = dispatch_clock_guard(self.admitted_at, self.expires_at, || {
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .map(|time| time.as_secs())
+                .map_err(|_| "admission clock unavailable".to_string())
+        })?;
         let mut log = crate::policy_log::PolicyLog::create_for_bound_run(
             log_path,
             self.policy.identity(),
@@ -285,6 +286,7 @@ impl VerifiedSession {
         } else {
             run
         };
+        let run = run.with_dispatch_guard(guard);
         // _admission remains owned through execution and final durable recording.
         run.run(host, &mut log).map_err(|e| e.to_string())
     }
@@ -399,6 +401,22 @@ impl Controls {
     }
 }
 
+fn dispatch_clock_guard(
+    admitted_at: u64,
+    expires_at: u64,
+    mut clock: impl FnMut() -> Result<u64, String> + 'static,
+) -> Result<Box<dyn FnMut() -> Result<(), String>>, String> {
+    let started_at = clock()?;
+    check_dispatch_time(admitted_at, expires_at, started_at)?;
+    let mut latest_time = started_at;
+    Ok(Box::new(move || {
+        let now = clock()?;
+        check_dispatch_time(latest_time, expires_at, now)?;
+        latest_time = now;
+        Ok(())
+    }))
+}
+
 fn check_dispatch_time(admitted: u64, expires: u64, now: u64) -> Result<(), String> {
     if now < admitted || now >= expires {
         Err("admitted session is no longer within its verified time window".into())
@@ -408,6 +426,30 @@ fn check_dispatch_time(admitted: u64, expires: u64, now: u64) -> Result<(), Stri
 }
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn dispatch_clock_checks_later_rollback_expiry_and_unavailable_clock() {
+        for values in [
+            vec![Ok(100), Ok(150), Ok(149)],
+            vec![Ok(100), Ok(150), Ok(200)],
+            vec![Ok(100), Ok(150), Err("unavailable".into())],
+        ] {
+            let mut times = values.into_iter();
+            let mut guard =
+                super::dispatch_clock_guard(100, 200, move || times.next().unwrap()).unwrap();
+            assert!(guard().is_ok());
+            assert!(guard().is_err());
+        }
+        assert!(super::dispatch_clock_guard(100, 200, || Err("unavailable".into())).is_err());
+    }
+
+    #[test]
+    fn first_effect_cannot_roll_clock_back_from_execution_start() {
+        let mut times = [200, 150].into_iter();
+        let mut guard =
+            super::dispatch_clock_guard(100, 300, move || Ok(times.next().unwrap())).unwrap();
+        assert!(guard().is_err());
+    }
+
     #[test]
     fn dispatch_rejects_clock_rollback_and_exclusive_expiry() {
         for now in [0, 99, 200, 201, u64::MAX] {

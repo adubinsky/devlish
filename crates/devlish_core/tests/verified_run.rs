@@ -400,11 +400,14 @@ fn verified_evidence_replays_with_release_permissions_and_redacted_diagnostics()
 }
 
 fn assert_process_replays(f: &Fixture) {
+    assert_process_replays_with_runtime(f, PathBuf::from(env!("CARGO_BIN_EXE_devlish-core")), None);
+}
+fn assert_process_replays_with_runtime(f: &Fixture, runtime: PathBuf, evaluated_at: Option<u64>) {
     let files: Vec<_> = ["runtime", "program", "policy"]
         .iter()
         .map(|id| {
             let path = if *id == "runtime" {
-                PathBuf::from(env!("CARGO_BIN_EXE_devlish-core"))
+                runtime.clone()
             } else {
                 f.dir.join(id)
             };
@@ -466,13 +469,13 @@ fn assert_process_replays(f: &Fixture) {
     let mut trust: Value =
         serde_json::from_slice(&fs::read(f.dir.join("trust.json")).unwrap()).unwrap();
     trust["keys"][0]["purposes"] = json!(["release-manifest", "audit-receipt"]);
-    // Standalone verification uses explicit current operator evaluation time.
+    // Explicit evaluation time: historical verification is separate from fresh admission.
     let mut requirements = f.requirements.clone();
     requirements["require_recorded_controls"] = json!(true);
-    requirements["evaluated_at"] = json!(SystemTime::now()
+    requirements["evaluated_at"] = json!(evaluated_at.unwrap_or_else(|| SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap()
-        .as_secs());
+        .as_secs()));
     let release = devlish_audit::release::verify_release(
         &bytes(&f.manifest),
         &fs::read(f.dir.join("signature.json")).unwrap(),
@@ -480,7 +483,7 @@ fn assert_process_replays(f: &Fixture) {
         &bytes(&requirements),
         |id| {
             fs::read(if id == "runtime" {
-                PathBuf::from(env!("CARGO_BIN_EXE_devlish-core"))
+                runtime.clone()
             } else {
                 f.dir.join(id)
             })
@@ -1413,4 +1416,81 @@ fn held_session_cannot_dispatch_after_builder_statement_expires() {
     assert!(!log.exists());
     assert!(host.responses.is_empty());
     assert_eq!(host.events, 0);
+}
+
+#[test]
+fn active_session_cannot_start_another_effect_after_authority_expires() {
+    struct SlowHost {
+        until: u64,
+        clocks: usize,
+        responses: usize,
+    }
+    impl devlish_vm::HostEffects for SlowHost {
+        fn emit_event(&mut self, _: &Value) {
+            panic!("unexpected diagnostic");
+        }
+        fn write_file(&mut self, _: &Value) -> Result<(), String> {
+            panic!("unexpected write");
+        }
+        fn clock_now(&mut self, _: &str) -> Result<Value, String> {
+            self.clocks += 1;
+            let deadline = UNIX_EPOCH + std::time::Duration::from_secs(self.until);
+            if let Ok(remaining) = deadline.duration_since(SystemTime::now()) {
+                std::thread::sleep(remaining);
+            }
+            Ok(json!("synthetic time"))
+        }
+        fn respond(&mut self, _: &Value) -> Result<(), String> {
+            self.responses += 1;
+            Ok(())
+        }
+    }
+    let mut f = library_fixture();
+    f.profile["allow_raw_evidence"] = json!(true);
+    replace_compiled(
+        &mut f,
+        "program",
+        "Get the current time as first\nTry:\n  Respond with \"public\"\nOtherwise:\n  caught equals true\nRespond with \"retry\"",
+    );
+    replace_json(
+        &mut f,
+        "tool-catalog",
+        json!({"format":"devlish-tool-catalog","format_version":1,"host_effects":["clock_now","respond"]}),
+    );
+    replace_json(
+        &mut f,
+        "permissions",
+        json!({"format":"devlish-runtime-permissions","format_version":1,"allowed_effects":["clock_now","respond"],"instruction_limit":1000}),
+    );
+    let until = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_secs()
+        + 10;
+    f.manifest["valid_until"] = json!(until);
+    f.save();
+    let session = devlish_core::verified_session::VerifiedSession::admit(
+        &f.dir.join("profile.json"),
+        "active-expiry",
+        true,
+    )
+    .unwrap();
+    let mut host = SlowHost {
+        until,
+        clocks: 0,
+        responses: 0,
+    };
+    let log = f.dir.join("run.jsonl");
+    assert!(session.execute(json!({}), &log, &mut host).is_err());
+    assert_eq!(host.clocks, 1);
+    assert_eq!(host.responses, 0);
+    let records: Vec<Value> = fs::read_to_string(&log)
+        .unwrap()
+        .lines()
+        .map(|line| serde_json::from_str(line).unwrap())
+        .collect();
+    assert_eq!(records[4]["record"]["outcome"]["status"], "failed");
+    assert_eq!(records[6]["record"]["outcome"]["status"], "failed");
+    assert_eq!(records.last().unwrap()["record"]["success"], false);
+    assert_process_replays_with_runtime(&f, std::env::current_exe().unwrap(), Some(until - 1));
 }

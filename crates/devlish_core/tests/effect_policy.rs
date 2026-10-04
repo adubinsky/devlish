@@ -368,3 +368,46 @@ fn invalid_effect_budgets_fail_closed_and_names_must_match_permissions() {
     let budget = EffectBudget::parse(&json!({"total":2,"per_effect":{"write_file":1}})).unwrap();
     assert!(budget.validate_effects(&["respond".into()].into()).is_err());
 }
+
+#[test]
+fn dispatch_guard_runs_after_decision_recording_and_failure_cannot_reopen() {
+    use std::{cell::Cell, rc::Rc};
+    let policy = policy("Respond with record with true as allow and \"approved\" as reason");
+    let mut host = Host::default();
+    let mut records = Records::default();
+    let calls = Rc::new(Cell::new(0));
+    let count = calls.clone();
+    let mut guarded = PolicyHost::new(&mut host, &policy, &mut records).with_dispatch_guard(
+        Box::new(move || {
+            count.set(count.get() + 1);
+            if count.get() == 2 {
+                Err("expired".into())
+            } else {
+                Ok(())
+            }
+        }),
+    );
+    assert!(guarded.write_file(&json!({})).is_ok());
+    assert!(guarded.write_file(&json!({})).is_err());
+    assert!(guarded.write_file(&json!({})).is_err());
+    drop(guarded);
+    assert_eq!(host.writes, 1);
+    assert_eq!(calls.get(), 2);
+    assert_eq!(records.records.len(), 6);
+    assert_eq!(records.records[3]["outcome"]["status"], "failed");
+    assert_eq!(records.records[5]["outcome"]["status"], "failed");
+    records = Records {
+        fail_at: Some(0),
+        ..Default::default()
+    };
+    let count = calls.clone();
+    assert!(PolicyHost::new(&mut host, &policy, &mut records)
+        .with_dispatch_guard(Box::new(move || {
+            count.set(99);
+            Ok(())
+        }))
+        .write_file(&json!({}))
+        .is_err());
+    assert_eq!(calls.get(), 2);
+    assert_eq!(host.writes, 1);
+}

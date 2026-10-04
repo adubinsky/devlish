@@ -110,6 +110,8 @@ pub struct PolicyHost<'a> {
     redact_diagnostics: bool,
     allowed_effects: Option<std::collections::BTreeSet<String>>,
     effect_budget: Option<crate::effect_budget::EffectBudget>,
+    dispatch_guard: Option<Box<dyn FnMut() -> Result<(), String>>>,
+    dispatch_blocked: bool,
 }
 
 impl<'a> PolicyHost<'a> {
@@ -128,6 +130,8 @@ impl<'a> PolicyHost<'a> {
             redact_diagnostics: false,
             allowed_effects: None,
             effect_budget: None,
+            dispatch_guard: None,
+            dispatch_blocked: false,
         }
     }
 
@@ -154,6 +158,13 @@ impl<'a> PolicyHost<'a> {
     /// it before policy evaluation/dispatch; caught errors cannot refund counts.
     pub fn with_effect_budget(mut self, budget: crate::effect_budget::EffectBudget) -> Self {
         self.effect_budget = Some(budget);
+        self
+    }
+
+    /// Trusted adapter check immediately before each authorized host dispatch.
+    /// Failure permanently blocks this host; it is recorded as a failed outcome.
+    pub fn with_dispatch_guard(mut self, guard: Box<dyn FnMut() -> Result<(), String>>) -> Self {
+        self.dispatch_guard = Some(guard);
         self
     }
 
@@ -218,7 +229,15 @@ impl<'a> PolicyHost<'a> {
                 format!("Policy denied {kind}: {reason}")
             });
         }
-        let result = action(self.inner);
+        let gate = if self.dispatch_blocked {
+            Err("host dispatch previously blocked".into())
+        } else {
+            self.dispatch_guard.as_mut().map_or(Ok(()), |guard| guard())
+        };
+        if gate.is_err() {
+            self.dispatch_blocked = true;
+        }
+        let result = gate.and_then(|()| action(self.inner));
         let exchange = match &result {
             Ok(result) => json!({"ok": value(result)}),
             Err(error) => json!({"err": error}),
