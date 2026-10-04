@@ -25,6 +25,8 @@ pub mod tool_limits;
 pub mod tool_syscalls;
 #[cfg(feature = "native")]
 pub mod tool_streams;
+#[cfg(feature = "native")]
+pub mod tool_reservations;
 #[cfg(all(test, feature = "native", target_os = "linux", target_arch = "x86_64"))]
 mod tool_broker_test_support;
 #[cfg(feature = "native")]

@@ -595,6 +595,38 @@ _start:
                 .0
         );
     }
+    #[cfg(unix)]
+    #[test]
+    fn durable_launch_slot_commits_authenticated_selection_without_raw_arguments() {
+        use std::os::unix::fs::PermissionsExt;
+        let fixture = CatalogFixture::new(b"synthetic image");
+        let directory = fixture.dir.join("slots");
+        std::fs::create_dir(&directory).unwrap();
+        std::fs::set_permissions(&directory, std::fs::Permissions::from_mode(0o700)).unwrap();
+        let store = crate::tool_reservations::ToolReservations::open(&directory).unwrap();
+        let arguments = vec!["--public-only".into()];
+        let selected = fixture
+            .catalog
+            .select("public-grep", &arguments, 150)
+            .unwrap();
+        let token = store.reserve("tenant", "session", 1, &selected).unwrap();
+        let bytes = std::fs::read(directory.join(format!("{}.jsonl", token.operation_id()))).unwrap();
+        let record: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+        assert_eq!(record["binding"]["tool_sha256"], selected.tool_sha256());
+        assert_eq!(
+            record["binding"]["release_sha256"],
+            selected.manifest_sha256()
+        );
+        assert_eq!(
+            record["binding"]["arguments_sha256"],
+            devlish_audit::sha256(&serde_json::to_vec(&arguments).unwrap())
+        );
+        let text = String::from_utf8(bytes).unwrap();
+        assert!(!text.contains("--public-only"));
+        assert!(!text.contains(selected.path()));
+        drop(token);
+        assert!(store.reserve("tenant", "session", 1, &selected).is_err());
+    }
     #[test]
     fn preparation_binds_signed_selection_to_image_or_refuses_unsupported_platform() {
         let fixture = CatalogFixture::new(&fixture());

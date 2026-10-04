@@ -13,6 +13,7 @@ assurance separate from the complete launch boundary.
 | Inherited capabilities | Close unlisted descriptors and install private bounded stdio in the synthetic composition | Authenticate every retained descriptor in production dispatch |
 | Network, IPC, process creation and later execution | Minimal syscall gate (see TOOL_SYSCALL_GATE.md), not integrated | Qualify initial-exec broker and complete launch integration before enabling dispatch |
 | Resource and output limits | Fixed resource ceilings plus private bounded stream collector (see TOOL_STREAM_SUPERVISION.md) | Integrate deadline checks and collection with the production broker, policy and journal |
+| Crash-safe attempt reservation | Private durable one-attempt storage primitive (see TOOL_LAUNCH_RESERVATIONS.md) | Connect protected session/effect identities, consumption before broker continuation and uncertain-outcome reconciliation |
 | Policy, disclosure and evidence | Declared tool effect, Devlish policy and replay tested with fake adapters | Connect real launcher, record identity/outcome commitments, release only approved output |
 
 ## Composed Linux test
