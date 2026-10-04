@@ -10,6 +10,35 @@ pub struct StaticToolImage {
     layout: Layout,
 }
 
+/// A catalog selection and the exact sealed image it names. This is preparation
+/// only: no policy decision, admission lock, containment or launch is implied.
+#[derive(Debug)]
+pub struct PreparedCatalogTool<'a> {
+    selection: devlish_audit::tool_catalog::ToolSelection<'a>,
+    image: StaticToolImage,
+}
+
+impl<'a> PreparedCatalogTool<'a> {
+    /// The path, digest and image profile all come from the authenticated
+    /// selection. No caller-supplied pathname or alternate image is accepted.
+    pub fn load(selection: devlish_audit::tool_catalog::ToolSelection<'a>) -> Result<Self, String> {
+        let snapshot = SealedToolSnapshot::from_path(
+            std::path::Path::new(selection.path()),
+            selection.tool_sha256(),
+        )?;
+        let image = StaticToolImage::from_snapshot(snapshot, selection.image_profile())?;
+        Ok(Self { selection, image })
+    }
+
+    pub fn selection(&self) -> &devlish_audit::tool_catalog::ToolSelection<'a> {
+        &self.selection
+    }
+
+    pub fn image(&self) -> &StaticToolImage {
+        &self.image
+    }
+}
+
 impl StaticToolImage {
     /// Restrict the initial profile to native Linux x86-64, ET_EXEC, no ELF
     /// interpreter/dynamic segment, non-executable stack and disjoint W^X pages.
@@ -394,5 +423,158 @@ _start:
                 .unwrap();
         assert!(StaticToolImage::from_snapshot(changed, PROFILE).is_err());
         fs::remove_dir_all(directory).unwrap();
+    }
+
+    struct CatalogFixture {
+        dir: std::path::PathBuf,
+        catalog: devlish_audit::tool_catalog::VerifiedToolCatalog,
+    }
+    impl CatalogFixture {
+        fn new(tool: &[u8]) -> Self {
+            use devlish_audit::{hex, sha256, signing_message, Purpose};
+            use ring::{
+                rand::SystemRandom,
+                signature::{Ed25519KeyPair, KeyPair},
+            };
+            use serde_json::{json, Value};
+            let key = Ed25519KeyPair::generate_pkcs8(&SystemRandom::new()).unwrap();
+            let key = Ed25519KeyPair::from_pkcs8(key.as_ref()).unwrap();
+            let dir = std::env::temp_dir().canonicalize().unwrap().join(format!(
+                "devlish-prepared-tool-{}",
+                hex(key.public_key().as_ref())
+            ));
+            std::fs::create_dir(&dir).unwrap();
+            std::fs::write(dir.join("tool"), tool).unwrap();
+            let bytes = |v: &Value| serde_json::to_vec(v).unwrap();
+            let catalog = bytes(
+                &json!({"format":"devlish-external-tool-catalog","format_version":1,
+                "target":devlish_audit::tool_catalog::STATIC_TARGET,"tools":[{
+                    "id":"public-grep","artifact_id":"tool","path":dir.join("tool"),
+                    "image_profile":PROFILE,"containment_id":"containment","allowed_arguments":[["--public-only"]]
+                }]}),
+            );
+            let mut snapshots = std::collections::BTreeMap::new();
+            let artifacts: Vec<_> = [
+                "runtime",
+                "compiler",
+                "policy",
+                "tool-catalog",
+                "permissions",
+                "containment",
+                "source-closure",
+                "build-attestation",
+                "tool",
+            ]
+            .iter()
+            .map(|role| {
+                let snapshot = match *role {
+                    "tool" => tool.to_vec(),
+                    "tool-catalog" => catalog.clone(),
+                    _ => role.as_bytes().to_vec(),
+                };
+                let artifact = json!({"id":role,"role":role,"sha256":sha256(&snapshot)});
+                snapshots.insert(role.to_string(), snapshot);
+                artifact
+            })
+            .collect();
+            let manifest = bytes(
+                &json!({"format":"devlish-release-manifest","format_version":1,
+                "release_id":"synthetic","environment":"test","target":devlish_audit::tool_catalog::STATIC_TARGET,
+                "sequence":1,"valid_from":100,"valid_until":200,"repository":"synthetic","commit":"synthetic",
+                "workflow":"test","policy_id":"test","policy_version":"1","artifacts":artifacts}),
+            );
+            let requirements = bytes(
+                &json!({"format":"devlish-release-requirements","format_version":1,
+                "environment":"test","target":devlish_audit::tool_catalog::STATIC_TARGET,"repository":"synthetic",
+                "commit":"synthetic","workflow":"test","policy_id":"test","policy_version":"1",
+                "minimum_sequence":1,"evaluated_at":150,"revocations_valid_from":100,"revocations_valid_until":200,
+                "revoked_manifest_sha256":[],"authorized_release_keys":["test"]}),
+            );
+            let trust = bytes(
+                &json!({"format":"devlish-audit-trust","format_version":1,"keys":[{
+                "id":"test","public_key_hex":hex(key.public_key().as_ref()),"purposes":["release-manifest"],"revoked":false}]}),
+            );
+            let signature = bytes(
+                &json!({"format":"devlish-detached-signature","format_version":1,
+                "algorithm":"ed25519","key_id":"test","purpose":"release-manifest",
+                "signature_hex":hex(key.sign(&signing_message(Purpose::ReleaseManifest, &manifest)).as_ref())}),
+            );
+            let release = devlish_audit::release::verify_release(
+                &manifest,
+                &signature,
+                &trust,
+                &requirements,
+                |id| Ok(snapshots[id].clone()),
+            )
+            .unwrap();
+            Self {
+                dir,
+                catalog: release.tool_catalog("tool-catalog", &catalog).unwrap(),
+            }
+        }
+    }
+    impl Drop for CatalogFixture {
+        fn drop(&mut self) {
+            std::fs::remove_dir_all(&self.dir).unwrap();
+        }
+    }
+    #[test]
+    fn preparation_binds_signed_selection_to_image_or_refuses_unsupported_platform() {
+        let fixture = CatalogFixture::new(&fixture());
+        let mut arguments = vec!["--public-only".to_string()];
+        let selected = fixture
+            .catalog
+            .select("public-grep", &arguments, 150)
+            .unwrap();
+        arguments[0] = "--private".into();
+        let prepared = PreparedCatalogTool::load(selected);
+        #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
+        {
+            use std::os::fd::AsFd;
+            use std::os::unix::fs::FileExt;
+            let prepared = prepared.unwrap();
+            std::fs::write(fixture.dir.join("tool"), b"substitution").unwrap();
+            assert_eq!(prepared.selection().arguments(), &["--public-only"]);
+            assert_eq!(
+                prepared.image().sha256(),
+                prepared.selection().tool_sha256()
+            );
+            let mut magic = [0; 4];
+            std::fs::File::from(prepared.image().as_fd().try_clone_to_owned().unwrap())
+                .read_exact_at(&mut magic, 0)
+                .unwrap();
+            assert_eq!(&magic, b"\x7fELF");
+        }
+        #[cfg(not(all(target_os = "linux", target_arch = "x86_64")))]
+        assert!(prepared
+            .unwrap_err()
+            .contains("unavailable on this platform"));
+    }
+    #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
+    #[test]
+    fn preparation_rejects_replaced_or_signed_but_unsupported_tool_bytes() {
+        for changed in [false, true] {
+            let fixture = CatalogFixture::new(if changed {
+                b"original"
+            } else {
+                b"#!/bin/sh\nexit 0\n"
+            });
+            if changed {
+                std::fs::write(fixture.dir.join("tool"), b"substitute").unwrap();
+            }
+            let selected = fixture
+                .catalog
+                .select("public-grep", &["--public-only".to_string()], 150)
+                .unwrap();
+            let error = PreparedCatalogTool::load(selected).unwrap_err();
+            assert!(
+                if changed {
+                    error.contains("digest")
+                } else {
+                    error.contains("static ELF profile")
+                },
+                "{error}"
+            );
+        }
     }
 }

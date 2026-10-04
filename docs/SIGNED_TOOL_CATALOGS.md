@@ -57,6 +57,22 @@ containment, catalog and manifest commitments for later evidence recording.
 Public presentation fields in a release report cannot change its authority,
 target, baseline time or deadline.
 
+## Preparing the selected image
+
+The native core's `PreparedCatalogTool::load(selection)` consumes a selection,
+copies and seals the file at its catalog path, verifies its catalog digest, then
+applies the selected static-image profile to that same descriptor. It retains
+both the immutable selection and checked image together. The caller cannot
+provide an alternate path, digest, image or argument vector to this constructor.
+Replacing the source pathname after preparation cannot change the sealed image.
+Even a signed script or dynamic executable fails the format gate.
+
+Preparation reads a local file but does not execute it. On unsupported platforms
+it returns an error rather than falling back to ordinary process spawning.
+Tests create ephemeral signed releases, replace a tool before and after loading,
+mutate the original request arguments, and verify the retained selection and
+descriptor. Linux CI checks the positive path; macOS checks refusal.
+
 ## Policy and assurance boundary
 
 The catalog is an operator ceiling, not the decision-making agent. Devlish still
@@ -67,7 +83,7 @@ read `/work/nppi.csv` or `/work/company-secret.txt`; those argument vectors are
 also absent from this catalog. Do not widen the catalog merely because a model
 requests another argument.
 
-This primitive performs no filesystem access, execution or containment
+Catalog selection itself performs no filesystem access, execution or containment
 qualification. It authenticates the containment artifact digest without
 interpreting or enforcing its contents. A future launcher must consume the
 [sealed snapshot](SEALED_TOOL_SNAPSHOTS.md) and
