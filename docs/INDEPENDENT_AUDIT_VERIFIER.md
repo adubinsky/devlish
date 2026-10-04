@@ -299,6 +299,7 @@ Operator requirements are separate from the candidate manifest:
   "policy_id": "nppi",
   "policy_version": "1",
   "minimum_sequence": 2,
+  "require_recorded_controls": true,
   "evaluated_at": 1791000000,
   "revocations_valid_from": 1790985600,
   "revocations_valid_until": 1791072000,
@@ -840,3 +841,18 @@ It does not prove that instructions or effects actually ran, that the instructio
 limit was observed, that the Devlish policy allowed those calls, or that filesystem
 and network containment was enforced. Execution origin, policy enforcement and
 policy replay remain separate, unverified claims in this independent verifier.
+
+Operators can set `"require_recorded_controls": true` in their independently
+trusted release-requirements file. Release verification echoes this as
+`recorded_controls_required`. Receipt preparation, reservation and release-bound
+receipt verification then reject a log without control metadata, including a
+correctly signed legacy receipt. The log, receipt or manifest cannot lower this
+operator setting. Omission defaults to false for older evidence; null and
+non-boolean values are rejected. Protect this requirements file independently
+of candidate evidence, like the trust-key configuration.
+
+This requirement applies when preparing or verifying release-bound receipts.
+Checking release files alone still does not evaluate any run, and standalone
+`verify-log` does not apply release requirements. Use `verify-release` with receipt
+evidence for the stronger check. This option demands recorded-control consistency,
+not actual-execution assurance.

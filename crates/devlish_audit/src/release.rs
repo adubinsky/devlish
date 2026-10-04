@@ -46,6 +46,8 @@ pub enum Role {
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Requirements {
+    #[serde(default)]
+    pub require_recorded_controls: bool,
     pub format: String,
     pub format_version: u32,
     pub environment: String,
@@ -64,6 +66,8 @@ pub struct Requirements {
 }
 #[derive(Debug, Serialize)]
 pub struct ReleaseVerification {
+    #[serde(rename = "recorded_controls_required")]
+    pub(crate) require_recorded_controls: bool,
     #[serde(skip)]
     pub(crate) verified_scope_digest: String,
     #[serde(skip)]
@@ -225,6 +229,7 @@ pub fn verify_release(
         ));
     }
     Ok(ReleaseVerification {
+        require_recorded_controls: r.require_recorded_controls,
         verified_scope_digest: crate::admission::scope_digest(&r),
         verified_sequence: m.sequence,
         verified_artifacts,

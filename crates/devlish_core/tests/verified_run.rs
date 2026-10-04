@@ -467,6 +467,7 @@ fn assert_process_replays(f: &Fixture) {
     trust["keys"][0]["purposes"] = json!(["release-manifest", "audit-receipt"]);
     // Standalone verification uses explicit current operator evaluation time.
     let mut requirements = f.requirements.clone();
+    requirements["require_recorded_controls"] = json!(true);
     requirements["evaluated_at"] = json!(SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap()

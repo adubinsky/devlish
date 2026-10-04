@@ -777,4 +777,60 @@ fn recorded_controls_match_signed_permissions_and_counts_not_execution() {
             .unwrap()
             .recorded_controls_match_release
     );
+    // Operator requirements are independently trusted; log metadata cannot relax them.
+    f.requirements["require_recorded_controls"] = json!(true);
+    let strict = verify_release(
+        &bytes(&f.manifest),
+        &f.signature(),
+        &bytes(&f.trust),
+        &bytes(&f.requirements),
+        |id| Ok(snapshots[id].clone()),
+    )
+    .unwrap();
+    assert_eq!(
+        serde_json::to_value(&strict).unwrap()["recorded_controls_required"],
+        true
+    );
+    assert!(strict
+        .prepare_receipt(
+            &legacy,
+            "controls",
+            devlish_audit::receipt::ReceiptKind::Terminal
+        )
+        .is_err());
+    assert!(strict
+        .bind_receipt(
+            &legacy,
+            &receipt,
+            &signature,
+            &bytes(&f.trust),
+            &sha256(&receipt),
+            "controls"
+        )
+        .is_err());
+    assert!(strict
+        .prepare_receipt(
+            &log,
+            "controls",
+            devlish_audit::receipt::ReceiptKind::Terminal
+        )
+        .is_ok());
+}
+
+#[test]
+fn recorded_control_requirement_is_explicit_boolean_operator_configuration() {
+    let mut f = Fixture::new();
+    assert_eq!(
+        serde_json::to_value(f.check().unwrap()).unwrap()["recorded_controls_required"],
+        false
+    );
+    for invalid in [Value::Null, json!("true"), json!(1), json!({})] {
+        f.requirements["require_recorded_controls"] = invalid;
+        assert!(f.check().is_err());
+    }
+    f.requirements["require_recorded_controls"] = json!(true);
+    assert_eq!(
+        serde_json::to_value(f.check().unwrap()).unwrap()["recorded_controls_required"],
+        true
+    );
 }

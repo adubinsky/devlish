@@ -165,6 +165,9 @@ impl ReleaseVerification {
             }
         }
         let Some(binding) = record.get("verified_release") else {
+            if self.require_recorded_controls {
+                return Err("operator requirements demand recorded release controls".into());
+            }
             return Ok(false);
         };
         for (role, field) in [
