@@ -9,7 +9,7 @@ If kind of report equals "application":
   Respond with "PASS: The measured application files match the supplied manifest. Build provenance and approval of that manifest have not been authenticated."
 
 If kind of report equals "policy":
-  Respond with "PASS: The policy reproduced every supplied expected decision. This establishes the tested cases, not exhaustive policy coverage."
+  Respond with "PASS: The policy reproduced every supplied expected decision. This establishes the tested cases, not exhaustive policy coverage, and does not authenticate supplied authority state."
 
 If kind of report equals "process":
   details equals details of report

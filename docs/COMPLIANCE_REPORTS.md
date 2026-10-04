@@ -56,7 +56,11 @@ that the listed external tools were executed.
 
 Compile the policy and provide named golden cases with `input.effect`,
 `input.request`, and an exact `expected` decision containing `allow` and `reason`.
-The existing NPPI and company-IP fixtures are compatible.
+The existing NPPI and company-IP fixtures are compatible. An optional
+`input.authority` supplies separate context for authority-aware policies. It is
+offline fixture data, not authenticated live authority; nested request fields
+cannot populate this channel. Policy reports explicitly record
+`authority_authenticated: false`.
 
 ```bash
 devlish compile examples/data_protection/nppi.dvl --output policy.dvlc.json
@@ -70,6 +74,18 @@ decisions are rejected. Failed evaluations or different decisions produce a
 failing report. The report records input/expected/actual hashes rather than raw
 case payloads. Case names are retained for review, so do not put customer data
 in their names. Passing supplied cases is not exhaustive verification.
+
+The receipt authorization cases use the same command:
+
+```bash
+devlish compile examples/receipt_authority/authorize.dvl --output receipt-policy.json
+devlish report policy receipt-policy.json examples/receipt_authority/cases.json \
+  --output receipt-policy-report.json
+devlish report explain receipt-policy-report.json
+```
+
+This repeats the Devlish decisions without signing receipts or contacting a key
+backend. Full receipt-issuer journal replay remains separate work.
 
 ## Capture a process, then report it offline
 

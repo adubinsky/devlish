@@ -22,6 +22,18 @@ cargo test --locked --manifest-path crates/devlish_core/Cargo.toml --test receip
 cargo test --locked --manifest-path crates/devlish_core/Cargo.toml --test receipt_issuer
 ```
 
+Generate and explain a repeatable policy report without a signing backend:
+
+```bash
+devlish compile examples/receipt_authority/authorize.dvl --output receipt-policy.json
+devlish report policy receipt-policy.json examples/receipt_authority/cases.json \
+  --output receipt-policy-report.json
+devlish report explain receipt-policy-report.json
+```
+
+The report treats `input.authority` as supplied test data and explicitly declines
+to authenticate it. It does not create a reservation or call a signer.
+
 `cases.json` contains the expected English decision for every scenario. The test
 runs each case twice to check repeatability. A separate test proves that ordinary
 host policy evaluation cannot obtain authority by nesting it inside a request,

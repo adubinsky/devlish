@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Independent audit verification
+- Extend repeatable policy reports to separate authority fixtures, with explicit JSON and Devlish-English limits on what those fixtures authenticate.
 - Connect Devlish preflight/final receipt authorization to durable reservation and a native signing-backend interface; denials, recorder failures, stale/revoked key identities and competing issuance block backend calls. No production signer or network endpoint is included.
 - Reserve terminal receipt issuance durably in operator-owned Unix storage; concurrent/abandoned slots fail closed and completion validates exact bytes, reserved key, purpose and revocation without loading private keys.
 - Add Devlish-authored terminal-receipt authorization rules and synthetic cases, with a separate host authority input and no signing backend or execution-assurance claim.

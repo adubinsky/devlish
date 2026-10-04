@@ -226,8 +226,11 @@ fn policy(path: &str, cases_path: &str) -> Result<Value, String> {
                     && e["reason"].as_str().is_some_and(|r| !r.trim().is_empty())
             })
             .ok_or("case expected must be a policy decision")?;
+        // Fixture authority is an explicit offline input, never authentication
+        // or a way to populate authority in ordinary live PolicyHost calls.
+        let authority = input.get("authority").unwrap_or(&Value::Null);
         let actual = policy
-            .evaluate(effect, request)
+            .evaluate_with_authority(effect, request, authority)
             .map(|(allow, reason)| json!({"allow":allow,"reason":reason}));
         checks.push(
             json!({"name":name, "input_sha256":hash(input), "expected_sha256":hash(expected),
@@ -241,7 +244,7 @@ fn policy(path: &str, cases_path: &str) -> Result<Value, String> {
         json!({
         "scope":"deterministic evaluation of supplied golden cases", "policy":policy.identity(),
         "policy_file_sha256":sha256_hex(&bytes), "cases_file_sha256":sha256_hex(&case_bytes), "cases":checks,
-        "coverage_exhaustive":false}),
+        "coverage_exhaustive":false, "authority_authenticated":false}),
     ))
 }
 

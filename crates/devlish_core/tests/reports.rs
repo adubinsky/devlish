@@ -327,3 +327,71 @@ fn verbose_execution_replays_and_old_hash_only_logs_are_rejected() {
     assert!(!report.status.success());
     assert!(String::from_utf8_lossy(&report.stderr).contains("--policy-evidence"));
 }
+
+#[test]
+fn authority_policy_reports_are_repeatable_and_do_not_authenticate_fixture_state() {
+    // Arrange: synthetic fixture authority is supplied only to offline evaluation.
+    let f = Fixture::new(false);
+    let compiled = devlish_core::compile_source_to_json(
+        include_str!("../../../examples/receipt_authority/authorize.dvl"),
+        devlish_core::CompileOptions {
+            source_path: None,
+            search_paths: vec![],
+        },
+    )
+    .unwrap();
+    std::fs::write(f.0.join("receipt-policy.json"), compiled).unwrap();
+    let mut cases: Value = serde_json::from_str(include_str!(
+        "../../../examples/receipt_authority/cases.json"
+    ))
+    .unwrap();
+    f.write("receipt-cases.json", &cases);
+    // Act.
+    let run = || {
+        f.command(&[
+            "report",
+            "policy",
+            "receipt-policy.json",
+            "receipt-cases.json",
+        ])
+    };
+    let first = run();
+    let second = run();
+    // Assert: stable passing report, with no authentication claim for case inputs.
+    assert!(
+        first.status.success(),
+        "{}",
+        String::from_utf8_lossy(&first.stdout)
+    );
+    assert_eq!(first.stdout, second.stdout);
+    let report: Value = serde_json::from_slice(&first.stdout).unwrap();
+    assert_eq!(report["details"]["authority_authenticated"], false);
+    assert_eq!(
+        report["details"]["cases"].as_array().unwrap().len(),
+        cases.as_array().unwrap().len()
+    );
+    f.write("receipt-report.json", &report);
+    let explanation = f.ok(&["report", "explain", "receipt-report.json"]);
+    assert!(String::from_utf8_lossy(&explanation.stdout)
+        .contains("does not authenticate supplied authority state"));
+    f.ok(&[
+        "report",
+        "verify",
+        "receipt-report.json",
+        "--sha256",
+        report["report_sha256"].as_str().unwrap(),
+    ]);
+    // A substituted authoritative candidate must change the decision and fail.
+    cases[0]["input"]["authority"]["receipt_sha256"] = json!("f".repeat(64));
+    f.write("receipt-cases.json", &cases);
+    assert!(!run().status.success());
+    // A nested caller field cannot fill the separate authority channel.
+    let forged = cases[0]["input"]
+        .as_object_mut()
+        .unwrap()
+        .remove("authority")
+        .unwrap();
+    cases[0]["input"]["request"]["authority"] = forged;
+    f.write("receipt-cases.json", &cases);
+    assert!(!run().status.success());
+}
