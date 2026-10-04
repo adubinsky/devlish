@@ -55,3 +55,7 @@ links, pin mount identities, impose a hard deadline on a hostile filesystem, or
 check executable permissions. Those are separate launcher/deployment decisions.
 No claim that an authorized external program executed may be derived from this
 primitive or its test results.
+
+The separate [static tool image gate](STATIC_TOOL_IMAGES.md) can now inspect the
+same sealed descriptor for the initial Linux x86-64 profile. Neither layer launches
+the image or establishes the remaining catalog and containment controls.

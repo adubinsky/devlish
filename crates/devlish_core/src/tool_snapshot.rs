@@ -38,6 +38,17 @@ impl SealedToolSnapshot {
     pub fn size(&self) -> u64 {
         self.size
     }
+
+    #[cfg(target_os = "linux")]
+    pub(crate) fn read_sealed_bytes(&self) -> Result<Vec<u8>, String> {
+        use std::os::unix::fs::FileExt;
+        let mut bytes = vec![0; self.size as usize];
+        // Positional reads cannot be redirected by another descriptor's cursor.
+        self.file
+            .read_exact_at(&mut bytes, 0)
+            .map_err(|_| "sealed tool snapshot read failed")?;
+        Ok(bytes)
+    }
 }
 
 #[cfg(target_os = "linux")]
