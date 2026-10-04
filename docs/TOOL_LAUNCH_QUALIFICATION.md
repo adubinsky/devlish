@@ -10,7 +10,7 @@ assurance separate from the complete launch boundary.
 | Immutable executable bytes | Sealed Linux memfd, hash checked after sealing | Retain that descriptor through the complete production launch sequence |
 | Restricted initial image | Static Linux x86-64 ELF profile | Qualify CPU/kernel assumptions and inherited loader/personality state |
 | Filesystem data access | Empty Landlock ABI-3 allowlist primitive | Additional syscall restrictions; separate approved input profile if files are needed |
-| Inherited capabilities | Close unlisted descriptors in a disposable child | Configure and bound standard I/O; authenticate every retained descriptor |
+| Inherited capabilities | Close unlisted descriptors and install private bounded stdio in the synthetic composition | Authenticate every retained descriptor in production dispatch |
 | Network, IPC, process creation and later execution | Minimal syscall gate (see TOOL_SYSCALL_GATE.md), not integrated | Qualify initial-exec broker and complete launch integration before enabling dispatch |
 | Resource and output limits | Fixed resource ceilings plus private bounded stream collector (see TOOL_STREAM_SUPERVISION.md) | Integrate deadline checks and collection with the production broker, policy and journal |
 | Policy, disclosure and evidence | Declared tool effect, Devlish policy and replay tested with fake adapters | Connect real launcher, record identity/outcome commitments, release only approved output |
@@ -62,8 +62,12 @@ arguments of its known fork continuation. It consumes a local one-time grant
 before continuing that initial execution. The executed assembly then attempts
 `execveat(-1, "/proc/self/exe", ...)`. Its absolute pathname would ignore the
 invalid descriptor; the second notification is denied with EPERM. The fixture
-must observe that denial and exit with the expected status. The parent has bounded
-waits and kills/reaps its child if the test fails.
+must observe that denial, echo synthetic public stdin to stdout, write a fixed
+stderr diagnostic and exit with the expected status. The broker checks the shared
+stream deadline before the first grant. After the second denial it closes its
+listener and transfers exclusive child ownership to the bounded stream collector.
+The test requires exact stdout, stderr, exit status and completed reaping; failures
+withhold output and clean up the child.
 
 This qualifies a kernel mechanism using known synthetic setup. The helper is
 compiled only for Linux x86-64 tests and supplies no production broker API.

@@ -710,26 +710,62 @@ finish:
         let fixture = linked_static_fixture(
             "broker",
             r#".text
-.global _start
-_start:
-    mov $322, %rax
-    mov $-1, %rdi
-    lea pathname(%rip), %rsi
-    xor %rdx, %rdx
-    xor %r10, %r10
-    xor %r8, %r8
-    syscall
-    mov $38, %rdi
-    cmp $-1, %rax
-    jne finish
-    mov $37, %rdi
-finish:
-    mov $60, %rax
-    syscall
-.section .rodata
-pathname: .asciz "/proc/self/exe"
-.section .note.GNU-stack,"",@progbits
-"#,
+    .global _start
+    _start:
+        mov $322, %rax
+        mov $-1, %rdi
+        lea pathname(%rip), %rsi
+        xor %rdx, %rdx
+        xor %r10, %r10
+        xor %r8, %r8
+        syscall
+        mov $38, %rdi
+        cmp $-1, %rax
+        jne finish
+        sub $64, %rsp
+    read_input:
+        xor %rax, %rax
+        xor %rdi, %rdi
+        mov %rsp, %rsi
+        mov $64, %rdx
+        syscall
+        test %rax, %rax
+        js io_failed
+        jz input_complete
+        mov %rsp, %r12
+        mov %rax, %r13
+    write_output:
+        mov $1, %rax
+        mov $1, %rdi
+        mov %r12, %rsi
+        mov %r13, %rdx
+        syscall
+        test %rax, %rax
+        jle io_failed
+        add %rax, %r12
+        sub %rax, %r13
+        jnz write_output
+        jmp read_input
+    input_complete:
+        mov $1, %rax
+        mov $2, %rdi
+        lea diagnostic(%rip), %rsi
+        mov $10, %rdx
+        syscall
+        cmp $10, %rax
+        jne io_failed
+        mov $37, %rdi
+        jmp finish
+    io_failed:
+        mov $39, %rdi
+    finish:
+        mov $60, %rax
+        syscall
+    .section .rodata
+    pathname: .asciz "/proc/self/exe"
+    diagnostic: .ascii "completed\n"
+    .section .note.GNU-stack,"",@progbits
+    "#,
         );
         let selected = fixture
             .catalog
@@ -737,6 +773,7 @@ pathname: .asciz "/proc/self/exe"
             .unwrap();
         let prepared = PreparedCatalogTool::load(selected, CONTAINMENT).unwrap();
         let rules = crate::tool_landlock::LandlockRuleset::deny_file_access().unwrap();
+        let streams = crate::tool_streams::ToolStreams::new(b"public build output\n").unwrap();
         let [parent_socket, child_socket] = broker::socket_pair();
         let image_fd = prepared.image().as_fd().as_raw_fd();
         let transfer_fd = child_socket.as_raw_fd();
@@ -771,10 +808,8 @@ pathname: .asciz "/proc/self/exe"
                 {
                     libc::_exit(110);
                 }
-                for fd in 0..3 {
-                    libc::close(fd);
-                }
-                if rules.restrict_current_thread().is_err()
+                if streams.install_child_stdio().is_err()
+                    || rules.restrict_current_thread().is_err()
                     || crate::tool_descriptors::close_unlisted(&keep).is_err()
                     || crate::tool_limits::restrict_child().is_err()
                 {
@@ -801,6 +836,7 @@ pathname: .asciz "/proc/self/exe"
             }
         }
         let mut child = broker::Child(Some(pid));
+        let streams = streams.into_parent();
         drop(child_socket);
         let listener = broker::receive_listener(&parent_socket);
         drop(parent_socket);
@@ -816,6 +852,7 @@ pathname: .asciz "/proc/self/exe"
                 assert_eq!(request.data.args[..5], expected_arguments);
                 // This is the known trusted fork continuation, not a generic
                 // pointer-based approval for candidate-supplied memory.
+                assert!(std::time::Instant::now() < streams.deadline());
                 authorization_consumed = true;
                 broker::reply(&listener, request.id, true);
             } else {
@@ -825,12 +862,23 @@ pathname: .asciz "/proc/self/exe"
                 broker::reply(&listener, request.id, false);
             }
         }
-        let status = child.wait();
-        assert!(libc::WIFEXITED(status), "child status {status}");
+        // No listener remains after this test's explicit second-exec denial.
+        // Further exec requests fail closed in the kernel. Move sole reaping
+        // ownership to the bounded collector before any candidate output escapes.
+        drop(listener);
+        let owned_pid = child.0.take().unwrap();
+        let captured = unsafe { streams.collect(owned_pid) }.unwrap();
+        assert_eq!(captured.exit_code(), 37);
+        assert_eq!(captured.stdout(), b"public build output\n");
+        assert_eq!(captured.stderr(), b"completed\n");
+        let mut status = 0;
         assert_eq!(
-            libc::WEXITSTATUS(status),
-            37,
-            "initial execution or repeat denial failed"
+            unsafe { libc::waitpid(pid, &mut status, libc::WNOHANG) },
+            -1
+        );
+        assert_eq!(
+            std::io::Error::last_os_error().raw_os_error(),
+            Some(libc::ECHILD)
         );
     }
     #[test]

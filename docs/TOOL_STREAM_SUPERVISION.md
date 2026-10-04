@@ -2,7 +2,8 @@
 
 `ToolStreams` prepares controlled standard streams for a future Linux launcher.
 It never spawns or authorizes a process. Production dispatch remains disabled;
-the existing broker experiment does not yet use this collector.
+the synthetic broker experiment now uses this collector after its explicit
+second-execution denial.
 
 The fixed signed profile limits stdin, stdout and stderr to 65,536 bytes each
 and requests a 5,000 ms wall deadline. Stream construction starts that deadline;
@@ -60,3 +61,10 @@ locked-libc compatibility; actual kernel behavior still requires Linux tests.
 
 Sources: [Linux send flags](https://man7.org/linux/man-pages/man2/send.2.html) and
 [poll semantics](https://man7.org/linux/man-pages/man2/poll.2.html).
+
+The composed Linux broker fixture receives synthetic public input through controlled
+stdin, echoes it to stdout, writes a fixed stderr diagnostic and exits with status
+37. It applies the signed image, Landlock, descriptor, resource and syscall controls
+before exec. The broker checks the stream deadline before granting execution and
+transfers exclusive child ownership to collection. This is test composition, not
+a production authority, durable journal or approved disclosure path.

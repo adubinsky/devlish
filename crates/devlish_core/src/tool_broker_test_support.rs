@@ -8,28 +8,6 @@ const NOTIF_SEND: libc::Ioctl = libc::_IOWR::<libc::seccomp_notif_resp>(b'!' as 
 const NOTIF_ID_VALID: libc::Ioctl = libc::_IOW::<u64>(b'!' as u32, 2);
 
 pub(super) struct Child(pub Option<libc::pid_t>);
-impl Child {
-    pub fn wait(&mut self) -> i32 {
-        let pid = self.0.unwrap();
-        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
-        loop {
-            let mut status = 0;
-            let result = unsafe { libc::waitpid(pid, &mut status, libc::WNOHANG) };
-            if result == pid {
-                self.0 = None;
-                return status;
-            }
-            if result < 0 {
-                assert_eq!(
-                    std::io::Error::last_os_error().raw_os_error(),
-                    Some(libc::EINTR)
-                );
-            }
-            assert!(std::time::Instant::now() < deadline, "broker child stalled");
-            std::thread::sleep(std::time::Duration::from_millis(10));
-        }
-    }
-}
 impl Drop for Child {
     fn drop(&mut self) {
         if let Some(pid) = self.0 {
