@@ -802,7 +802,9 @@ impl VerifiedServer {
             .stdout(Stdio::piped())
             .stderr(Stdio::null());
         if let Some(directory) = credentials {
-            command.env("DEVLISH_CREDENTIALS_DIR", directory);
+            command
+                .env("DEVLISH_CREDENTIALS_DIR", directory)
+                .env("DEVLISH_SERVE_TOKEN", "b".repeat(64));
         }
         let mut child = command.spawn().unwrap();
         let stdout = child.stdout.take().unwrap();
@@ -829,12 +831,26 @@ impl VerifiedServer {
         server
     }
     fn request(&self, method: &str, path: &str, authorized: bool, body: &str) -> (u16, Value) {
+        self.request_using_token(
+            method,
+            path,
+            authorized.then(|| "a".repeat(64)).as_deref(),
+            body,
+        )
+    }
+    fn request_using_token(
+        &self,
+        method: &str,
+        path: &str,
+        token: Option<&str>,
+        body: &str,
+    ) -> (u16, Value) {
         let agent = ureq::AgentBuilder::new()
             .timeout(std::time::Duration::from_secs(5))
             .build();
         let mut request = agent.request(method, &format!("{}{path}", self.url));
-        if authorized {
-            request = request.set("Authorization", &format!("Bearer {}", "a".repeat(64)));
+        if let Some(token) = token {
+            request = request.set("Authorization", &format!("Bearer {token}"));
         }
         let result = if method == "GET" {
             request.call()
@@ -990,6 +1006,7 @@ fn verified_http_startup_rejects_unsafe_binding_storage_and_missing_authenticati
         let mut command = Command::new(env!("CARGO_BIN_EXE_devlish-core"));
         command
             .env("DEVLISH_VERIFIED_PROFILE", f.dir.join("profile.json"))
+            .env_remove("DEVLISH_CREDENTIALS_DIR")
             .env_remove("DEVLISH_SERVE_TOKEN");
         if let Some(token) = token {
             command.env("DEVLISH_SERVE_TOKEN", token);
@@ -1121,6 +1138,12 @@ fn verified_http_rechecks_operator_credential_source_without_exposing_it() {
     let directory = f.dir.join("sensitive-credentials");
     fs::create_dir(&directory).unwrap();
     fs::set_permissions(&directory, fs::Permissions::from_mode(0o700)).unwrap();
+    fs::write(directory.join("DEVLISH_SERVE_TOKEN"), "a".repeat(64)).unwrap();
+    fs::set_permissions(
+        directory.join("DEVLISH_SERVE_TOKEN"),
+        fs::Permissions::from_mode(0o600),
+    )
+    .unwrap();
     let server = VerifiedServer::start_with_credentials(&f, Some(&directory));
     let command = |session| json!({"session_id":session,"input":null}).to_string();
     assert_eq!(
@@ -1134,4 +1157,122 @@ fn verified_http_rechecks_operator_credential_source_without_exposing_it() {
     assert_eq!(status, 503);
     assert!(!response.to_string().contains("sensitive-credentials"));
     assert!(!f.dir.join("http-logs/bad-source.jsonl").exists());
+}
+
+#[cfg(unix)]
+#[test]
+fn verified_http_mounted_token_overrides_environment_and_is_pinned_until_restart() {
+    use std::os::unix::fs::PermissionsExt;
+    let f = Fixture::new();
+    let directory = f.dir.join("credentials");
+    fs::create_dir(&directory).unwrap();
+    fs::set_permissions(&directory, fs::Permissions::from_mode(0o700)).unwrap();
+    let token_file = directory.join("DEVLISH_SERVE_TOKEN");
+    fs::write(&token_file, format!("{}\n", "a".repeat(64))).unwrap();
+    fs::set_permissions(&token_file, fs::Permissions::from_mode(0o600)).unwrap();
+    let server = VerifiedServer::start_with_credentials(&f, Some(&directory));
+    assert_eq!(server.request("GET", "/v1/health", true, "").0, 200);
+    assert_eq!(
+        server
+            .request_using_token("GET", "/v1/health", Some(&"b".repeat(64)), "")
+            .0,
+        401
+    );
+    fs::write(&token_file, "b".repeat(64)).unwrap();
+    assert_eq!(server.request("GET", "/v1/health", true, "").0, 200);
+    assert_eq!(
+        server
+            .request_using_token("GET", "/v1/health", Some(&"b".repeat(64)), "")
+            .0,
+        401
+    );
+    drop(server);
+    fs::remove_dir(f.dir.join("http-logs")).unwrap();
+    let restarted = VerifiedServer::start_with_credentials(&f, Some(&directory));
+    assert_eq!(restarted.request("GET", "/v1/health", true, "").0, 401);
+    assert_eq!(
+        restarted
+            .request_using_token("GET", "/v1/health", Some(&"b".repeat(64)), "")
+            .0,
+        200
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn verified_http_missing_or_unsafe_mounted_token_never_uses_environment() {
+    use std::{
+        io::Read,
+        os::unix::fs::PermissionsExt,
+        process::Stdio,
+        time::{Duration, Instant},
+    };
+    let f = Fixture::new();
+    let directory = f.dir.join("sensitive-token-directory");
+    let logs = f.dir.join("logs");
+    for path in [&directory, &logs] {
+        fs::create_dir(path).unwrap();
+        fs::set_permissions(path, fs::Permissions::from_mode(0o700)).unwrap();
+    }
+    for (value, mode) in [
+        (None, 0o600),
+        (Some("short".into()), 0o600),
+        (Some("a".repeat(64)), 0o644),
+    ] {
+        if let Some(value) = value {
+            fs::write(directory.join("DEVLISH_SERVE_TOKEN"), value).unwrap();
+            fs::set_permissions(
+                directory.join("DEVLISH_SERVE_TOKEN"),
+                fs::Permissions::from_mode(mode),
+            )
+            .unwrap();
+        }
+        let child = Command::new(env!("CARGO_BIN_EXE_devlish-core"))
+            .env("DEVLISH_VERIFIED_PROFILE", f.dir.join("profile.json"))
+            .env("DEVLISH_CREDENTIALS_DIR", &directory)
+            .env("DEVLISH_SERVE_TOKEN", "a".repeat(64))
+            .args(["serve-verified", "--bind", "127.0.0.1:0", "--log-dir"])
+            .arg(&logs)
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .unwrap();
+        // Reuse the owned-child guard so an unexpected listener is killed on panic.
+        let mut server = VerifiedServer {
+            child,
+            url: String::new(),
+        };
+        let deadline = Instant::now() + Duration::from_secs(5);
+        let status = loop {
+            if let Some(status) = server.child.try_wait().unwrap() {
+                break status;
+            }
+            assert!(
+                Instant::now() < deadline,
+                "unsafe authentication source must reject startup"
+            );
+            std::thread::sleep(Duration::from_millis(10));
+        };
+        assert!(!status.success());
+        let mut stdout = String::new();
+        let mut stderr = String::new();
+        server
+            .child
+            .stdout
+            .take()
+            .unwrap()
+            .read_to_string(&mut stdout)
+            .unwrap();
+        server
+            .child
+            .stderr
+            .take()
+            .unwrap()
+            .read_to_string(&mut stderr)
+            .unwrap();
+        assert!(!stdout.contains("listening"));
+        assert!(!stderr.contains("sensitive-token-directory"));
+        assert!(!stderr.contains(&"a".repeat(64)));
+        assert_eq!(fs::read_dir(&logs).unwrap().count(), 0);
+    }
 }

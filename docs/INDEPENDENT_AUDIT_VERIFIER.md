@@ -730,6 +730,8 @@ literal loopback addresses, defaulting to `127.0.0.1:7421`.
 mkdir -m 700 verified-logs
 # Set DEVLISH_SERVE_TOKEN from an operator-managed random 32-byte secret,
 # encoded as 64 hexadecimal characters. Do not commit it or put it in a URL.
+# If DEVLISH_CREDENTIALS_DIR is set, supply a private file named
+# DEVLISH_SERVE_TOKEN there instead; the environment token is ignored.
 DEVLISH_VERIFIED_PROFILE=/operator/deployment/profile.json \
   devlish serve-verified --log-dir verified-logs
 ```
@@ -740,6 +742,15 @@ Both `GET /v1/health` and `POST /v1/run` require exactly one
 ```json
 {"session_id":"review-001","input":{"example":"application input"}}
 ```
+
+The service reads its token from the verified credential source at startup.
+A configured mounted source never falls back to `DEVLISH_SERVE_TOKEN` in the
+environment, including when the file is missing, malformed or unsafe. It uses
+the same file ownership, permissions, link and size checks as model credentials.
+The token remains fixed in memory for that process; rotating or revoking it
+requires stopping the old service and starting it with the new token. Changing
+the file alone does not revoke existing access. Per-request credential-source
+validation does not reload the authentication token.
 
 Unknown fields, chunked bodies and bodies over 65,536 bytes are rejected.
 Profiles, source, policies, model routes, credentials, filesystem paths and raw

@@ -29,7 +29,7 @@ struct RunRequest {
 
 pub(super) fn run(args: Vec<String>) -> Result<(), String> {
     devlish_core::logutil::set_level(devlish_core::logutil::LogLevel::Error);
-    const USAGE: &str = "Usage: DEVLISH_VERIFIED_PROFILE=<operator-profile> DEVLISH_SERVE_TOKEN=<64-hex-secret> devlish-core serve-verified --log-dir <private-directory> [--bind 127.0.0.1:7421]";
+    const USAGE: &str = "Usage: DEVLISH_VERIFIED_PROFILE=<operator-profile> devlish-core serve-verified --log-dir <private-directory> [--bind 127.0.0.1:7421]; provide DEVLISH_SERVE_TOKEN (64 hex characters) through the verified credential source";
     if args.len() == 2 && ["--help", "-h"].contains(&args[1].as_str()) {
         println!("{USAGE}");
         return Ok(());
@@ -56,8 +56,9 @@ pub(super) fn run(args: Vec<String>) -> Result<(), String> {
     if !bind.ip().is_loopback() {
         return Err("verified service only supports loopback binding".into());
     }
-    let token = std::env::var("DEVLISH_SERVE_TOKEN")
-        .map_err(|_| "verified service requires an operator token")?;
+    let token = super::CredentialStore::verified()?
+        .resolve("DEVLISH_SERVE_TOKEN")
+        .ok_or("verified service requires an operator token")?;
     if token.len() != 64 || !token.bytes().all(|b| b.is_ascii_hexdigit()) {
         return Err("verified service requires a 64-hex operator token".into());
     }
@@ -74,7 +75,6 @@ pub(super) fn run(args: Vec<String>) -> Result<(), String> {
     let logs = private_log_directory(Path::new(options.get("--log-dir").ok_or(USAGE)?))?;
     // Refuse to listen for an invalid deployment; every request admits afresh too.
     drop(VerifiedSession::admit(&profile, "server-startup", false)?);
-    drop(super::CredentialStore::verified()?);
     let state = State {
         profile,
         logs,
