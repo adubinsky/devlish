@@ -1,0 +1,632 @@
+[
+  {
+    "name": "public build output to model",
+    "input": {
+      "effect": "disclose_tool_output",
+      "request": {
+        "session_id": "session-1",
+        "operation_id": "operation-1",
+        "destination": "model",
+        "stdout": "Build complete.\n",
+        "stderr": ""
+      },
+      "authority": {
+        "session_id": "session-1",
+        "operation_id": "operation-1",
+        "destination": "model",
+        "stdout": "Build complete.\n",
+        "stderr": "",
+        "evidence_source": "protected-launcher",
+        "capture_complete": true,
+        "outcome_recorded": true,
+        "admission_active": true,
+        "stdout_classification": "public",
+        "stderr_classification": "public"
+      }
+    },
+    "expected": {
+      "allow": true,
+      "reason": "Only the complete recorded public capture may reach the bound destination."
+    }
+  },
+  {
+    "name": "public build output to client",
+    "input": {
+      "effect": "disclose_tool_output",
+      "request": {
+        "session_id": "session-1",
+        "operation_id": "operation-1",
+        "destination": "client",
+        "stdout": "Build complete.\n",
+        "stderr": ""
+      },
+      "authority": {
+        "session_id": "session-1",
+        "operation_id": "operation-1",
+        "destination": "client",
+        "stdout": "Build complete.\n",
+        "stderr": "",
+        "evidence_source": "protected-launcher",
+        "capture_complete": true,
+        "outcome_recorded": true,
+        "admission_active": true,
+        "stdout_classification": "public",
+        "stderr_classification": "public"
+      }
+    },
+    "expected": {
+      "allow": true,
+      "reason": "Only the complete recorded public capture may reach the bound destination."
+    }
+  },
+  {
+    "name": "nppi in stdout",
+    "input": {
+      "effect": "disclose_tool_output",
+      "request": {
+        "session_id": "session-1",
+        "operation_id": "operation-1",
+        "destination": "model",
+        "stdout": "Synthetic borrower account 00012345",
+        "stderr": ""
+      },
+      "authority": {
+        "session_id": "session-1",
+        "operation_id": "operation-1",
+        "destination": "model",
+        "stdout": "Synthetic borrower account 00012345",
+        "stderr": "",
+        "evidence_source": "protected-launcher",
+        "capture_complete": true,
+        "outcome_recorded": true,
+        "admission_active": true,
+        "stdout_classification": "nppi",
+        "stderr_classification": "public"
+      }
+    },
+    "expected": {
+      "allow": false,
+      "reason": "Standard output is not approved public data."
+    }
+  },
+  {
+    "name": "company-ip in stderr",
+    "input": {
+      "effect": "disclose_tool_output",
+      "request": {
+        "session_id": "session-1",
+        "operation_id": "operation-1",
+        "destination": "model",
+        "stdout": "Build complete.\n",
+        "stderr": "Synthetic unreleased compiler design"
+      },
+      "authority": {
+        "session_id": "session-1",
+        "operation_id": "operation-1",
+        "destination": "model",
+        "stdout": "Build complete.\n",
+        "stderr": "Synthetic unreleased compiler design",
+        "evidence_source": "protected-launcher",
+        "capture_complete": true,
+        "outcome_recorded": true,
+        "admission_active": true,
+        "stdout_classification": "public",
+        "stderr_classification": "company-ip"
+      }
+    },
+    "expected": {
+      "allow": false,
+      "reason": "Standard error is not approved public data."
+    }
+  },
+  {
+    "name": "capture_complete absent",
+    "input": {
+      "effect": "disclose_tool_output",
+      "request": {
+        "session_id": "session-1",
+        "operation_id": "operation-1",
+        "destination": "model",
+        "stdout": "Build complete.\n",
+        "stderr": ""
+      },
+      "authority": {
+        "session_id": "session-1",
+        "operation_id": "operation-1",
+        "destination": "model",
+        "stdout": "Build complete.\n",
+        "stderr": "",
+        "evidence_source": "protected-launcher",
+        "capture_complete": false,
+        "outcome_recorded": true,
+        "admission_active": true,
+        "stdout_classification": "public",
+        "stderr_classification": "public"
+      }
+    },
+    "expected": {
+      "allow": false,
+      "reason": "Partial or uncertain output must remain withheld."
+    }
+  },
+  {
+    "name": "outcome_recorded absent",
+    "input": {
+      "effect": "disclose_tool_output",
+      "request": {
+        "session_id": "session-1",
+        "operation_id": "operation-1",
+        "destination": "model",
+        "stdout": "Build complete.\n",
+        "stderr": ""
+      },
+      "authority": {
+        "session_id": "session-1",
+        "operation_id": "operation-1",
+        "destination": "model",
+        "stdout": "Build complete.\n",
+        "stderr": "",
+        "evidence_source": "protected-launcher",
+        "capture_complete": true,
+        "outcome_recorded": false,
+        "admission_active": true,
+        "stdout_classification": "public",
+        "stderr_classification": "public"
+      }
+    },
+    "expected": {
+      "allow": false,
+      "reason": "The terminal outcome must be durably recorded before disclosure."
+    }
+  },
+  {
+    "name": "admission_active absent",
+    "input": {
+      "effect": "disclose_tool_output",
+      "request": {
+        "session_id": "session-1",
+        "operation_id": "operation-1",
+        "destination": "model",
+        "stdout": "Build complete.\n",
+        "stderr": ""
+      },
+      "authority": {
+        "session_id": "session-1",
+        "operation_id": "operation-1",
+        "destination": "model",
+        "stdout": "Build complete.\n",
+        "stderr": "",
+        "evidence_source": "protected-launcher",
+        "capture_complete": true,
+        "outcome_recorded": true,
+        "admission_active": false,
+        "stdout_classification": "public",
+        "stderr_classification": "public"
+      }
+    },
+    "expected": {
+      "allow": false,
+      "reason": "Release admission must remain active at disclosure."
+    }
+  },
+  {
+    "name": "substituted session_id",
+    "input": {
+      "effect": "disclose_tool_output",
+      "request": {
+        "session_id": "substituted",
+        "operation_id": "operation-1",
+        "destination": "model",
+        "stdout": "Build complete.\n",
+        "stderr": ""
+      },
+      "authority": {
+        "session_id": "session-1",
+        "operation_id": "operation-1",
+        "destination": "model",
+        "stdout": "Build complete.\n",
+        "stderr": "",
+        "evidence_source": "protected-launcher",
+        "capture_complete": true,
+        "outcome_recorded": true,
+        "admission_active": true,
+        "stdout_classification": "public",
+        "stderr_classification": "public"
+      }
+    },
+    "expected": {
+      "allow": false,
+      "reason": "The requested session_id does not match protected captured output."
+    }
+  },
+  {
+    "name": "substituted operation_id",
+    "input": {
+      "effect": "disclose_tool_output",
+      "request": {
+        "session_id": "session-1",
+        "operation_id": "substituted",
+        "destination": "model",
+        "stdout": "Build complete.\n",
+        "stderr": ""
+      },
+      "authority": {
+        "session_id": "session-1",
+        "operation_id": "operation-1",
+        "destination": "model",
+        "stdout": "Build complete.\n",
+        "stderr": "",
+        "evidence_source": "protected-launcher",
+        "capture_complete": true,
+        "outcome_recorded": true,
+        "admission_active": true,
+        "stdout_classification": "public",
+        "stderr_classification": "public"
+      }
+    },
+    "expected": {
+      "allow": false,
+      "reason": "The requested operation_id does not match protected captured output."
+    }
+  },
+  {
+    "name": "substituted destination",
+    "input": {
+      "effect": "disclose_tool_output",
+      "request": {
+        "session_id": "session-1",
+        "operation_id": "operation-1",
+        "destination": "substituted",
+        "stdout": "Build complete.\n",
+        "stderr": ""
+      },
+      "authority": {
+        "session_id": "session-1",
+        "operation_id": "operation-1",
+        "destination": "model",
+        "stdout": "Build complete.\n",
+        "stderr": "",
+        "evidence_source": "protected-launcher",
+        "capture_complete": true,
+        "outcome_recorded": true,
+        "admission_active": true,
+        "stdout_classification": "public",
+        "stderr_classification": "public"
+      }
+    },
+    "expected": {
+      "allow": false,
+      "reason": "The requested destination does not match protected captured output."
+    }
+  },
+  {
+    "name": "substituted stdout",
+    "input": {
+      "effect": "disclose_tool_output",
+      "request": {
+        "session_id": "session-1",
+        "operation_id": "operation-1",
+        "destination": "model",
+        "stdout": "substituted",
+        "stderr": ""
+      },
+      "authority": {
+        "session_id": "session-1",
+        "operation_id": "operation-1",
+        "destination": "model",
+        "stdout": "Build complete.\n",
+        "stderr": "",
+        "evidence_source": "protected-launcher",
+        "capture_complete": true,
+        "outcome_recorded": true,
+        "admission_active": true,
+        "stdout_classification": "public",
+        "stderr_classification": "public"
+      }
+    },
+    "expected": {
+      "allow": false,
+      "reason": "The requested stdout does not match protected captured output."
+    }
+  },
+  {
+    "name": "substituted stderr",
+    "input": {
+      "effect": "disclose_tool_output",
+      "request": {
+        "session_id": "session-1",
+        "operation_id": "operation-1",
+        "destination": "model",
+        "stdout": "Build complete.\n",
+        "stderr": "substituted"
+      },
+      "authority": {
+        "session_id": "session-1",
+        "operation_id": "operation-1",
+        "destination": "model",
+        "stdout": "Build complete.\n",
+        "stderr": "",
+        "evidence_source": "protected-launcher",
+        "capture_complete": true,
+        "outcome_recorded": true,
+        "admission_active": true,
+        "stdout_classification": "public",
+        "stderr_classification": "public"
+      }
+    },
+    "expected": {
+      "allow": false,
+      "reason": "The requested stderr does not match protected captured output."
+    }
+  },
+  {
+    "name": "unknown stdout_classification",
+    "input": {
+      "effect": "disclose_tool_output",
+      "request": {
+        "session_id": "session-1",
+        "operation_id": "operation-1",
+        "destination": "model",
+        "stdout": "Build complete.\n",
+        "stderr": ""
+      },
+      "authority": {
+        "session_id": "session-1",
+        "operation_id": "operation-1",
+        "destination": "model",
+        "stdout": "Build complete.\n",
+        "stderr": "",
+        "evidence_source": "protected-launcher",
+        "capture_complete": true,
+        "outcome_recorded": true,
+        "admission_active": true,
+        "stdout_classification": "unknown",
+        "stderr_classification": "public"
+      }
+    },
+    "expected": {
+      "allow": false,
+      "reason": "Standard output is not approved public data."
+    }
+  },
+  {
+    "name": "unknown stderr_classification",
+    "input": {
+      "effect": "disclose_tool_output",
+      "request": {
+        "session_id": "session-1",
+        "operation_id": "operation-1",
+        "destination": "model",
+        "stdout": "Build complete.\n",
+        "stderr": ""
+      },
+      "authority": {
+        "session_id": "session-1",
+        "operation_id": "operation-1",
+        "destination": "model",
+        "stdout": "Build complete.\n",
+        "stderr": "",
+        "evidence_source": "protected-launcher",
+        "capture_complete": true,
+        "outcome_recorded": true,
+        "admission_active": true,
+        "stdout_classification": "public",
+        "stderr_classification": "unknown"
+      }
+    },
+    "expected": {
+      "allow": false,
+      "reason": "Standard error is not approved public data."
+    }
+  },
+  {
+    "name": "caller classification override",
+    "input": {
+      "effect": "disclose_tool_output",
+      "request": {
+        "session_id": "session-1",
+        "operation_id": "operation-1",
+        "destination": "model",
+        "stdout": "Build complete.\n",
+        "stderr": "",
+        "stdout_classification": "public"
+      },
+      "authority": {
+        "session_id": "session-1",
+        "operation_id": "operation-1",
+        "destination": "model",
+        "stdout": "Build complete.\n",
+        "stderr": "",
+        "evidence_source": "protected-launcher",
+        "capture_complete": true,
+        "outcome_recorded": true,
+        "admission_active": true,
+        "stdout_classification": "public",
+        "stderr_classification": "public"
+      }
+    },
+    "expected": {
+      "allow": false,
+      "reason": "The request contains unauthorized fields."
+    }
+  },
+  {
+    "name": "caller authority override",
+    "input": {
+      "effect": "disclose_tool_output",
+      "request": {
+        "session_id": "session-1",
+        "operation_id": "operation-1",
+        "destination": "model",
+        "stdout": "Build complete.\n",
+        "stderr": "",
+        "authority": {
+          "session_id": "session-1",
+          "operation_id": "operation-1",
+          "destination": "model",
+          "stdout": "Build complete.\n",
+          "stderr": "",
+          "evidence_source": "protected-launcher",
+          "capture_complete": true,
+          "outcome_recorded": true,
+          "admission_active": true,
+          "stdout_classification": "public",
+          "stderr_classification": "public"
+        }
+      },
+      "authority": {
+        "session_id": "session-1",
+        "operation_id": "operation-1",
+        "destination": "model",
+        "stdout": "Build complete.\n",
+        "stderr": "",
+        "evidence_source": "protected-launcher",
+        "capture_complete": true,
+        "outcome_recorded": true,
+        "admission_active": true,
+        "stdout_classification": "public",
+        "stderr_classification": "public"
+      }
+    },
+    "expected": {
+      "allow": false,
+      "reason": "The request contains unauthorized fields."
+    }
+  },
+  {
+    "name": "caller provenance",
+    "input": {
+      "effect": "disclose_tool_output",
+      "request": {
+        "session_id": "session-1",
+        "operation_id": "operation-1",
+        "destination": "model",
+        "stdout": "Build complete.\n",
+        "stderr": ""
+      },
+      "authority": {
+        "session_id": "session-1",
+        "operation_id": "operation-1",
+        "destination": "model",
+        "stdout": "Build complete.\n",
+        "stderr": "",
+        "evidence_source": "caller",
+        "capture_complete": true,
+        "outcome_recorded": true,
+        "admission_active": true,
+        "stdout_classification": "public",
+        "stderr_classification": "public"
+      }
+    },
+    "expected": {
+      "allow": false,
+      "reason": "Independent protected output state is required."
+    }
+  },
+  {
+    "name": "unapproved matching destination",
+    "input": {
+      "effect": "disclose_tool_output",
+      "request": {
+        "session_id": "session-1",
+        "operation_id": "operation-1",
+        "destination": "public-log",
+        "stdout": "Build complete.\n",
+        "stderr": ""
+      },
+      "authority": {
+        "session_id": "session-1",
+        "operation_id": "operation-1",
+        "destination": "public-log",
+        "stdout": "Build complete.\n",
+        "stderr": "",
+        "evidence_source": "protected-launcher",
+        "capture_complete": true,
+        "outcome_recorded": true,
+        "admission_active": true,
+        "stdout_classification": "public",
+        "stderr_classification": "public"
+      }
+    },
+    "expected": {
+      "allow": false,
+      "reason": "This destination is not approved for output disclosure."
+    }
+  },
+  {
+    "name": "wrong effect",
+    "input": {
+      "effect": "llm_complete",
+      "request": {
+        "session_id": "session-1",
+        "operation_id": "operation-1",
+        "destination": "model",
+        "stdout": "Build complete.\n",
+        "stderr": ""
+      },
+      "authority": {
+        "session_id": "session-1",
+        "operation_id": "operation-1",
+        "destination": "model",
+        "stdout": "Build complete.\n",
+        "stderr": "",
+        "evidence_source": "protected-launcher",
+        "capture_complete": true,
+        "outcome_recorded": true,
+        "admission_active": true,
+        "stdout_classification": "public",
+        "stderr_classification": "public"
+      }
+    },
+    "expected": {
+      "allow": false,
+      "reason": "Only captured tool output may be considered."
+    }
+  },
+  {
+    "name": "malformed request",
+    "input": {
+      "effect": "disclose_tool_output",
+      "request": {
+        "stdout": "synthetic"
+      },
+      "authority": {
+        "session_id": "session-1",
+        "operation_id": "operation-1",
+        "destination": "model",
+        "stdout": "Build complete.\n",
+        "stderr": "",
+        "evidence_source": "protected-launcher",
+        "capture_complete": true,
+        "outcome_recorded": true,
+        "admission_active": true,
+        "stdout_classification": "public",
+        "stderr_classification": "public"
+      }
+    },
+    "expected": {
+      "allow": false,
+      "reason": "The request is malformed."
+    }
+  },
+  {
+    "name": "malformed authority",
+    "input": {
+      "effect": "disclose_tool_output",
+      "request": {
+        "session_id": "session-1",
+        "operation_id": "operation-1",
+        "destination": "model",
+        "stdout": "Build complete.\n",
+        "stderr": ""
+      },
+      "authority": {
+        "evidence_source": "protected-launcher"
+      }
+    },
+    "expected": {
+      "allow": false,
+      "reason": "The authority is malformed."
+    }
+  }
+]

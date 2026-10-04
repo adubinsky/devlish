@@ -458,3 +458,49 @@ fn tool_execution_policy_report_repeats_without_authenticating_launch_claims() {
     assert!(String::from_utf8_lossy(&explanation.stdout)
         .contains("does not authenticate supplied authority state"));
 }
+
+#[test]
+fn tool_output_policy_report_repeats_without_authenticating_disclosure_claims() {
+    let fixture = Fixture::new(false);
+    let compiled = devlish_core::compile_source_to_json(
+        include_str!("../../../examples/tool_output_disclosure/authorize.dvl"),
+        devlish_core::CompileOptions {
+            source_path: None,
+            search_paths: vec![],
+        },
+    )
+    .unwrap();
+    std::fs::write(fixture.0.join("tool-policy.json"), compiled).unwrap();
+    let cases: Value = serde_json::from_str(include_str!(
+        "../../../examples/tool_output_disclosure/cases.json"
+    ))
+    .unwrap();
+    fixture.write("tool-cases.json", &cases);
+    let run = || fixture.command(&["report", "policy", "tool-policy.json", "tool-cases.json"]);
+    let first = run();
+    assert!(
+        first.status.success(),
+        "{}",
+        String::from_utf8_lossy(&first.stdout)
+    );
+    let second = run();
+    assert!(second.status.success());
+    assert_eq!(first.stdout, second.stdout);
+    let report: Value = serde_json::from_slice(&first.stdout).unwrap();
+    assert_eq!(report["details"]["authority_authenticated"], false);
+    assert_eq!(
+        report["details"]["cases"].as_array().unwrap().len(),
+        cases.as_array().unwrap().len()
+    );
+    fixture.write("tool-report.json", &report);
+    fixture.ok(&[
+        "report",
+        "verify",
+        "tool-report.json",
+        "--sha256",
+        report["report_sha256"].as_str().unwrap(),
+    ]);
+    let explanation = fixture.ok(&["report", "explain", "tool-report.json"]);
+    assert!(String::from_utf8_lossy(&explanation.stdout)
+        .contains("does not authenticate supplied authority state"));
+}

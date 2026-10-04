@@ -102,3 +102,10 @@ session/effect identities and policy-approved disclosure are still required.
 The synthetic broker now persists a durable reservation and consumes it before
 continuation; both allowed and denied cases refuse the same slot after reopening. This test adds no
 production broker API and does not establish independent execution attestation.
+
+The [tool output disclosure example](../examples/tool_output_disclosure/README.md)
+adds a Devlish rule and repeatable policy reports for independently supplied public
+classifications, complete capture, recorded outcome and exact destination/content
+binding. Synthetic NPPI and company-IP cases deny release. This is policy behavior
+coverage; classification, terminal persistence and the production disclosure adapter
+remain unimplemented.
