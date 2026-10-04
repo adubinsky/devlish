@@ -15,6 +15,13 @@ Pull request code runs through `pull_request`, not a privileged target workflow.
 These choices follow [GitHub's secure workflow guidance](https://docs.github.com/en/actions/reference/security/secure-use)
 and [checkout's credential settings](https://github.com/actions/checkout).
 
+CI sets `CARGO_PROFILE_DEV_DEBUG=0` and `CARGO_PROFILE_TEST_DEBUG=0`. Verified
+session fixtures hash and admit their actual runtime and test executables;
+Linux debug sections can push those files above the verifier's 64 MiB artifact
+limit. Disabling debug information keeps these test artifacts within that limit
+without changing verification or disabling assertions. Use the same environment
+variables for local test builds if the fixture's size preflight rejects them.
+
 A green job establishes that these tests passed for the checked-out revision in
 that runner. It is not a Devlish builder statement, a release approval, a signature
 on a compiler or policy, or proof of actual production enforcement. The hosted

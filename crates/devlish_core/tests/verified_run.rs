@@ -25,6 +25,21 @@ fn bytes(value: &Value) -> Vec<u8> {
 }
 impl Fixture {
     fn new() -> Self {
+        // The production limit also applies to the actual runtime and the test
+        // executable used by library-host fixtures. Fail before fixture setup
+        // instead of cascading into missing-log and server-startup failures.
+        for executable in [
+            PathBuf::from(env!("CARGO_BIN_EXE_devlish-core")),
+            std::env::current_exe().unwrap(),
+        ] {
+            let size = fs::metadata(&executable).unwrap().len();
+            assert!(
+                size <= devlish_audit::MAX_ARTIFACT_BYTES,
+                "test executable {} is {size} bytes, above the verified artifact limit; \
+                 rebuild with CARGO_PROFILE_DEV_DEBUG=0 CARGO_PROFILE_TEST_DEBUG=0",
+                executable.display()
+            );
+        }
         let key = Ed25519KeyPair::generate_pkcs8(&SystemRandom::new()).unwrap();
         let key = Ed25519KeyPair::from_pkcs8(key.as_ref()).unwrap();
         let dir = std::env::temp_dir().join(format!(
