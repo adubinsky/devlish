@@ -59,7 +59,7 @@ target, baseline time or deadline.
 
 ## Preparing the selected image
 
-The native core's `PreparedCatalogTool::load(selection)` consumes a selection,
+The native core's `PreparedCatalogTool::load(selection, containment_bytes)` consumes a selection,
 copies and seals the file at its catalog path, verifies its catalog digest, then
 applies the selected static-image profile to that same descriptor. It retains
 both the immutable selection and checked image together. The caller cannot
@@ -130,3 +130,30 @@ duplicate entries, request bounds, expiry, and modified presentation fields:
 ```bash
 cargo test --locked --manifest-path crates/devlish_audit/Cargo.toml --test releases catalog
 ```
+
+
+## Authenticated containment requirements
+
+Preparation now requires the exact selected containment bytes, bounded to 64 KiB.
+`ToolSelection::verify_containment` checks their signed digest and strict schema
+before accepting the fixed `devlish-linux-static-stdio-v1` declaration. The readable
+example is `examples/tool_execution_authority/containment.json`. Unknown fields,
+missing/duplicate fields, alternate targets, relaxed controls and changed limits
+are rejected even when correctly signed. This is a fixed profile, not arbitrary
+operator-configurable syscall code.
+
+The declaration requires no new filesystem access, no network/process creation
+or later execution, an empty environment, and the documented resource ceilings.
+It also requires bounded standard streams and a wall deadline. The native resource
+helper consumes the same constants as declaration validation. Stricter inherited
+OS ceilings remain valid; the signed declaration itself must match the fixed
+profile exactly. A future profile change requires explicit implementation and
+qualification rather than silently accepting a new setting.
+
+The prepared object retains the checked declaration commitment beside its sealed
+image and catalog selection. Validation happens before opening the tool path.
+It still does not apply those controls or authorize dispatch. Standard-stream
+supervision, production broker integration and governed evidence recording remain
+unfinished. The existing offline tool-request report authenticates membership and
+digests only; it does not invoke this declaration validator or claim containment
+was enforced. A valid declaration is a requirement, not proof of compliance.

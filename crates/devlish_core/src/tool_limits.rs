@@ -14,13 +14,14 @@
 pub unsafe fn restrict_child() -> Result<(), &'static str> {
     #[cfg(target_os = "linux")]
     {
+        use devlish_audit::tool_containment as profile;
         let ceilings = [
-            (libc::RLIMIT_CPU, 1),
-            (libc::RLIMIT_AS, 512 * 1024 * 1024),
-            (libc::RLIMIT_STACK, 8 * 1024 * 1024),
+            (libc::RLIMIT_CPU, profile::CPU_SECONDS),
+            (libc::RLIMIT_AS, profile::ADDRESS_SPACE_BYTES),
+            (libc::RLIMIT_STACK, profile::STACK_BYTES),
             (libc::RLIMIT_CORE, 0),
             (libc::RLIMIT_FSIZE, 0),
-            (libc::RLIMIT_NOFILE, 64),
+            (libc::RLIMIT_NOFILE, profile::MAX_DESCRIPTORS),
             (libc::RLIMIT_MEMLOCK, 0),
         ];
         let mut limits = [libc::rlimit {
@@ -33,7 +34,7 @@ pub unsafe fn restrict_child() -> Result<(), &'static str> {
             if unsafe { libc::getrlimit(*resource, limit) } != 0 {
                 return Err("cannot inspect inherited tool resource limit");
             }
-            let bound = (*ceiling).min(limit.rlim_cur).min(limit.rlim_max);
+            let bound = (*ceiling as libc::rlim_t).min(limit.rlim_cur).min(limit.rlim_max);
             limit.rlim_cur = bound;
             limit.rlim_max = bound;
         }

@@ -11,23 +11,38 @@ pub struct StaticToolImage {
 }
 
 /// A catalog selection and the exact sealed image it names. This is preparation
-/// only: no policy decision, admission lock, containment or launch is implied.
+/// only: no policy decision, admission lock, containment enforcement or launch is implied.
 #[derive(Debug)]
 pub struct PreparedCatalogTool<'a> {
     selection: devlish_audit::tool_catalog::ToolSelection<'a>,
     image: StaticToolImage,
+    containment: devlish_audit::tool_containment::VerifiedToolContainment,
 }
 
 impl<'a> PreparedCatalogTool<'a> {
     /// The path, digest and image profile all come from the authenticated
-    /// selection. No caller-supplied pathname or alternate image is accepted.
-    pub fn load(selection: devlish_audit::tool_catalog::ToolSelection<'a>) -> Result<Self, String> {
+    /// selection. Containment bytes must match that selection and the recognized
+    /// fixed declaration before the executable path is opened. This validates
+    /// requirements, not their enforcement. No alternate image is accepted.
+    pub fn load(
+        selection: devlish_audit::tool_catalog::ToolSelection<'a>,
+        containment_bytes: &[u8],
+    ) -> Result<Self, String> {
+        let containment = selection.verify_containment(containment_bytes)?;
         let snapshot = SealedToolSnapshot::from_path(
             std::path::Path::new(selection.path()),
             selection.tool_sha256(),
         )?;
         let image = StaticToolImage::from_snapshot(snapshot, selection.image_profile())?;
-        Ok(Self { selection, image })
+        Ok(Self {
+            selection,
+            image,
+            containment,
+        })
+    }
+
+    pub fn containment(&self) -> &devlish_audit::tool_containment::VerifiedToolContainment {
+        &self.containment
     }
 
     pub fn selection(&self) -> &devlish_audit::tool_catalog::ToolSelection<'a> {
@@ -201,6 +216,7 @@ fn inspect(bytes: &[u8]) -> Result<Layout, String> {
 
 #[cfg(test)]
 mod tests {
+    const CONTAINMENT: &[u8] = include_bytes!("../../../examples/tool_execution_authority/containment.json");
     use super::*;
     fn put16(b: &mut [u8], off: usize, value: u16) {
         b[off..off + 2].copy_from_slice(&value.to_le_bytes());
@@ -476,6 +492,7 @@ _start:
                 let snapshot = match *role {
                     "tool" => tool.to_vec(),
                     "tool-catalog" => catalog.clone(),
+                    "containment" => CONTAINMENT.to_vec(),
                     _ => role.as_bytes().to_vec(),
                 };
                 let artifact = json!({"id":role,"role":role,"sha256":sha256(&snapshot)});
@@ -533,12 +550,14 @@ _start:
             .select("public-grep", &arguments, 150)
             .unwrap();
         arguments[0] = "--private".into();
-        let prepared = PreparedCatalogTool::load(selected);
+        let prepared = PreparedCatalogTool::load(selected, CONTAINMENT);
         #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
         {
             use std::os::fd::AsFd;
             use std::os::unix::fs::FileExt;
             let prepared = prepared.unwrap();
+            assert_eq!(prepared.containment().sha256(), prepared.selection().containment_sha256());
+            assert_eq!(prepared.containment().profile(), devlish_audit::tool_containment::PROFILE);
             std::fs::write(fixture.dir.join("tool"), b"substitution").unwrap();
             assert_eq!(prepared.selection().arguments(), &["--public-only"]);
             assert_eq!(
@@ -572,7 +591,7 @@ _start:
                 .catalog
                 .select("public-grep", &["--public-only".to_string()], 150)
                 .unwrap();
-            let error = PreparedCatalogTool::load(selected).unwrap_err();
+            let error = PreparedCatalogTool::load(selected, CONTAINMENT).unwrap_err();
             assert!(
                 if changed {
                     error.contains("digest")
@@ -612,7 +631,7 @@ finish:
             .catalog
             .select("public-grep", &["--public-only".into()], 150)
             .unwrap();
-        let prepared = PreparedCatalogTool::load(selected).unwrap();
+        let prepared = PreparedCatalogTool::load(selected, CONTAINMENT).unwrap();
         std::fs::write(
             fixture.dir.join("tool"),
             b"replaced pathname is not executable",
@@ -716,7 +735,7 @@ pathname: .asciz "/proc/self/exe"
             .catalog
             .select("public-grep", &["--public-only".into()], 150)
             .unwrap();
-        let prepared = PreparedCatalogTool::load(selected).unwrap();
+        let prepared = PreparedCatalogTool::load(selected, CONTAINMENT).unwrap();
         let rules = crate::tool_landlock::LandlockRuleset::deny_file_access().unwrap();
         let [parent_socket, child_socket] = broker::socket_pair();
         let image_fd = prepared.image().as_fd().as_raw_fd();
@@ -814,4 +833,13 @@ pathname: .asciz "/proc/self/exe"
             "initial execution or repeat denial failed"
         );
     }
+    #[test]
+    fn prepared_tool_rejects_containment_substitution_before_opening_image() {
+        let fixture = CatalogFixture::new(b"synthetic image");
+        std::fs::remove_file(fixture.dir.join("tool")).unwrap();
+        let selection = fixture.catalog.select("public-grep", &["--public-only".into()], 150).unwrap();
+        let error = PreparedCatalogTool::load(selection, b"forged containment").unwrap_err();
+        assert!(error.contains("selected signed artifact"), "{error}");
+    }
+
 }

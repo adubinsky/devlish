@@ -6,7 +6,7 @@ assurance separate from the complete launch boundary.
 
 | Gate | Current implementation | Remaining requirement |
 | --- | --- | --- |
-| Operator-approved identity and arguments | Signed catalog selections bound to private verified release state | Bind selection to the actual governed dispatch and current admission lock |
+| Operator-approved identity and arguments | Signed catalog selections and checked fixed containment declarations bound to private verified release state | Bind selection to the actual governed dispatch and current admission lock |
 | Immutable executable bytes | Sealed Linux memfd, hash checked after sealing | Retain that descriptor through the complete production launch sequence |
 | Restricted initial image | Static Linux x86-64 ELF profile | Qualify CPU/kernel assumptions and inherited loader/personality state |
 | Filesystem data access | Empty Landlock ABI-3 allowlist primitive | Additional syscall restrictions; separate approved input profile if files are needed |

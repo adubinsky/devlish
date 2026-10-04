@@ -1217,3 +1217,143 @@ fn cli_tool_report_reverifies_bytes_trust_and_options_without_executing() {
     assert!(!run(false, &options).status.success());
     fs::remove_dir_all(dir).unwrap();
 }
+
+fn containment_catalog(snapshot: &[u8]) -> devlish_audit::tool_catalog::VerifiedToolCatalog {
+    let (mut fixture, catalog) = tool_catalog_fixture();
+    let catalog_bytes = bytes(&catalog);
+    fixture.manifest["artifacts"][3]["sha256"] = json!(sha256(&catalog_bytes));
+    fixture.manifest["artifacts"][5]["sha256"] = json!(sha256(snapshot));
+    let release = verify_release(
+        &bytes(&fixture.manifest),
+        &fixture.signature(),
+        &bytes(&fixture.trust),
+        &bytes(&fixture.requirements),
+        |id| {
+            Ok(match id {
+                "tool-catalog" => catalog_bytes.clone(),
+                "containment" => snapshot.to_vec(),
+                _ => id.as_bytes().to_vec(),
+            })
+        },
+    )
+    .unwrap();
+    assert!(!release.execution_origin_verified && !release.policy_enforcement_verified);
+    release
+        .tool_catalog("tool-catalog", &catalog_bytes)
+        .unwrap()
+}
+fn recognized_containment() -> Value {
+    serde_json::from_str(include_str!(
+        "../../../examples/tool_execution_authority/containment.json"
+    ))
+    .unwrap()
+}
+fn check_containment(
+    signed: &[u8],
+    supplied: &[u8],
+) -> Result<devlish_audit::tool_containment::VerifiedToolContainment, String> {
+    let catalog = containment_catalog(signed);
+    catalog
+        .select(
+            "public-grep",
+            &[
+                "--fixed-strings".into(),
+                "--".into(),
+                "published".into(),
+                "/work/public.txt".into(),
+            ],
+            150,
+        )
+        .unwrap()
+        .verify_containment(supplied)
+}
+
+#[test]
+fn signed_tool_containment_binds_exact_bytes_without_claiming_enforcement() {
+    let original = bytes(&recognized_containment());
+    let checked = check_containment(&original, &original).unwrap();
+    assert_eq!(checked.profile(), devlish_audit::tool_containment::PROFILE);
+    assert_eq!(checked.sha256(), sha256(&original));
+    let mut altered = original.clone();
+    altered.push(b' ');
+    assert!(check_containment(&original, &altered)
+        .unwrap_err()
+        .contains("selected signed artifact"));
+    assert_eq!(
+        check_containment(&altered, &altered).unwrap().sha256(),
+        sha256(&altered)
+    );
+}
+
+#[test]
+fn correctly_signed_weaker_or_unknown_tool_containment_is_rejected() {
+    let original = recognized_containment();
+    for (key, replacement) in [
+        ("format", json!("other")),
+        ("format_version", json!(2)),
+        ("profile", json!("unrestricted")),
+        ("target", json!("aarch64-unknown-linux-gnu")),
+        ("filesystem", json!("read-all")),
+        ("network", json!("allow")),
+        ("process_creation", json!("allow")),
+        ("subsequent_exec", json!("allow")),
+        ("environment", json!("inherit")),
+        ("extra", json!(true)),
+    ] {
+        let mut candidate = original.clone();
+        candidate[key] = replacement;
+        let encoded = bytes(&candidate);
+        assert!(check_containment(&encoded, &encoded).is_err(), "{key}");
+    }
+    for group in ["resources", "io"] {
+        for key in original[group].as_object().unwrap().keys() {
+            for replacement in [
+                json!(0),
+                json!(u64::MAX),
+                json!(-1),
+                json!(1.5),
+                json!("1"),
+                Value::Null,
+            ] {
+                if replacement == original[group][key] {
+                    continue;
+                }
+                let mut candidate = original.clone();
+                candidate[group][key] = replacement;
+                let encoded = bytes(&candidate);
+                assert!(
+                    check_containment(&encoded, &encoded).is_err(),
+                    "{group}.{key}"
+                );
+            }
+        }
+        let mut candidate = original.clone();
+        candidate[group]["extra"] = json!(0);
+        let encoded = bytes(&candidate);
+        assert!(check_containment(&encoded, &encoded).is_err());
+    }
+}
+
+#[test]
+fn signed_tool_containment_rejects_missing_duplicate_and_oversized_metadata() {
+    let original = recognized_containment();
+    for key in original.as_object().unwrap().keys() {
+        let mut candidate = original.clone();
+        candidate.as_object_mut().unwrap().remove(key);
+        let encoded = bytes(&candidate);
+        assert!(
+            check_containment(&encoded, &encoded).is_err(),
+            "missing {key}"
+        );
+    }
+    let encoded = serde_json::to_string(&original).unwrap();
+    let duplicate = encoded
+        .replacen('{', "{\"format_version\":1,", 1)
+        .into_bytes();
+    assert!(check_containment(&duplicate, &duplicate).is_err());
+    let mut oversized = bytes(&original);
+    oversized.resize(devlish_audit::MAX_METADATA_BYTES as usize + 1, b' ');
+    assert!(check_containment(&oversized, &oversized)
+        .unwrap_err()
+        .contains("metadata limit"));
+}

@@ -11,6 +11,7 @@ pub mod issuance;
 pub mod receipt;
 pub mod release;
 pub mod tool_catalog;
+pub mod tool_containment;
 
 pub const MAX_ARTIFACT_BYTES: u64 = 64 * 1024 * 1024;
 pub const MAX_METADATA_BYTES: u64 = 64 * 1024;
