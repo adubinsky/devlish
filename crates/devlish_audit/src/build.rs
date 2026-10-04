@@ -210,7 +210,10 @@ pub(crate) fn verify_bundles(
                 .get(subject.id.as_str())
                 .ok_or("build subject is absent from approved release")?;
             let allowed = match statement.kind {
-                Kind::Toolchain => matches!(artifact.role, Role::Runtime | Role::Compiler),
+                Kind::Toolchain => matches!(
+                    artifact.role,
+                    Role::Runtime | Role::Compiler | Role::AuditVerifier
+                ),
                 Kind::Policy => matches!(artifact.role, Role::Policy | Role::Program),
             };
             if !allowed || artifact.sha256 != subject.sha256 || !covered.insert(subject.id.clone())
@@ -226,7 +229,7 @@ pub(crate) fn verify_bundles(
         .filter(|a| {
             matches!(
                 a.role,
-                Role::Runtime | Role::Compiler | Role::Policy | Role::Program
+                Role::Runtime | Role::Compiler | Role::AuditVerifier | Role::Policy | Role::Program
             )
         })
         .any(|a| !covered.contains(&a.id))

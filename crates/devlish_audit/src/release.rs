@@ -34,6 +34,7 @@ pub enum Role {
     Runtime,
     Program,
     Compiler,
+    AuditVerifier,
     Policy,
     ToolCatalog,
     Permissions,
@@ -48,6 +49,8 @@ pub enum Role {
 pub struct Requirements {
     #[serde(default)]
     pub build_requirements: Option<crate::build::BuildRequirements>,
+    #[serde(default)]
+    pub require_audit_verifier: bool,
     #[serde(default)]
     pub require_recorded_controls: bool,
     pub format: String,
@@ -93,6 +96,8 @@ pub struct ReleaseVerification {
     pub artifact_snapshots_verified: bool,
     #[serde(rename = "admission_valid_until")]
     verified_valid_until: u64,
+    pub audit_verifier_required: bool,
+    pub audit_verifier_artifacts_verified: bool,
     pub builder_statements_required: bool,
     pub builder_statements_authenticated: bool,
     pub builder_statements: Vec<Verification>,
@@ -218,6 +223,9 @@ pub fn verify_release(
             return Err(format!("missing required artifact role: {required:?}"));
         }
     }
+    if r.require_audit_verifier && !roles.contains(&Role::AuditVerifier) {
+        return Err("operator requirements demand an audit-verifier artifact".into());
+    }
     let mut verified_artifacts = Vec::new();
     let mut verified_permissions = Vec::new();
     let mut build_bundles = Vec::new();
@@ -281,6 +289,8 @@ pub fn verify_release(
         minimum_sequence: r.minimum_sequence, artifact_count: m.artifacts.len(),
         release_requirements_verified: true, artifact_snapshots_verified: true,
         verified_valid_until,
+        audit_verifier_required: r.require_audit_verifier,
+        audit_verifier_artifacts_verified: roles.contains(&Role::AuditVerifier),
         builder_statements_required: r.build_requirements.is_some(),
         builder_statements_authenticated: r.build_requirements.is_some(),
         builder_statements,

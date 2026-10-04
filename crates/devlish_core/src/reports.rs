@@ -185,6 +185,7 @@ fn application(path: &str) -> Result<Value, String> {
         let role = file["role"].as_str().ok_or("file needs role")?;
         if ![
             "runtime",
+            "audit-verifier",
             "program",
             "policy",
             "tool",

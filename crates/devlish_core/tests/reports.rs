@@ -395,3 +395,20 @@ fn authority_policy_reports_are_repeatable_and_do_not_authenticate_fixture_state
     f.write("receipt-cases.json", &cases);
     assert!(!run().status.success());
 }
+
+#[test]
+fn application_report_measures_the_separately_distributed_audit_verifier() {
+    let f = Fixture::new(false);
+    let mut manifest = f.json("manifest.json");
+    std::fs::write(f.0.join("audit-verifier"), b"synthetic verifier bytes").unwrap();
+    manifest["files"].as_array_mut().unwrap().push(json!({"id":"verifier","role":"audit-verifier","path":"audit-verifier","sha256":sha256_hex(b"synthetic verifier bytes")}));
+    f.write("manifest.json", &manifest);
+    let accepted = f.ok(&["report", "application", "manifest.json"]);
+    assert_eq!(
+        serde_json::from_slice::<Value>(&accepted.stdout).unwrap()["passed"],
+        true
+    );
+    std::fs::write(f.0.join("audit-verifier"), b"replaced").unwrap();
+    let rejected = f.command(&["report", "application", "manifest.json"]);
+    assert!(!rejected.status.success());
+}

@@ -325,3 +325,90 @@ fn admission_deadline_includes_every_authenticated_authority() {
         assert_eq!(report["admission_valid_until"], json!(expected));
     }
 }
+
+#[test]
+fn required_audit_verifier_cannot_be_omitted_or_left_without_builder_coverage() {
+    let mut f = Fixture::new();
+    f.requirements["require_audit_verifier"] = json!(true);
+    assert!(f.check().unwrap_err().contains("audit-verifier artifact"));
+    f.payloads
+        .insert("audit-verifier".into(), b"audit-verifier".to_vec());
+    assert!(f
+        .check()
+        .unwrap_err()
+        .contains("without authenticated builder"));
+    f.statements[0]["subjects"]
+        .as_array_mut()
+        .unwrap()
+        .push(json!({"id":"audit-verifier","sha256":sha256(b"audit-verifier")}));
+    let report = f.check().unwrap();
+    assert!(report.audit_verifier_required && report.audit_verifier_artifacts_verified);
+    assert!(report.builder_statements_authenticated);
+    assert!(!report.build_provenance_verified && !report.execution_origin_verified);
+    let (manifest, mut payloads) = f.material();
+    payloads.insert("audit-verifier".into(), b"replaced verifier".to_vec());
+    assert!(f
+        .check_material(manifest, payloads)
+        .unwrap_err()
+        .contains("artifact digest or size mismatch"));
+    f.statements[0]["subjects"].as_array_mut().unwrap().pop();
+    f.statements[1]["subjects"]
+        .as_array_mut()
+        .unwrap()
+        .push(json!({"id":"audit-verifier","sha256":sha256(b"audit-verifier")}));
+    assert!(f
+        .check()
+        .unwrap_err()
+        .contains("invalid, mismatched or duplicate"));
+}
+
+#[test]
+fn verifier_presence_is_distinct_from_operator_requirement_and_authenticated_build() {
+    let mut f = Fixture::new();
+    f.requirements
+        .as_object_mut()
+        .unwrap()
+        .remove("build_requirements");
+    let report = f.check().unwrap();
+    assert!(!report.audit_verifier_required && !report.audit_verifier_artifacts_verified);
+    f.payloads
+        .insert("audit-verifier".into(), b"audit-verifier".to_vec());
+    let report = f.check().unwrap();
+    assert!(!report.audit_verifier_required && report.audit_verifier_artifacts_verified);
+    assert!(!report.builder_statements_authenticated);
+}
+
+#[test]
+fn application_verifier_identity_must_match_the_approved_release() {
+    let mut f = Fixture::new();
+    f.requirements
+        .as_object_mut()
+        .unwrap()
+        .remove("build_requirements");
+    f.payloads
+        .insert("audit-verifier".into(), b"audit-verifier".to_vec());
+    let release = f.check().unwrap();
+    let seal = |kind: &str, details: Value| {
+        let mut report = json!({"format":"devlish-compliance-report","format_version":1,"kind":kind,"passed":true,"details":details});
+        report["report_sha256"] = json!(sha256(&bytes(&report)));
+        bytes(&report)
+    };
+    let application = |verifier: &str| {
+        seal(
+            "application",
+            json!({"files":(["runtime","policy","audit-verifier"].map(|id| {
+                let digest = sha256(if id == "audit-verifier" {verifier.as_bytes()} else {id.as_bytes()});
+                json!({"id":id,"role":id,"passed":true,"actual_sha256":digest,"expected_sha256":digest})
+            }))}),
+        )
+    };
+    let policy = seal("policy", json!({"policy_file_sha256":sha256(b"policy")}));
+    let report = release
+        .bind_reports(&application("audit-verifier"), &policy)
+        .unwrap();
+    assert_eq!(report["reported_identities_match_release"], true);
+    assert_eq!(report["report_claims_independently_verified"], false);
+    assert!(release
+        .bind_reports(&application("other verifier"), &policy)
+        .is_err());
+}

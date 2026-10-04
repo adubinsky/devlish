@@ -140,7 +140,10 @@ devlish run /opt/devlish/workflows/loan-review.dvlc.json \
 
 The same hash command can measure the Devlish runtime, but trusting an unverified
 runtime to attest to itself is circular. Bootstrap with an independently trusted
-verifier or deployment system. The native `run-verified` command now enforces
+verifier or deployment system. Releases can include an `audit-verifier` artifact;
+operator `require_audit_verifier` requirements prevent its omission, and optional
+builder requirements authenticate its toolchain claim. Matching supplied bytes
+still does not authenticate the process performing the check. The native `run-verified` command now enforces
 program and runtime digests against a signed manifest. The development wrapper
 refuses verified-mode requests before release/debug/PATH discovery; use a fixed,
 independently verified native executable. This is not a trusted hash-and-exec

@@ -64,11 +64,12 @@ impl ReleaseVerification {
             }
             let role = match file["role"].as_str() {
                 Some("runtime") => Role::Runtime,
+                Some("audit-verifier") => Role::AuditVerifier,
                 Some("policy") => Role::Policy,
                 Some("program") => Role::Program,
                 Some("tool") => Role::Tool,
                 _ => return Err(
-                    "unsupported application binding role; use runtime, policy, program or tool"
+                    "unsupported application binding role; use runtime, audit-verifier, policy, program or tool"
                         .into(),
                 ),
             };

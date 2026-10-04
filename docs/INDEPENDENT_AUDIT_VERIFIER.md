@@ -282,9 +282,10 @@ Required artifact roles are `runtime`, `compiler`, `policy`, `tool-catalog`,
 Additional external programs such as `ls` or `grep` use `tool`. Every artifact
 has a unique ASCII alphanumeric/underscore/hyphen ID and a lowercase SHA-256
 hex digest. All supplied artifact snapshots must match. Digests authenticate
-bytes only: this increment does not interpret the catalog, permission or
-containment documents, verify builder attestations, or ensure the catalog lists
-every external program. Such semantics remain a prerequisite for deployment.
+bytes only. Separately authenticated builder statements are optional as described
+below. The native verified execution path interprets its supported control formats;
+offline snapshot checks alone do not enforce containment or ensure a catalog lists
+every external program.
 
 Operator requirements are separate from the candidate manifest:
 
@@ -1002,7 +1003,7 @@ The statement text must parse as this strict schema:
 | `inputs` | Exactly the operator's corresponding toolchain or policy input object above |
 | `subjects` | Nonempty array of `{ "id": "artifact-id", "sha256": "..." }` |
 
-Toolchain subjects may cover only runtime/compiler artifacts. Policy subjects may
+Toolchain subjects may cover only runtime/compiler/audit-verifier artifacts. Policy subjects may
 cover only program/policy artifacts. Every such artifact in the release must be
 covered exactly once across all bundles; subject IDs and digests must match the
 supplied verified snapshots. Unknown, missing, duplicate or mismatched subjects
@@ -1029,3 +1030,32 @@ revocation information, and all required builder statements. Native sessions
 recheck this exclusive deadline before dispatch, including when an admitted
 session has been held in memory. This is an admission deadline, not a promise
 to interrupt an already running effect at expiry.
+
+### Including the independent verifier in a release
+
+Use the `audit-verifier` artifact role for the separately distributed native audit
+verifier. Setting `"require_audit_verifier": true` in operator requirements rejects
+a candidate manifest without that role before reading artifact contents. The flag
+defaults to false for existing releases. All included verifier artifacts are checked
+against the release's exact signed digests, even when the flag is false.
+
+When `build_requirements` is configured, every included audit-verifier artifact
+also needs exactly one toolchain builder subject with its exact ID and digest.
+A policy builder statement cannot cover this role. Require both settings when
+operator approval needs verifier presence and authenticated builder claims.
+
+The report exposes `audit_verifier_required` and
+`audit_verifier_artifacts_verified` separately. The latter means supplied bytes
+match approved release digests; it does not identify the verifier process that
+produced the report. Bootstrap by validating the verifier through an independently
+trusted distribution/deployment mechanism before using it on candidate releases.
+Do not run a candidate verifier and accept its self-report as proof of authenticity.
+Protected CI, release publication, loader integrity and process attestation remain
+separate work.
+
+Application manifests and reports accept `audit-verifier` file entries. Release
+binding checks any such reported ID and exact digest against the approved verifier
+artifact. As with other application report entries, this compares recorded claims;
+it does not independently rerun the measurements or authenticate the reporting
+process. The report need not inventory every release artifact: requiring verifier
+presence applies to the release snapshots, not to completeness of a report's list.
