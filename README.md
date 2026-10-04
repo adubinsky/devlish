@@ -63,9 +63,9 @@ devlish disassemble <file.dvlc.json>                   Show bytecode instruction
 devlish fmt <file.dvl>                                 Format a source file
 devlish repl                                           Interactive read-eval-print loop
 devlish new <project_name>                             Create a new project
-devlish serve-verified --log-dir DIR                   Authenticated loopback signed-session service
+/opt/devlish/runtime/devlish-core serve-verified --log-dir DIR                   Authenticated loopback signed-session service
 devlish serve [--bind HOST:PORT] [--log-level LEVEL]   HTTP daemon (/v1/health|compile|run|lint|…)
-devlish run-verified                                  Operator-selected signed release
+/opt/devlish/runtime/devlish-core run-verified          Operator-selected signed release
 devlish harness run|resume|init-config                 Outbound LLM sessions
 devlish mcp [--tools-dir dir]                          Start MCP server (JSON-RPC over stdio)
 devlish course                                         Interactive beginner course

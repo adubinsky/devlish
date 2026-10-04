@@ -1,5 +1,11 @@
 #!/usr/bin/env bash
-# Devlish CLI - delegates to the native Rust binary (devlish-core)
+# Development CLI - delegates to the native Rust binary (devlish-core).
+# This mutable discovery wrapper is not a trusted bootstrap verifier.
+if [ "${DEVLISH_VERIFIED_PROFILE+x}" = x ] ||
+   [ "${1-}" = run-verified ] || [ "${1-}" = serve-verified ]; then
+  echo "Verified mode requires an operator-selected, protected native executable; the development wrapper cannot verify its candidate." >&2
+  exit 1
+fi
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"

@@ -466,6 +466,15 @@ operator recovery; it never silently resets the floor. Initialization uses
 exclusive creation and cannot overwrite existing state. Other platforms fail
 closed until a supported locking implementation is added.
 
+The development `bin/devlish` wrapper refuses `run-verified`, `serve-verified`,
+and every invocation with `DEVLISH_VERIFIED_PROFILE` set (including an empty
+value). It cannot authenticate a discovered binary before executing it. Use the
+operator-selected absolute native executable path, verified and installed through
+an independently trusted deployment process. Development release/debug/PATH
+resolution remains available only without a verified-mode request. This refusal
+is a guardrail against accidental bootstrap bypass, not an atomic hash-and-exec
+implementation or protection against replacing the wrapper/interpreter.
+
 These are in-process admission controls, not a protected executor. The service
 launcher, environment, profile, trust, clock and state directory must be under
 operator control. A user who can replace the state or unset the profile can
@@ -734,7 +743,7 @@ mkdir -m 700 verified-logs
 # If DEVLISH_CREDENTIALS_DIR is set, supply a private file named
 # DEVLISH_SERVE_TOKEN there instead; the environment token is ignored.
 DEVLISH_VERIFIED_PROFILE=/operator/deployment/profile.json \
-  devlish serve-verified --log-dir verified-logs
+  /opt/devlish/runtime/devlish-core serve-verified --log-dir verified-logs
 ```
 
 Both `GET /v1/health` and `POST /v1/run` require exactly one
