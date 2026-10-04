@@ -5,5 +5,16 @@
     "llm_complete",
     "call_service",
     "respond"
-  ]
+  ],
+  "llm_route": {
+    "format": "devlish-model-route",
+    "format_version": 1,
+    "provider": "openrouter",
+    "model": "synthetic/replace-with-approved-model",
+    "credential": "OPENROUTER_API_KEY",
+    "timeout_seconds": 30,
+    "max_request_bytes": 16384,
+    "max_response_bytes": 65536,
+    "max_tokens": 1024
+  }
 }

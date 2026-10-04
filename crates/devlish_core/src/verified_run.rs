@@ -200,6 +200,7 @@ pub(super) fn run(args: Vec<String>) -> Result<(), String> {
         .find(|a| a.id == profile.runtime_id)
         .ok_or("missing runtime")?;
     let loaded = VerifiedInputs {
+        llm_route: controls.llm_route,
         instruction_limit: controls.instruction_limit,
         allowed_effects: controls.allowed_effects.clone(),
         program,
@@ -253,6 +254,8 @@ struct Catalog {
     format: String,
     format_version: u32,
     host_effects: Vec<String>,
+    #[serde(default)]
+    llm_route: Option<Value>,
 }
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -262,6 +265,7 @@ struct Containment {
     mode: String,
 }
 struct Controls {
+    llm_route: Option<devlish_llm::governed::ApprovedModel>,
     allowed_effects: std::collections::BTreeSet<String>,
     instruction_limit: u64,
 }
@@ -317,9 +321,10 @@ impl Controls {
         {
             return Err("unknown, duplicate or uncatalogued release effect".into());
         }
-        Ok(Self {
-            allowed_effects,
-            instruction_limit: p.instruction_limit,
-        })
+        let llm_route = c.llm_route.as_ref().map(devlish_llm::governed::ApprovedModel::parse).transpose()?;
+        if allowed_effects.contains("llm_complete") && llm_route.is_none() {
+            return Err("verified model effects require an approved catalog route".into());
+        }
+        Ok(Self { llm_route, allowed_effects, instruction_limit: p.instruction_limit })
     }
 }

@@ -4,6 +4,8 @@
 //! resolves the user's configured provider (Anthropic, OpenAI, or Ollama) and
 //! performs the HTTP completion. Secrets never leave the credential chain.
 
+pub mod governed;
+
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::env;
@@ -32,7 +34,7 @@ pub struct LlmResponse {
     pub parsed: Option<Value>,
 }
 
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LlmConfig {
     #[serde(default = "default_provider")]
     pub default_provider: String,
@@ -64,6 +66,19 @@ fn default_provider() -> String {
 
 fn default_model() -> String {
     "gpt-4o-mini".to_string()
+}
+
+impl Default for LlmConfig {
+    fn default() -> Self {
+        Self {
+            default_provider: default_provider(),
+            default_model: default_model(),
+            anthropic: ProviderConfig::default(),
+            openai: ProviderConfig::default(),
+            openrouter: ProviderConfig::default(),
+            ollama: ProviderConfig::default(),
+        }
+    }
 }
 
 impl LlmConfig {

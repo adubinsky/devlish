@@ -88,8 +88,12 @@ safe recovery across a new run remain required before production use.
 
 The model and LoanReview service in these tests are in-memory adapters. There is
 no production LoanReview implementation or new governed CLI/server route in this
-increment. Provider URLs, credentials, transport limits and service identity
-still need binding to operator-approved configuration and protected adapters.
+increment. Verified CLI model calls now require the catalog's `llm_route`: a fixed OpenRouter
+HTTPS endpoint, exact model, credential lookup name and bounded transport. The
+example catalog uses a deliberately synthetic model; replace it with an approved
+model before compiling/signing a deployment. No live provider request is made
+by these example tests. Protected credential storage and LoanReview service
+identity still need operator-controlled adapters.
 These example tokens are fixed allowlists, not a production tokenization system.
 
 The shared `governed_run::GovernedRun` runs the pinned program and policy with

@@ -633,3 +633,59 @@ completion. This compiler/VM-backed replay is deliberately separate from the
 small `devlish-audit` executable, which has no VM dependency. Combining the two
 checks still does not authenticate authority snapshots or prove protected
 execution. See [receipt authorization replay](COMPLIANCE_REPORTS.md#replay-recorded-receipt-authorization).
+
+
+### Approved model routing in verified runs
+
+A signed catalog that permits `llm_complete` must now include `llm_route`. Missing
+or invalid routes reject admission before creating a run log or dispatching an
+effect. Existing signed catalogs with model permission must be reissued with an
+approved route; non-model catalogs are unchanged.
+
+```json
+{
+  "format": "devlish-tool-catalog",
+  "format_version": 1,
+  "host_effects": ["llm_complete", "respond"],
+  "llm_route": {
+    "format": "devlish-model-route",
+    "format_version": 1,
+    "provider": "openrouter",
+    "model": "synthetic/replace-with-approved-model",
+    "credential": "OPENROUTER_API_KEY",
+    "timeout_seconds": 30,
+    "max_request_bytes": 16384,
+    "max_response_bytes": 65536,
+    "max_tokens": 1024
+  }
+}
+```
+
+The model value above is a placeholder, not a recommendation or available model.
+For this first governed adapter, the only supported provider is `openrouter` and
+the destination is fixed to `https://openrouter.ai/api/v1/chat/completions`.
+`DEVLISH_CONFIG`, per-user provider defaults, request URLs, headers and conflicting
+model/provider fields cannot redirect it. Unknown route/request fields fail.
+The signed catalog digest in the session binds these settings to the release.
+The Devlish effect policy still approves each prompt and response effect.
+
+The adapter uses a fresh client, disables redirects and environment proxies,
+requires HTTPS, applies connect/request timeouts and bounds request JSON and
+response bytes before parsing. Timeout must be 1–120 seconds, request size
+1–1,048,576 bytes, response size 1–8,388,608 bytes and output token budget
+1–32,768. Serialized request overhead counts against the byte budget. Plain
+text completions remain untrusted; `expect_json` requires strict JSON content,
+without accepting Markdown fences or repair by another model. Provider error
+bodies are not returned as diagnostic text. Transport failures are uncertain
+and do not trigger automatic replay/retry.
+
+This controls the request sent to OpenRouter using its documented
+[completion API](https://openrouter.ai/docs/api_reference/overview). It does not
+attest which upstream model/provider actually processed it, fix account-side
+routing/retention settings or prove provider compliance. OpenRouter can choose
+upstream providers under its own routing rules. The credential resolver and host
+OS/TLS/DNS remain trusted; signing a credential lookup name does not protect the
+credential itself. The HTTP client's system DNS lookup can exceed its timeout;
+there is no strict process-wide deadline or network containment claim. Production
+identity isolation, downstream routing constraints and protected adapters remain
+required. Local test servers use synthetic keys; no live-provider test is implied.

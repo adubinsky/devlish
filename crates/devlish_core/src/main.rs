@@ -20,6 +20,8 @@ use devlish_core::logutil;
 const VERSION: &str = "0.1.0";
 
 struct VerifiedInputs {
+    #[cfg(feature = "native")]
+    llm_route: Option<devlish_llm::governed::ApprovedModel>,
     program: Value,
     policy: EffectPolicy,
     log_context: Value,
@@ -480,6 +482,10 @@ fn run_execute_loaded(
         CredentialStore::new(&config.env_overrides, Some(&config.input)),
         audit_path.map(AuditLogWriter::new),
     );
+    #[cfg(feature = "native")]
+    if let Some(loaded) = &verified {
+        native.verified_model_route = Some(loaded.llm_route.clone());
+    }
     native.llm_provider = config.provider.clone();
     native.llm_model = config.model.clone();
     let mut journaling_host;
@@ -1426,6 +1432,9 @@ struct NativeHost {
     /// Outbound LLM defaults (from CLI harness / serve).
     llm_provider: Option<String>,
     llm_model: Option<String>,
+    // Outer Some means verified mode; inner None must never fall back to user config.
+    #[cfg(feature = "native")]
+    verified_model_route: Option<Option<devlish_llm::governed::ApprovedModel>>,
     rng_state: u64,
 }
 
@@ -1445,6 +1454,8 @@ impl NativeHost {
             audit_log,
             llm_provider: None,
             llm_model: None,
+            #[cfg(feature = "native")]
+            verified_model_route: None,
             rng_state: hasher.finish() | 1,
         }
     }
@@ -3129,6 +3140,10 @@ impl HostEffects for NativeHost {
             fn resolve(&self, key: &str) -> Option<String> {
                 self.0.resolve(key)
             }
+        }
+        if let Some(route) = &self.verified_model_route {
+            let route = route.as_ref().ok_or("verified model route unavailable")?;
+            return route.complete(request, &Creds(&self.credentials)).map(|r| response_value(&r));
         }
         let prompt = request
             .get("prompt")

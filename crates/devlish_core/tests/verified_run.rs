@@ -458,3 +458,78 @@ fn verified_evidence_replays_with_release_permissions_and_redacted_diagnostics()
     let report: Value = serde_json::from_slice(&one.stdout).unwrap();
     assert_eq!(report["passed"], true);
 }
+
+fn model_route() -> Value {
+    json!({"format":"devlish-model-route","format_version":1,"provider":"openrouter",
+        "model":"synthetic/approved-model","credential":"SYNTHETIC_MODEL_KEY",
+        "timeout_seconds":1,"max_request_bytes":4096,"max_response_bytes":4096,"max_tokens":100})
+}
+fn permit_model(f: &mut Fixture, route: Option<Value>) {
+    let mut catalog =
+        json!({"format":"devlish-tool-catalog","format_version":1,"host_effects":["llm_complete"]});
+    if let Some(route) = route {
+        catalog["llm_route"] = route;
+    }
+    replace_json(f, "tool-catalog", catalog);
+    replace_json(
+        f,
+        "permissions",
+        json!({"format":"devlish-runtime-permissions","format_version":1,"allowed_effects":["llm_complete"],"instruction_limit":1000}),
+    );
+}
+#[test]
+fn model_permission_requires_an_approved_signed_route_before_admission() {
+    for route in [
+        None,
+        Some(json!({"provider":"openrouter","base_url":"http://unapproved.invalid"})),
+    ] {
+        let mut f = Fixture::new();
+        permit_model(&mut f, route);
+        let result = f.run();
+        assert!(!result.status.success());
+        f.assert_no_dispatch();
+    }
+}
+#[test]
+fn verified_model_calls_cannot_fall_back_to_mutable_user_routing() {
+    use std::net::TcpListener;
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    listener.set_nonblocking(true).unwrap();
+    let mut f = Fixture::new();
+    permit_model(&mut f, Some(model_route()));
+    replace_compiled(&mut f,"program","Permissions:\n  Call language models\nAsk the model \"synthetic/other-model\" with \"public\" expecting json as plan");
+    f.profile["allow_raw_evidence"] = json!(true);
+    f.save();
+    fs::write(f.dir.join("untrusted.toml"),format!("default_provider = \"ollama\"\ndefault_model = \"synthetic/other-model\"\n[ollama]\nbase_url = \"http://{}\"\n",listener.local_addr().unwrap())).unwrap();
+    let result = Command::new(env!("CARGO_BIN_EXE_devlish-core"))
+        .current_dir(&f.dir)
+        .env("DEVLISH_VERIFIED_PROFILE", f.dir.join("profile.json"))
+        .env("DEVLISH_CONFIG", f.dir.join("untrusted.toml"))
+        .args([
+            "run-verified",
+            "--policy-log",
+            "run.jsonl",
+            "--session-id",
+            "test-session",
+            "--policy-evidence",
+        ])
+        .output()
+        .unwrap();
+    assert!(!result.status.success());
+    assert!(result.stdout.is_empty());
+    assert_eq!(
+        listener.accept().unwrap_err().kind(),
+        std::io::ErrorKind::WouldBlock
+    );
+    let records: Vec<Value> = fs::read_to_string(f.dir.join("run.jsonl"))
+        .unwrap()
+        .lines()
+        .map(|s| serde_json::from_str(s).unwrap())
+        .collect();
+    assert_eq!(records[1]["record"]["allow"], true);
+    assert_eq!(
+        records[2]["record"]["exchange"]["err"],
+        "model request conflicts with approved route"
+    );
+    assert_eq!(records.last().unwrap()["record"]["success"], false);
+}

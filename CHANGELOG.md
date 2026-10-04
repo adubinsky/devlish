@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Independent audit verification
+- Require signed catalog routes for verified model effects; fixed OpenRouter destination/model, no mutable provider-config fallback, redirect/proxy suppression, bounded transport and redacted errors. Reissue existing model-enabled catalogs with `llm_route`.
+- Fix the existing LLM default-config regression (Rust `Default` now agrees with deserialization defaults) and synchronize its lockfile's already-declared JSON dependency edges.
 - Extract the verified CLI execution boundary into a single-use shared governed runner with redacted failures, completion-only results, instruction bounds and fail-closed terminal recording; future service adapters still require authenticated admission.
 - Add a Devlish-authored bounded planning harness example with complete-plan validation, minimal model/tool payloads, separate effect policy and deterministic failure/disclosure tests.
 - Add bounded durable issuer journals and operator-opted raw evidence; `report receipt-issuer` replays recorded Devlish decisions against a retained digest without contacting a signer or authenticating authority state.
