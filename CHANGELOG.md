@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Independent audit verification
+- Add a Devlish-authored bounded planning harness example with complete-plan validation, minimal model/tool payloads, separate effect policy and deterministic failure/disclosure tests.
 - Add bounded durable issuer journals and operator-opted raw evidence; `report receipt-issuer` replays recorded Devlish decisions against a retained digest without contacting a signer or authenticating authority state.
 - Add read-only `verify-issuance` to recheck saved reservations/completions against current key trust, pinned identities, retained terminal receipts and execution logs; stored verification flags never grant assurance.
 - Extend repeatable policy reports to separate authority fixtures, with explicit JSON and Devlish-English limits on what those fixtures authenticate.

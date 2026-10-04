@@ -204,6 +204,9 @@ See [Effect policies](docs/EFFECT_POLICY.md) for the contract and current limits
 rules, and [Policy provenance](docs/POLICY_PROVENANCE.md) for artifact verification
 and the signing roadmap. [Repeatable compliance reports](docs/COMPLIANCE_REPORTS.md)
 cover application integrity, policy cases, and offline process reproduction.
+The [governed agent example](examples/governed_agent/README.md) implements a finite
+plan/validate/execute loop entirely in Devlish, with a separate effect policy
+and deterministic model/service test adapters.
 
 The separate [independent audit verifier](docs/INDEPENDENT_AUDIT_VERIFIER.md)
 checks signatures and signed log receipts offline. Its results explicitly

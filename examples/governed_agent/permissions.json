@@ -1,0 +1,10 @@
+{
+  "format": "devlish-runtime-permissions",
+  "format_version": 1,
+  "allowed_effects": [
+    "llm_complete",
+    "call_service",
+    "respond"
+  ],
+  "instruction_limit": 50000
+}

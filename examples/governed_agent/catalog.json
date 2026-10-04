@@ -1,0 +1,9 @@
+{
+  "format": "devlish-tool-catalog",
+  "format_version": 1,
+  "host_effects": [
+    "llm_complete",
+    "call_service",
+    "respond"
+  ]
+}
