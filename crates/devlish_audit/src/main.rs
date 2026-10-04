@@ -2,7 +2,7 @@ mod output;
 use devlish_audit::{read_bounded, verify, Purpose, MAX_ARTIFACT_BYTES, MAX_METADATA_BYTES};
 use serde_json::json;
 use std::{collections::BTreeMap, path::Path};
-const USAGE: &str = "Plain-English findings: put --text before any command. JSON remains the default.\nUsage: devlish-audit verify-issuance <log.jsonl> --pending <pending.json> --completed <completed.json> --trust <operator-trust.json> --expectations <operator-expectations.json>\n       devlish-audit init-admission <new-state.json> --requirements <operator-requirements.json>\n       devlish-audit verify-release <manifest.json> --signature <signature.json> --trust <operator-trust.json> --requirements <operator-requirements.json> --artifacts <operator-artifacts.json> [--evidence <evidence.json> | --prepare-receipt <request.json>]\n       devlish-audit verify <file> --signature <signature.json> --trust <operator-trust.json> --purpose <release-manifest|release-artifact|build-statement|audit-evidence|audit-receipt>\n       devlish-audit verify-log <log.jsonl> --receipt <receipt.json> --signature <signature.json> --trust <operator-trust.json> --receipt-sha256 <retained-digest> --session-id <expected-session> --release-sha256 <expected-release-digest>";
+const USAGE: &str = "Plain-English findings: put --text before any command. JSON remains the default.\nUsage: devlish-audit verify-issuance <log.jsonl> --pending <pending.json> --completed <completed.json> --trust <operator-trust.json> --expectations <operator-expectations.json>\n       devlish-audit init-admission <new-state.json> --requirements <operator-requirements.json>\n       devlish-audit verify-release <manifest.json> --signature <signature.json> --trust <operator-trust.json> --requirements <operator-requirements.json> --artifacts <operator-artifacts.json> [--evidence <evidence.json> | --prepare-receipt <request.json> | --tool-catalog <operator-catalog-id> --tool-request <request.json>]\n       devlish-audit verify <file> --signature <signature.json> --trust <operator-trust.json> --purpose <release-manifest|release-artifact|build-statement|audit-evidence|audit-receipt>\n       devlish-audit verify-log <log.jsonl> --receipt <receipt.json> --signature <signature.json> --trust <operator-trust.json> --receipt-sha256 <retained-digest> --session-id <expected-session> --release-sha256 <expected-release-digest>";
 fn run(args: &[String]) -> Result<serde_json::Value, String> {
     if args.first().map(String::as_str) == Some("verify-issuance") {
         if args.len() != 10 {
@@ -40,7 +40,7 @@ fn run(args: &[String]) -> Result<serde_json::Value, String> {
         );
     }
     if args.first().map(String::as_str) == Some("verify-release") {
-        if ![10, 12].contains(&args.len()) {
+        if ![10, 12, 14].contains(&args.len()) {
             return Err(USAGE.into());
         }
         let mut options = BTreeMap::new();
@@ -52,6 +52,8 @@ fn run(args: &[String]) -> Result<serde_json::Value, String> {
                 "--artifacts",
                 "--evidence",
                 "--prepare-receipt",
+                "--tool-catalog",
+                "--tool-request",
             ]
             .contains(&pair[0].as_str())
                 || options.insert(pair[0].as_str(), pair[1].as_str()).is_some()
@@ -62,6 +64,14 @@ fn run(args: &[String]) -> Result<serde_json::Value, String> {
         if ["--signature", "--trust", "--requirements", "--artifacts"]
             .iter()
             .any(|key| !options.contains_key(key))
+        {
+            return Err(USAGE.into());
+        }
+        if options.contains_key("--tool-catalog") != options.contains_key("--tool-request")
+            || (options.contains_key("--evidence") && options.contains_key("--prepare-receipt"))
+            || (options.contains_key("--tool-request")
+                && (options.contains_key("--evidence")
+                    || options.contains_key("--prepare-receipt")))
         {
             return Err(USAGE.into());
         }
@@ -81,6 +91,7 @@ fn run(args: &[String]) -> Result<serde_json::Value, String> {
                 return Err("duplicate artifact mapping".into());
             }
         }
+        let mut tool_catalog_snapshot = None;
         let report = devlish_audit::release::verify_release(
             &read_bounded(Path::new(&args[1]), MAX_METADATA_BYTES)?,
             &read_bounded(Path::new(options["--signature"]), MAX_METADATA_BYTES)?,
@@ -90,12 +101,29 @@ fn run(args: &[String]) -> Result<serde_json::Value, String> {
                 let path = paths
                     .get(id)
                     .ok_or_else(|| format!("missing artifact mapping: {id}"))?;
-                read_bounded(
+                let selected_catalog = options.get("--tool-catalog").copied() == Some(id);
+                let snapshot = read_bounded(
                     &index_path.parent().unwrap_or(Path::new(".")).join(path),
-                    MAX_ARTIFACT_BYTES,
-                )
+                    if selected_catalog {
+                        MAX_METADATA_BYTES
+                    } else {
+                        MAX_ARTIFACT_BYTES
+                    },
+                )?;
+                if selected_catalog {
+                    tool_catalog_snapshot = Some(snapshot.clone());
+                }
+                Ok(snapshot)
             },
         )?;
+        if let Some(request_path) = options.get("--tool-request") {
+            let selection = report.verify_tool_request(
+                options["--tool-catalog"],
+                &tool_catalog_snapshot.ok_or("selected catalog is absent from the release")?,
+                &read_bounded(Path::new(request_path), MAX_METADATA_BYTES)?,
+            )?;
+            return Ok(json!({"release":report,"tool_selection":selection}));
+        }
         if let Some(request_path) = options.get("--prepare-receipt") {
             #[derive(serde::Deserialize)]
             #[serde(deny_unknown_fields)]

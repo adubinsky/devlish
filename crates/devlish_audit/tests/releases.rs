@@ -1045,3 +1045,175 @@ fn signed_catalog_rejects_duplicate_ids_arguments_and_transport_overflow() {
         .unwrap();
     assert!(verified.select("public-grep", &[], 150).is_ok());
 }
+
+#[test]
+fn tool_request_report_is_repeatable_redacted_and_cannot_invent_execution() {
+    let (mut f, catalog) = tool_catalog_fixture();
+    let mut release = verify_with_catalog(&mut f, &catalog);
+    let request = bytes(
+        &json!({"tool_id":"public-grep","arguments":catalog["tools"][0]["allowed_arguments"][0]}),
+    );
+    let first = release
+        .verify_tool_request("tool-catalog", &bytes(&catalog), &request)
+        .unwrap();
+    release.evaluated_at = 199;
+    release.execution_origin_verified = true;
+    release.policy_enforcement_verified = true;
+    let second = release
+        .verify_tool_request("tool-catalog", &bytes(&catalog), &request)
+        .unwrap();
+    assert_eq!(first, second);
+    assert_eq!(first["catalog_membership_verified"], true);
+    assert_eq!(first["tool_artifact_snapshot_verified"], true);
+    assert_eq!(first["evaluated_at"], 150);
+    assert_eq!(first["request_sha256"], sha256(&request));
+    for key in [
+        "tool_image_profile_verified",
+        "containment_enforcement_verified",
+        "execution_origin_verified",
+        "policy_enforcement_verified",
+    ] {
+        assert_eq!(first[key], false);
+    }
+    let output = first.to_string();
+    assert!(
+        !output.contains("/work/public.txt")
+            && !output.contains("--fixed-strings")
+            && !output.contains("/opt/devlish")
+    );
+    for request in [
+        r#"{"tool_id":"public-grep","tool_id":"public-grep","arguments":[]}"#,
+        r#"{"tool_id":"public-grep","arguments":[],"catalog_id":"other"}"#,
+        r#"{"tool_id":"public-grep","arguments":[],"evaluated_at":150}"#,
+        r#"{"tool_id":"public-grep","arguments":["--nppi"]}"#,
+    ] {
+        assert!(release
+            .verify_tool_request("tool-catalog", &bytes(&catalog), request.as_bytes())
+            .is_err());
+    }
+    assert!(release
+        .verify_tool_request("tool-catalog", &bytes(&catalog), &vec![b' '; 65537])
+        .is_err());
+}
+
+#[test]
+fn cli_tool_report_reverifies_bytes_trust_and_options_without_executing() {
+    use std::{fs, process::Command};
+    let (mut f, catalog) = tool_catalog_fixture();
+    verify_with_catalog(&mut f, &catalog);
+    let dir = std::env::temp_dir().join(format!(
+        "devlish-catalog-cli-{}",
+        hex(f.key.public_key().as_ref())
+    ));
+    fs::create_dir(&dir).unwrap();
+    for (name, data) in [
+        ("manifest.json", bytes(&f.manifest)),
+        ("signature.json", f.signature()),
+        ("trust.json", bytes(&f.trust)),
+        ("requirements.json", bytes(&f.requirements)),
+        (
+            "request.json",
+            bytes(
+                &json!({"tool_id":"public-grep","arguments":catalog["tools"][0]["allowed_arguments"][0]}),
+            ),
+        ),
+    ] {
+        fs::write(dir.join(name), data).unwrap();
+    }
+    let mut mapping = Vec::new();
+    for artifact in f.manifest["artifacts"].as_array().unwrap() {
+        let id = artifact["id"].as_str().unwrap();
+        fs::write(
+            dir.join(id),
+            if id == "tool-catalog" {
+                bytes(&catalog)
+            } else {
+                id.as_bytes().to_vec()
+            },
+        )
+        .unwrap();
+        mapping.push(json!({"id":id,"path":id}));
+    }
+    fs::write(dir.join("artifacts.json"), bytes(&json!(mapping))).unwrap();
+    let run = |text: bool, extra: &[&str]| {
+        let mut command = Command::new(env!("CARGO_BIN_EXE_devlish-audit"));
+        command.current_dir(&dir);
+        if text {
+            command.arg("--text");
+        }
+        command
+            .args([
+                "verify-release",
+                "manifest.json",
+                "--signature",
+                "signature.json",
+                "--trust",
+                "trust.json",
+                "--requirements",
+                "requirements.json",
+                "--artifacts",
+                "artifacts.json",
+            ])
+            .args(extra)
+            .output()
+            .unwrap()
+    };
+    let options = [
+        "--tool-catalog",
+        "tool-catalog",
+        "--tool-request",
+        "request.json",
+    ];
+    let first = run(false, &options);
+    assert!(
+        first.status.success(),
+        "{}",
+        String::from_utf8_lossy(&first.stdout)
+    );
+    assert_eq!(first.stdout, run(false, &options).stdout);
+    let report: Value = serde_json::from_slice(&first.stdout).unwrap();
+    assert_eq!(
+        report["tool_selection"]["tool_image_profile_verified"],
+        false
+    );
+    let english = run(true, &options);
+    assert!(english.status.success());
+    let english = String::from_utf8(english.stdout).unwrap();
+    assert!(english.contains("Catalog membership verified: Yes"));
+    assert!(english.contains("Actual policy enforcement independently established: No"));
+    assert!(!english.contains("/work/public.txt"));
+    for extra in [
+        vec!["--tool-catalog", "tool-catalog"],
+        vec!["--tool-request", "request.json"],
+        vec!["--evidence", "absent", "--prepare-receipt", "absent"],
+        vec![
+            "--tool-catalog",
+            "tool-catalog",
+            "--tool-request",
+            "request.json",
+            "--evidence",
+            "absent",
+        ],
+        vec![
+            "--tool-catalog",
+            "runtime",
+            "--tool-request",
+            "request.json",
+        ],
+        vec![
+            "--tool-catalog",
+            "missing",
+            "--tool-request",
+            "request.json",
+        ],
+    ] {
+        assert!(!run(false, &extra).status.success(), "{extra:?}");
+    }
+    fs::write(dir.join("tool"), "replaced").unwrap();
+    assert!(!run(false, &options).status.success());
+    fs::write(dir.join("tool"), "tool").unwrap();
+    f.trust["keys"][0]["revoked"] = json!(true);
+    fs::write(dir.join("trust.json"), bytes(&f.trust)).unwrap();
+    assert!(!run(false, &options).status.success());
+    fs::remove_dir_all(dir).unwrap();
+}

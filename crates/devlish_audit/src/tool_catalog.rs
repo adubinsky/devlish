@@ -50,6 +50,47 @@ pub struct ToolSelection<'a> {
 }
 
 impl ReleaseVerification {
+    /// Offline membership evidence at the release's operator-supplied evaluation
+    /// time. Does not inspect/execute machine code or evaluate Devlish policy.
+    pub fn verify_tool_request(
+        &self,
+        catalog_id: &str,
+        catalog_bytes: &[u8],
+        request_bytes: &[u8],
+    ) -> Result<serde_json::Value, String> {
+        #[derive(Deserialize)]
+        #[serde(deny_unknown_fields)]
+        struct Request {
+            tool_id: String,
+            arguments: Vec<String>,
+        }
+        if request_bytes.len() as u64 > MAX_METADATA_BYTES {
+            return Err("tool request exceeds metadata limit".into());
+        }
+        let request: Request =
+            serde_json::from_slice(request_bytes).map_err(|_| "invalid tool selection request")?;
+        let catalog = self.tool_catalog(catalog_id, catalog_bytes)?;
+        let selection = catalog.select(
+            &request.tool_id,
+            &request.arguments,
+            self.verified_evaluated_at,
+        )?;
+        Ok(serde_json::json!({
+            "format":"devlish-tool-selection-verification", "format_version":1,
+            "catalog_id":catalog_id, "tool_id":selection.id(),
+            "artifact_id":selection.artifact_id(), "containment_id":selection.containment_id(),
+            "image_profile":selection.image_profile(),
+            "manifest_sha256":selection.manifest_sha256(), "catalog_sha256":selection.catalog_sha256(),
+            "tool_sha256":selection.tool_sha256(), "containment_sha256":selection.containment_sha256(),
+            "request_sha256":sha256(request_bytes),
+            "evaluated_at":self.verified_evaluated_at, "admission_valid_until":selection.valid_until(),
+            "catalog_membership_verified":true, "tool_artifact_snapshot_verified":true,
+            "tool_image_profile_verified":false, "containment_enforcement_verified":false,
+            "execution_origin_verified":false, "policy_enforcement_verified":false,
+            "explanation":"Exact request arguments match an authenticated catalog entry at the operator-supplied release evaluation time. Referenced tool bytes matched the release during verification. This does not inspect executable format, authorize dispatch, evaluate Devlish policy, enforce containment or prove execution. Raw arguments and paths are omitted; digests do not encrypt low-entropy data."
+        }))
+    }
+
     pub fn tool_catalog(&self, id: &str, bytes: &[u8]) -> Result<VerifiedToolCatalog, String> {
         if bytes.len() as u64 > MAX_METADATA_BYTES {
             return Err("tool catalog exceeds metadata limit".into());

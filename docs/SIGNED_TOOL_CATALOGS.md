@@ -73,6 +73,35 @@ Tests create ephemeral signed releases, replace a tool before and after loading,
 mutate the original request arguments, and verify the retained selection and
 descriptor. Linux CI checks the positive path; macOS checks refusal.
 
+## Offline request report
+
+Operators can obtain fresh catalog-membership findings without loading or
+executing the tool:
+
+```bash
+devlish-audit --text verify-release manifest.json \
+  --signature manifest.signature.json --trust operator-trust.json \
+  --requirements operator-requirements.json --artifacts operator-artifacts.json \
+  --tool-catalog external-tools --tool-request request.json
+```
+
+`external-tools` is the operator-selected artifact ID, not a path or a request
+field. The artifact mapping resolves its bytes. The request contains only
+`tool_id` and `arguments`; duplicate/unknown fields, caller-selected catalog or
+time overrides, and oversized requests fail. The verifier uses the release
+requirements' evaluation time and repeats release/trust/artifact checks on every
+invocation. It retains the exact catalog snapshot read during that verification.
+
+Omit `--text` for deterministic JSON. The report contains separate membership,
+artifact-snapshot, executable-format, containment and execution findings. Only
+the first two are established by this operation. Raw arguments and filesystem
+paths are omitted from successful selection findings; the exact request bytes
+are committed by SHA-256. This is data minimization, not encryption: guessed
+low-entropy arguments can be compared against the digest. The command does not
+accept a saved success report as authority and does not write or execute a
+candidate artifact. Tool-report options cannot be combined with receipt
+preparation or evidence verification in the same invocation.
+
 ## Policy and assurance boundary
 
 The catalog is an operator ceiling, not the decision-making agent. Devlish still
