@@ -47,3 +47,29 @@ platform is not qualification. Inspect the hosted Linux job, exact revision and
 named test result. A passing test is development evidence, not signed runtime
 attestation; audit reports continue to leave execution-origin and actual policy
 enforcement assurance false.
+
+## One-time execution broker experiment
+
+`synthetic_broker_allows_initial_image_and_denies_absolute_path_reexecution`
+adds the syscall gate to a second, test-only composition. The trusted fork child
+blocks inherited signal handlers during setup, disables ordinary same-user
+tracing, applies the filesystem/descriptor/resource restrictions, and transfers
+its seccomp listener over a private socket. It closes that socket and its local
+listener before requesting the initial descriptor-based execution.
+
+The parent test verifies the notification ABI, child identity, syscall and exact
+arguments of its known fork continuation. It consumes a local one-time grant
+before continuing that initial execution. The executed assembly then attempts
+`execveat(-1, "/proc/self/exe", ...)`. Its absolute pathname would ignore the
+invalid descriptor; the second notification is denied with EPERM. The fixture
+must observe that denial and exit with the expected status. The parent has bounded
+waits and kills/reaps its child if the test fails.
+
+This qualifies a kernel mechanism using known synthetic setup. The helper is
+compiled only for Linux x86-64 tests and supplies no production broker API.
+It does not authorize continuation of arbitrary candidate-supplied pointers.
+The grant's safety depends on trusted pre-exec code and private, unchanged setup
+memory, not on matching pointer numbers alone. Ordinary tracing protection may
+reset on exec; it is not hostile-admin or runtime-memory attestation. Production
+needs a broker bound to governed admission, protected identity, signed controls,
+durable effect recording, bounded I/O and cancellation before dispatch can open.

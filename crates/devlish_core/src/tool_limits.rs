@@ -82,6 +82,16 @@ mod tests {
             unsafe { libc::getrlimit(libc::RLIMIT_NOFILE, &mut parent) },
             0
         );
+        // Open before lowering NOFILE: unrelated parallel tests can occupy
+        // every low-numbered descriptor inherited by this child.
+        let file = unsafe {
+            libc::syscall(
+                libc::SYS_memfd_create,
+                c"limit-test".as_ptr(),
+                libc::MFD_CLOEXEC,
+            )
+        };
+        assert!(file >= 0);
         let child = unsafe { libc::fork() };
         assert!(child >= 0);
         if child == 0 {
@@ -121,11 +131,6 @@ mod tests {
                 {
                     libc::_exit(14);
                 }
-                let file = libc::syscall(
-                    libc::SYS_memfd_create,
-                    c"limit-test".as_ptr(),
-                    libc::MFD_CLOEXEC,
-                );
                 if file < 0
                     || libc::ftruncate(file as i32, 1) != -1
                     || *libc::__errno_location() != libc::EFBIG
@@ -148,6 +153,9 @@ mod tests {
             }
         }
         let status = wait_bounded(child);
+        unsafe {
+            libc::close(file as i32);
+        }
         assert!(
             libc::WIFEXITED(status) && libc::WEXITSTATUS(status) == 0,
             "child status {status}"

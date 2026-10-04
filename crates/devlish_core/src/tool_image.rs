@@ -678,4 +678,140 @@ finish:
             prepared.selection().tool_sha256()
         );
     }
+
+    #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
+    #[test]
+    fn synthetic_broker_allows_initial_image_and_denies_absolute_path_reexecution() {
+        use crate::tool_broker_test_support as broker;
+        use std::{
+            ffi::CString,
+            os::fd::{AsFd, AsRawFd},
+        };
+        broker::check_notification_sizes();
+        let fixture = linked_static_fixture(
+            "broker",
+            r#".text
+.global _start
+_start:
+    mov $322, %rax
+    mov $-1, %rdi
+    lea pathname(%rip), %rsi
+    xor %rdx, %rdx
+    xor %r10, %r10
+    xor %r8, %r8
+    syscall
+    mov $38, %rdi
+    cmp $-1, %rax
+    jne finish
+    mov $37, %rdi
+finish:
+    mov $60, %rax
+    syscall
+.section .rodata
+pathname: .asciz "/proc/self/exe"
+.section .note.GNU-stack,"",@progbits
+"#,
+        );
+        let selected = fixture
+            .catalog
+            .select("public-grep", &["--public-only".into()], 150)
+            .unwrap();
+        let prepared = PreparedCatalogTool::load(selected).unwrap();
+        let rules = crate::tool_landlock::LandlockRuleset::deny_file_access().unwrap();
+        let [parent_socket, child_socket] = broker::socket_pair();
+        let image_fd = prepared.image().as_fd().as_raw_fd();
+        let transfer_fd = child_socket.as_raw_fd();
+        let mut keep = [image_fd, transfer_fd];
+        keep.sort_unstable();
+        let arguments: Vec<_> = std::iter::once(prepared.selection().id())
+            .chain(prepared.selection().arguments().iter().map(String::as_str))
+            .map(|s| CString::new(s).unwrap())
+            .collect();
+        let mut argv: Vec<_> = arguments.iter().map(|s| s.as_ptr()).collect();
+        argv.push(std::ptr::null());
+        let environment: [*const libc::c_char; 1] = [std::ptr::null()];
+        let empty_path = c"";
+        let expected_arguments = [
+            image_fd as u64,
+            empty_path.as_ptr() as u64,
+            argv.as_ptr() as u64,
+            environment.as_ptr() as u64,
+            libc::AT_EMPTY_PATH as u64,
+        ];
+        let pid = unsafe { libc::fork() };
+        assert!(pid >= 0);
+        if pid == 0 {
+            unsafe {
+                // Only trusted repository code runs until the first exec. Stop
+                // ordinary same-user tracing and block inherited signal handlers
+                // during that setup. Hostile administrators remain out of scope.
+                let mut blocked = std::mem::zeroed::<libc::sigset_t>();
+                if libc::prctl(libc::PR_SET_DUMPABLE, 0, 0, 0, 0) != 0
+                    || libc::sigfillset(&mut blocked) != 0
+                    || libc::sigprocmask(libc::SIG_SETMASK, &blocked, std::ptr::null_mut()) != 0
+                {
+                    libc::_exit(110);
+                }
+                for fd in 0..3 {
+                    libc::close(fd);
+                }
+                if rules.restrict_current_thread().is_err()
+                    || crate::tool_descriptors::close_unlisted(&keep).is_err()
+                    || crate::tool_limits::restrict_child().is_err()
+                {
+                    libc::_exit(111);
+                }
+                let listener = match crate::tool_syscalls::install(transfer_fd) {
+                    Ok(v) => v,
+                    Err(_) => libc::_exit(112),
+                };
+                if !broker::send_listener(transfer_fd, listener.as_fd().as_raw_fd()) {
+                    libc::_exit(113);
+                }
+                libc::close(listener.as_fd().as_raw_fd());
+                libc::close(transfer_fd);
+                libc::syscall(
+                    libc::SYS_execveat,
+                    image_fd as u64,
+                    empty_path.as_ptr(),
+                    argv.as_ptr(),
+                    environment.as_ptr(),
+                    libc::AT_EMPTY_PATH as u64,
+                );
+                libc::_exit(114);
+            }
+        }
+        let mut child = broker::Child(Some(pid));
+        drop(child_socket);
+        let listener = broker::receive_listener(&parent_socket);
+        drop(parent_socket);
+        let mut authorization_consumed = false;
+        for ordinal in 0..2 {
+            let request = broker::notification(&listener);
+            assert_eq!(request.pid, pid as u32);
+            assert_eq!(request.flags, 0);
+            assert_eq!(request.data.arch, 0xc000003e);
+            assert_eq!(request.data.nr, libc::SYS_execveat as i32);
+            if ordinal == 0 {
+                assert!(!authorization_consumed);
+                assert_eq!(request.data.args[..5], expected_arguments);
+                // This is the known trusted fork continuation, not a generic
+                // pointer-based approval for candidate-supplied memory.
+                authorization_consumed = true;
+                broker::reply(&listener, request.id, true);
+            } else {
+                assert!(authorization_consumed);
+                assert_eq!(request.data.args[0], u64::MAX);
+                assert_eq!(request.data.args[4], 0);
+                broker::reply(&listener, request.id, false);
+            }
+        }
+        let status = child.wait();
+        assert!(libc::WIFEXITED(status), "child status {status}");
+        assert_eq!(
+            libc::WEXITSTATUS(status),
+            37,
+            "initial execution or repeat denial failed"
+        );
+    }
 }

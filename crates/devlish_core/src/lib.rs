@@ -23,6 +23,8 @@ pub mod tool_descriptors;
 pub mod tool_limits;
 #[cfg(feature = "native")]
 pub mod tool_syscalls;
+#[cfg(all(test, feature = "native", target_os = "linux", target_arch = "x86_64"))]
+mod tool_broker_test_support;
 #[cfg(feature = "native")]
 pub mod receipt_issuer;
 #[cfg(feature = "native")]

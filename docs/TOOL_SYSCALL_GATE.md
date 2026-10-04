@@ -2,8 +2,8 @@
 
 `tool_syscalls::install` adds a Linux x86-64 seccomp filter to a disposable child.
 It is a building block, not a launcher. Production external-tool dispatch remains
-disabled. The filter is not yet part of the composed execution test because its
-required execution broker has not been implemented.
+disabled. A separate synthetic composition tests a one-time broker experiment; there is
+no production execution broker yet. See TOOL_LAUNCH_QUALIFICATION.md.
 
 The fixed gate permits only:
 
