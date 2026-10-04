@@ -11,9 +11,11 @@ use std::process::ExitCode;
 
 mod harness;
 mod reports;
+mod serve;
 #[cfg(feature = "native")]
 mod verified_run;
-mod serve;
+#[cfg(feature = "native")]
+mod verified_serve;
 
 use devlish_core::logutil;
 
@@ -78,8 +80,21 @@ fn main() -> ExitCode {
 
 fn run(args: Vec<String>) -> Result<(), String> {
     if env::var_os("DEVLISH_VERIFIED_PROFILE").is_some()
-        && !args.first().is_some_and(|a| ["run-verified", "help", "--help", "-h", "version", "--version", "-v"].contains(&a.as_str())) {
-        return Err("verified profile requires run-verified; other execution routes are disabled".into());
+        && !args.first().is_some_and(|a| {
+            [
+                "run-verified",
+                "serve-verified",
+                "help",
+                "--help",
+                "-h",
+                "version",
+                "--version",
+                "-v",
+            ]
+            .contains(&a.as_str())
+        })
+    {
+        return Err("verified profile requires run-verified or serve-verified; other execution routes are disabled".into());
     }
     logutil::init_from_env_and_args(&args)?;
     if args.is_empty() {
@@ -101,10 +116,23 @@ fn run(args: Vec<String>) -> Result<(), String> {
         "compile" => run_compile(args),
         "run" => run_execute(args),
         #[cfg(feature = "native")]
-        "run-verified" => verified_run::run(args).map_err(|error| format!(
-            "verified execution rejected; diagnostic sha256: {}", sha256_hex(error.as_bytes()))),
+        "run-verified" => verified_run::run(args).map_err(|error| {
+            format!(
+                "verified execution rejected; diagnostic sha256: {}",
+                sha256_hex(error.as_bytes())
+            )
+        }),
         #[cfg(not(feature = "native"))]
         "run-verified" => Err("verified execution requires the native feature".into()),
+        #[cfg(feature = "native")]
+        "serve-verified" => verified_serve::run(args).map_err(|error| {
+            format!(
+                "verified service rejected; diagnostic sha256: {}",
+                sha256_hex(error.as_bytes())
+            )
+        }),
+        #[cfg(not(feature = "native"))]
+        "serve-verified" => Err("verified service requires the native feature".into()),
         "disassemble" => run_disassemble(args),
         "validate" => run_validate(args),
         "lint" => run_lint(args),
@@ -178,6 +206,7 @@ Run options:
   --policy <file>             Enforce a Devlish effect policy (requires --policy-log)
   --policy-evidence          Include sensitive effect data in the log for offline reports
   run-verified              Run operator-selected release (DEVLISH_VERIFIED_PROFILE)
+  serve-verified            Serve an operator-selected release on loopback with authentication
   --policy-sha256 <digest>    Pin the exact compiled policy bytes to an approved digest
   --policy-log <path>         Create an exclusive, durable policy decision log
   --journal <dir>             Archive input, bytecode, and every effect exchange
@@ -1402,6 +1431,8 @@ struct NativeHost {
     // Outer Some means verified mode; inner None must never fall back to user config.
     #[cfg(feature = "native")]
     verified_model_route: Option<Option<devlish_llm::governed::ApprovedModel>>,
+    #[cfg(feature = "native")]
+    response_buffer: Option<verified_serve::ResponseBuffer>,
     rng_state: u64,
 }
 
@@ -1423,6 +1454,8 @@ impl NativeHost {
             llm_model: None,
             #[cfg(feature = "native")]
             verified_model_route: None,
+            #[cfg(feature = "native")]
+            response_buffer: None,
             rng_state: hasher.finish() | 1,
         }
     }
@@ -3000,6 +3033,10 @@ impl HostEffects for NativeHost {
     }
 
     fn respond(&mut self, value: &Value) -> Result<(), String> {
+        #[cfg(feature = "native")]
+        if let Some(buffer) = &mut self.response_buffer {
+            return buffer.push(value);
+        }
         let json = serde_json::to_string_pretty(value)
             .map_err(|e| format!("Failed to serialize response: {e}"))?;
         println!("{json}");
@@ -3110,7 +3147,9 @@ impl HostEffects for NativeHost {
         }
         if let Some(route) = &self.verified_model_route {
             let route = route.as_ref().ok_or("verified model route unavailable")?;
-            return route.complete(request, &Creds(&self.credentials)).map(|r| response_value(&r));
+            return route
+                .complete(request, &Creds(&self.credentials))
+                .map(|r| response_value(&r));
         }
         let prompt = request
             .get("prompt")

@@ -725,3 +725,224 @@ fn shared_session_anchors_relative_paths_before_working_directory_changes() {
         String::from_utf8_lossy(&output.stderr)
     );
 }
+
+#[cfg(unix)]
+struct VerifiedServer {
+    child: std::process::Child,
+    url: String,
+}
+#[cfg(unix)]
+impl VerifiedServer {
+    fn start(f: &Fixture) -> Self {
+        use std::{io::BufRead, os::unix::fs::PermissionsExt, process::Stdio};
+        let logs = f.dir.join("http-logs");
+        fs::create_dir(&logs).unwrap();
+        fs::set_permissions(&logs, fs::Permissions::from_mode(0o700)).unwrap();
+        let mut child = Command::new(env!("CARGO_BIN_EXE_devlish-core"))
+            .env("DEVLISH_VERIFIED_PROFILE", f.dir.join("profile.json"))
+            .env("DEVLISH_SERVE_TOKEN", "a".repeat(64))
+            .env_remove("DEVLISH_AUDIT_LOG")
+            .args(["serve-verified", "--bind", "127.0.0.1:0", "--log-dir"])
+            .arg(logs)
+            .stdout(Stdio::piped())
+            .stderr(Stdio::null())
+            .spawn()
+            .unwrap();
+        let stdout = child.stdout.take().unwrap();
+        let (tx, rx) = std::sync::mpsc::channel();
+        std::thread::spawn(move || {
+            let mut reader = std::io::BufReader::new(stdout);
+            let mut line = String::new();
+            let _ = reader.read_line(&mut line);
+            let _ = tx.send(line);
+            // Drain until the owned child exits; private output is checked in logs/body.
+            let _ = std::io::copy(&mut reader, &mut std::io::sink());
+        });
+        let mut server = Self {
+            child,
+            url: String::new(),
+        };
+        let line = rx.recv_timeout(std::time::Duration::from_secs(10)).unwrap();
+        server.url = format!(
+            "http://{}",
+            line.trim()
+                .strip_prefix("verified service listening on ")
+                .expect("service must start")
+        );
+        server
+    }
+    fn request(&self, method: &str, path: &str, authorized: bool, body: &str) -> (u16, Value) {
+        let agent = ureq::AgentBuilder::new()
+            .timeout(std::time::Duration::from_secs(5))
+            .build();
+        let mut request = agent.request(method, &format!("{}{path}", self.url));
+        if authorized {
+            request = request.set("Authorization", &format!("Bearer {}", "a".repeat(64)));
+        }
+        let result = if method == "GET" {
+            request.call()
+        } else {
+            request.send_string(body)
+        };
+        let response = match result {
+            Ok(r) | Err(ureq::Error::Status(_, r)) => r,
+            Err(e) => panic!("local request failed: {e}"),
+        };
+        (
+            response.status(),
+            serde_json::from_str(&response.into_string().unwrap()).unwrap(),
+        )
+    }
+}
+#[cfg(unix)]
+impl Drop for VerifiedServer {
+    fn drop(&mut self) {
+        let _ = self.child.kill();
+        let _ = self.child.wait();
+    }
+}
+
+#[cfg(unix)]
+#[test]
+fn verified_http_authentication_schema_and_duplicate_sessions_fail_closed() {
+    let f = Fixture::new();
+    let server = VerifiedServer::start(&f);
+    let private = "synthetic-private-input";
+    let body = json!({"session_id":"http-test", "input":private}).to_string();
+    assert_eq!(server.request("POST", "/v1/run", false, &body).0, 401);
+    assert_eq!(server.request("GET", "/v1/health", false, "").0, 401);
+    assert_eq!(
+        server.request("GET", "/v1/health", true, "").1["execution_origin_verified"],
+        false
+    );
+    assert_eq!(server.request("POST", "/v1/compile", true, &body).0, 404);
+    assert_eq!(
+        server
+            .request(
+                "POST",
+                "/v1/run",
+                true,
+                &json!({"session_id":"bad", "input":null,"policy":"weaker"}).to_string()
+            )
+            .0,
+        400
+    );
+    assert_eq!(
+        server
+            .request("POST", "/v1/run", true, &"x".repeat(65_537))
+            .0,
+        413
+    );
+    assert_eq!(
+        server
+            .request(
+                "POST",
+                "/v1/run",
+                true,
+                &json!({"session_id":"../escape", "input":null}).to_string()
+            )
+            .0,
+        503
+    );
+    assert_eq!(fs::read_dir(f.dir.join("http-logs")).unwrap().count(), 0);
+    let (status, result) = server.request("POST", "/v1/run", true, &body);
+    assert_eq!(status, 200, "{result}");
+    assert_eq!(result["responses"], json!(["verified success"]));
+    assert!(!result.to_string().contains(private));
+    let path = f.dir.join("http-logs/http-test.jsonl");
+    let log = fs::read(&path).unwrap();
+    assert!(!String::from_utf8_lossy(&log).contains(private));
+    assert_eq!(server.request("POST", "/v1/run", true, &body).0, 409);
+    assert_eq!(fs::read(path).unwrap(), log);
+    // Admission is repeated per request, not merely at daemon startup.
+    fs::write(f.dir.join("program"), "tampered").unwrap();
+    assert_eq!(
+        server
+            .request(
+                "POST",
+                "/v1/run",
+                true,
+                &json!({"session_id":"after-tamper", "input":null}).to_string()
+            )
+            .0,
+        503
+    );
+    assert!(!f.dir.join("http-logs/after-tamper.jsonl").exists());
+}
+
+#[cfg(unix)]
+#[test]
+fn verified_http_denial_discards_buffered_output_and_private_errors() {
+    let mut f = Fixture::new();
+    replace_compiled(&mut f, "policy", "Rule:\n  id: test.verified\n  version: 1.0.0\nRespond with record with false as allow and \"synthetic-private-reason\" as reason");
+    let server = VerifiedServer::start(&f);
+    let (status, result) = server.request(
+        "POST",
+        "/v1/run",
+        true,
+        &json!({"session_id":"denied", "input":null}).to_string(),
+    );
+    assert_eq!(status, 500);
+    assert!(!result.to_string().contains("synthetic-private-reason"));
+    assert!(result.get("responses").is_none());
+    assert!(f.dir.join("http-logs/denied.jsonl").exists());
+}
+
+#[cfg(unix)]
+#[test]
+fn verified_http_execution_failure_withholds_private_diagnostics() {
+    let mut f = Fixture::new();
+    replace_compiled(&mut f, "program", "Fail with \"synthetic-private-failure\"");
+    let server = VerifiedServer::start(&f);
+    let (status, result) = server.request(
+        "POST",
+        "/v1/run",
+        true,
+        &json!({"session_id":"failed", "input":null}).to_string(),
+    );
+    assert_eq!(status, 500);
+    assert!(!result.to_string().contains("synthetic-private-failure"));
+    assert!(result.get("responses").is_none());
+    assert_eq!(
+        server
+            .request(
+                "POST",
+                "/v1/run",
+                true,
+                &json!({"session_id":"failed", "input":null}).to_string()
+            )
+            .0,
+        409
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn verified_http_startup_rejects_unsafe_binding_storage_and_missing_authentication() {
+    use std::os::unix::fs::PermissionsExt;
+    let f = Fixture::new();
+    let logs = f.dir.join("logs");
+    fs::create_dir(&logs).unwrap();
+    fs::set_permissions(&logs, fs::Permissions::from_mode(0o755)).unwrap();
+    for (bind, token) in [
+        ("0.0.0.0:0", Some("a".repeat(64))),
+        ("127.0.0.1:0", None),
+        ("127.0.0.1:0", Some("short".into())),
+        ("127.0.0.1:0", Some("a".repeat(64))),
+    ] {
+        let mut command = Command::new(env!("CARGO_BIN_EXE_devlish-core"));
+        command
+            .env("DEVLISH_VERIFIED_PROFILE", f.dir.join("profile.json"))
+            .env_remove("DEVLISH_SERVE_TOKEN");
+        if let Some(token) = token {
+            command.env("DEVLISH_SERVE_TOKEN", token);
+        }
+        let output = command
+            .args(["serve-verified", "--bind", bind, "--log-dir"])
+            .arg(&logs)
+            .output()
+            .unwrap();
+        assert!(!output.status.success());
+        assert!(!String::from_utf8_lossy(&output.stdout).contains("listening"));
+    }
+}

@@ -87,8 +87,7 @@ safe recovery across a new run remain required before production use.
 ## Integration boundary
 
 The model and LoanReview service in these tests are in-memory adapters. There is
-no production LoanReview implementation or new governed CLI/server route in this
-increment. Verified CLI model calls now require the catalog's `llm_route`: a fixed OpenRouter
+no production LoanReview implementation in this example. Verified CLI model calls now require the catalog's `llm_route`: a fixed OpenRouter
 HTTPS endpoint, exact model, credential lookup name and bounded transport. The
 example catalog uses a deliberately synthetic model; replace it with an approved
 model before compiling/signing a deployment. No live provider request is made
@@ -101,8 +100,8 @@ a finite instruction budget, disables debug events, intersects host permissions,
 redacts policy diagnostics and requires the final run record before reporting
 success. It returns only `response_emitted` and `paused`; private VM envelopes
 and checkpoint contents are inaccessible through that result. `run-verified`
-now uses this runner. Future service adapters can use the same API, but must
-first authenticate admission and create the bound start record. This API alone
+now uses this runner. The authenticated loopback `serve-verified` adapter uses shared signed admission
+and creates the same bound start record. Other adapters must do so too. This API alone
 does not verify releases or authenticate its caller.
 
 A host must expose only the policy-approved response. The VM's internal context
@@ -117,5 +116,5 @@ requires separate operator consent and protected storage.
 For signed deployment, the exact compiled agent, policy, permissions and catalog
 must be bound into an approved release; these source examples do not authenticate
 a runtime or prove protected execution. Current verified-profile mode continues
-to block unsupported harness/server/MCP routes. This example establishes the
+to block legacy harness/server/MCP routes. This example establishes the
 Devlish control loop and its tests, not completed production isolation.

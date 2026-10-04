@@ -713,5 +713,61 @@ exposing a route. Session IDs only correlate records; they do not establish a
 user or tenant identity. A valid API object is local admission evidence, not
 proof of protected execution. It cannot make an arbitrary host implementation
 trustworthy. The validity recheck is at execution startup, not continuous
-revocation monitoring during effects. Existing HTTP/MCP routes remain disabled
-under a verified profile until their full boundaries are implemented.
+revocation monitoring during effects. Legacy HTTP/harness/MCP routes remain disabled under a verified profile.
+The separate `serve-verified` adapter below uses this shared admission path.
+
+
+### Authenticated local service
+
+`serve-verified` stays running and executes each request as a separate admitted
+session. The operator selects the signed profile and a private Unix log directory;
+clients can supply only a correlation ID and application input. It accepts only
+literal loopback addresses, defaulting to `127.0.0.1:7421`.
+
+```bash
+mkdir -m 700 verified-logs
+# Set DEVLISH_SERVE_TOKEN from an operator-managed random 32-byte secret,
+# encoded as 64 hexadecimal characters. Do not commit it or put it in a URL.
+DEVLISH_VERIFIED_PROFILE=/operator/deployment/profile.json \
+  devlish serve-verified --log-dir verified-logs
+```
+
+Both `GET /v1/health` and `POST /v1/run` require exactly one
+`Authorization: Bearer <token>` header. A run body is JSON:
+
+```json
+{"session_id":"review-001","input":{"example":"application input"}}
+```
+
+Unknown fields, chunked bodies and bodies over 65,536 bytes are rejected.
+Profiles, source, policies, model routes, credentials, filesystem paths and raw
+evidence capture cannot be chosen through this API. Startup validates the
+release before listening; each run re-admits it, including current validity and
+artifact checks. Health reports local liveness, not current release validity or
+attested execution. Admission failure returns a generic 503.
+
+Successful requests return `success`, `session_id`, `paused` and `responses`.
+Only policy-approved `Respond` values enter `responses`, with at most 16 values
+and 64,000 aggregate serialized bytes. They are staged until execution and the
+final audit record succeed. A recorded response outcome means acceptance into
+this buffer, not proven delivery to the HTTP client. No private VM result,
+checkpoint state, policy reason or provider diagnostic is returned. Execution
+failure discards the buffer and returns a generic 500; earlier business effects
+may still have happened.
+
+Logs are digest-only and use exclusive `<session_id>.jsonl` files. An existing
+name returns 409 without re-execution or log replacement, including after an
+interrupted run. There is no automatic retry, resume or cross-ID deduplication:
+using a new ID can repeat business effects. Session IDs are correlation labels,
+not authenticated user or tenant identities.
+
+This is a single-operator local service, not a production isolation boundary.
+The bearer token authenticates possession only; there is no per-user/tenant
+authorization, TLS listener or protected OS identity. The operator must protect
+the profile, environment, log directory and its parent directories. Same-user
+or root compromise remains outside these guarantees. The current HTTP transport
+bounds application body/output buffers but does not enforce hard socket read
+or connection-count limits; a slow local client can block this sequential
+service. Deploying it to untrusted clients requires availability controls and
+protected execution/credential isolation. No successful response claims that
+signatures independently prove policy enforcement.
