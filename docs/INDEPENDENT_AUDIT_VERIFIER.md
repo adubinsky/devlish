@@ -511,3 +511,17 @@ No private key is loaded and nothing is signed. The result explicitly reports
 must authorize signing and independently retain the receipt digest. Fabricated
 but internally consistent logs remain possible without protected execution;
 receipt preparation does not change that trust limit.
+
+## Devlish receipt authorization contract
+
+The [receipt authority example](../examples/receipt_authority/README.md) expresses
+terminal-receipt authorization as Devlish rules with repeatable synthetic cases.
+The VM exposes an explicit host-supplied authority input, separate from caller
+request JSON. Ordinary policy-host evaluation has no authority context.
+
+This is a policy contract, not a protected signing service. It does not acquire
+keys, authenticate authority state, reserve concurrent requests or sign receipts.
+A service must independently derive that state, authorize a tenant-scoped key,
+reserve issuance, and sign the exact retained bytes whose digest the policy
+approved. The example documents those obligations and denies stronger execution
+assurance claims.

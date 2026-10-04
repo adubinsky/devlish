@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Independent audit verification
+- Add Devlish-authored terminal-receipt authorization rules and synthetic cases, with a separate host authority input and no signing backend or execution-assurance claim.
 - Add a standalone offline verifier for exact-byte Ed25519 signatures, explicit operator trust keys, revocation flags, and signature-purpose separation.
 - Verify signed checkpoints and terminal receipts against independently supplied digests and policy-log chains, while distinguishing recorded history from actual execution assurance.
 - Add synthetic signing examples, adversarial verification tests, and an independent-verifier guide. Protected receipt issuance and runtime attestation remain future work.

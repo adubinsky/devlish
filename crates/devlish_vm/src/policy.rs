@@ -44,9 +44,23 @@ impl EffectPolicy {
     }
 
     pub fn evaluate(&self, kind: &str, request: &Value) -> Result<(bool, String), String> {
+        self.evaluate_with_authority(kind, request, &Value::Null)
+    }
+
+    /// Evaluate using separately supplied host authority state. This API does not
+    /// authenticate that state: the host must obtain it independently of request
+    /// data and bind it to the same immutable operation it subsequently performs.
+    /// Ordinary PolicyHost calls supply no authority and cannot opt into it via
+    /// a request field. The policy still has no external effects or signing keys.
+    pub fn evaluate_with_authority(
+        &self,
+        kind: &str,
+        request: &Value,
+        authority: &Value,
+    ) -> Result<(bool, String), String> {
         let mut vm = Vm::new(
             self.package.clone(),
-            json!({"effect": kind, "request": request}),
+            json!({"effect": kind, "request": request, "authority": authority}),
         )
         .map_err(|e| e.message)?;
         vm.set_instruction_limit(100_000);

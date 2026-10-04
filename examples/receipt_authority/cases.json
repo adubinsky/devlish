@@ -1,0 +1,927 @@
+[
+  {
+    "name": "reserved authority-prepared history",
+    "input": {
+      "effect": "issue_audit_receipt",
+      "request": {
+        "tenant_id": "tenant-example",
+        "session_id": "session-example",
+        "release_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+        "receipt_sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+        "key_id": "receipt-example",
+        "purpose": "audit-receipt",
+        "kind": "terminal"
+      },
+      "authority": {
+        "tenant_id": "tenant-example",
+        "session_id": "session-example",
+        "release_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+        "receipt_sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+        "key_id": "receipt-example",
+        "key_active": true,
+        "signer_available": true,
+        "terminal_ready": true,
+        "reservation_state": "reserved",
+        "evidence_source": "verified-history",
+        "assurance_profile": "recorded-history"
+      }
+    },
+    "expected": {
+      "allow": true,
+      "reason": "The reserved terminal receipt matches the authority state; signing records history without proving execution."
+    }
+  },
+  {
+    "name": "wrong tenant_id",
+    "input": {
+      "effect": "issue_audit_receipt",
+      "request": {
+        "tenant_id": "tenant-attacker",
+        "session_id": "session-example",
+        "release_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+        "receipt_sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+        "key_id": "receipt-example",
+        "purpose": "audit-receipt",
+        "kind": "terminal"
+      },
+      "authority": {
+        "tenant_id": "tenant-example",
+        "session_id": "session-example",
+        "release_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+        "receipt_sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+        "key_id": "receipt-example",
+        "key_active": true,
+        "signer_available": true,
+        "terminal_ready": true,
+        "reservation_state": "reserved",
+        "evidence_source": "verified-history",
+        "assurance_profile": "recorded-history"
+      }
+    },
+    "expected": {
+      "allow": false,
+      "reason": "The request belongs to a different tenant."
+    }
+  },
+  {
+    "name": "wrong session_id",
+    "input": {
+      "effect": "issue_audit_receipt",
+      "request": {
+        "tenant_id": "tenant-example",
+        "session_id": "session-other",
+        "release_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+        "receipt_sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+        "key_id": "receipt-example",
+        "purpose": "audit-receipt",
+        "kind": "terminal"
+      },
+      "authority": {
+        "tenant_id": "tenant-example",
+        "session_id": "session-example",
+        "release_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+        "receipt_sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+        "key_id": "receipt-example",
+        "key_active": true,
+        "signer_available": true,
+        "terminal_ready": true,
+        "reservation_state": "reserved",
+        "evidence_source": "verified-history",
+        "assurance_profile": "recorded-history"
+      }
+    },
+    "expected": {
+      "allow": false,
+      "reason": "The request belongs to a different session."
+    }
+  },
+  {
+    "name": "wrong release_sha256",
+    "input": {
+      "effect": "issue_audit_receipt",
+      "request": {
+        "tenant_id": "tenant-example",
+        "session_id": "session-example",
+        "release_sha256": "3333333333333333333333333333333333333333333333333333333333333333",
+        "receipt_sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+        "key_id": "receipt-example",
+        "purpose": "audit-receipt",
+        "kind": "terminal"
+      },
+      "authority": {
+        "tenant_id": "tenant-example",
+        "session_id": "session-example",
+        "release_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+        "receipt_sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+        "key_id": "receipt-example",
+        "key_active": true,
+        "signer_available": true,
+        "terminal_ready": true,
+        "reservation_state": "reserved",
+        "evidence_source": "verified-history",
+        "assurance_profile": "recorded-history"
+      }
+    },
+    "expected": {
+      "allow": false,
+      "reason": "The request names a different release."
+    }
+  },
+  {
+    "name": "wrong receipt_sha256",
+    "input": {
+      "effect": "issue_audit_receipt",
+      "request": {
+        "tenant_id": "tenant-example",
+        "session_id": "session-example",
+        "release_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+        "receipt_sha256": "4444444444444444444444444444444444444444444444444444444444444444",
+        "key_id": "receipt-example",
+        "purpose": "audit-receipt",
+        "kind": "terminal"
+      },
+      "authority": {
+        "tenant_id": "tenant-example",
+        "session_id": "session-example",
+        "release_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+        "receipt_sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+        "key_id": "receipt-example",
+        "key_active": true,
+        "signer_available": true,
+        "terminal_ready": true,
+        "reservation_state": "reserved",
+        "evidence_source": "verified-history",
+        "assurance_profile": "recorded-history"
+      }
+    },
+    "expected": {
+      "allow": false,
+      "reason": "The request differs from the authority-prepared receipt."
+    }
+  },
+  {
+    "name": "wrong key_id",
+    "input": {
+      "effect": "issue_audit_receipt",
+      "request": {
+        "tenant_id": "tenant-example",
+        "session_id": "session-example",
+        "release_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+        "receipt_sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+        "key_id": "release-owner-key",
+        "purpose": "audit-receipt",
+        "kind": "terminal"
+      },
+      "authority": {
+        "tenant_id": "tenant-example",
+        "session_id": "session-example",
+        "release_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+        "receipt_sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+        "key_id": "receipt-example",
+        "key_active": true,
+        "signer_available": true,
+        "terminal_ready": true,
+        "reservation_state": "reserved",
+        "evidence_source": "verified-history",
+        "assurance_profile": "recorded-history"
+      }
+    },
+    "expected": {
+      "allow": false,
+      "reason": "The request selects an unauthorized signing key."
+    }
+  },
+  {
+    "name": "wrong purpose",
+    "input": {
+      "effect": "issue_audit_receipt",
+      "request": {
+        "tenant_id": "tenant-example",
+        "session_id": "session-example",
+        "release_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+        "receipt_sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+        "key_id": "receipt-example",
+        "purpose": "release-manifest",
+        "kind": "terminal"
+      },
+      "authority": {
+        "tenant_id": "tenant-example",
+        "session_id": "session-example",
+        "release_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+        "receipt_sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+        "key_id": "receipt-example",
+        "key_active": true,
+        "signer_available": true,
+        "terminal_ready": true,
+        "reservation_state": "reserved",
+        "evidence_source": "verified-history",
+        "assurance_profile": "recorded-history"
+      }
+    },
+    "expected": {
+      "allow": false,
+      "reason": "Release signing and receipt signing are separate roles."
+    }
+  },
+  {
+    "name": "wrong kind",
+    "input": {
+      "effect": "issue_audit_receipt",
+      "request": {
+        "tenant_id": "tenant-example",
+        "session_id": "session-example",
+        "release_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+        "receipt_sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+        "key_id": "receipt-example",
+        "purpose": "audit-receipt",
+        "kind": "checkpoint"
+      },
+      "authority": {
+        "tenant_id": "tenant-example",
+        "session_id": "session-example",
+        "release_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+        "receipt_sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+        "key_id": "receipt-example",
+        "key_active": true,
+        "signer_available": true,
+        "terminal_ready": true,
+        "reservation_state": "reserved",
+        "evidence_source": "verified-history",
+        "assurance_profile": "recorded-history"
+      }
+    },
+    "expected": {
+      "allow": false,
+      "reason": "This policy only authorizes terminal receipts."
+    }
+  },
+  {
+    "name": "authority key_active False",
+    "input": {
+      "effect": "issue_audit_receipt",
+      "request": {
+        "tenant_id": "tenant-example",
+        "session_id": "session-example",
+        "release_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+        "receipt_sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+        "key_id": "receipt-example",
+        "purpose": "audit-receipt",
+        "kind": "terminal"
+      },
+      "authority": {
+        "tenant_id": "tenant-example",
+        "session_id": "session-example",
+        "release_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+        "receipt_sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+        "key_id": "receipt-example",
+        "key_active": false,
+        "signer_available": true,
+        "terminal_ready": true,
+        "reservation_state": "reserved",
+        "evidence_source": "verified-history",
+        "assurance_profile": "recorded-history"
+      }
+    },
+    "expected": {
+      "allow": false,
+      "reason": "The selected receipt key is inactive or revoked."
+    }
+  },
+  {
+    "name": "authority signer_available False",
+    "input": {
+      "effect": "issue_audit_receipt",
+      "request": {
+        "tenant_id": "tenant-example",
+        "session_id": "session-example",
+        "release_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+        "receipt_sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+        "key_id": "receipt-example",
+        "purpose": "audit-receipt",
+        "kind": "terminal"
+      },
+      "authority": {
+        "tenant_id": "tenant-example",
+        "session_id": "session-example",
+        "release_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+        "receipt_sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+        "key_id": "receipt-example",
+        "key_active": true,
+        "signer_available": false,
+        "terminal_ready": true,
+        "reservation_state": "reserved",
+        "evidence_source": "verified-history",
+        "assurance_profile": "recorded-history"
+      }
+    },
+    "expected": {
+      "allow": false,
+      "reason": "The signing authority is unavailable."
+    }
+  },
+  {
+    "name": "authority terminal_ready False",
+    "input": {
+      "effect": "issue_audit_receipt",
+      "request": {
+        "tenant_id": "tenant-example",
+        "session_id": "session-example",
+        "release_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+        "receipt_sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+        "key_id": "receipt-example",
+        "purpose": "audit-receipt",
+        "kind": "terminal"
+      },
+      "authority": {
+        "tenant_id": "tenant-example",
+        "session_id": "session-example",
+        "release_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+        "receipt_sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+        "key_id": "receipt-example",
+        "key_active": true,
+        "signer_available": true,
+        "terminal_ready": false,
+        "reservation_state": "reserved",
+        "evidence_source": "verified-history",
+        "assurance_profile": "recorded-history"
+      }
+    },
+    "expected": {
+      "allow": false,
+      "reason": "Paused or incomplete history cannot receive a terminal receipt."
+    }
+  },
+  {
+    "name": "authority reservation_state consumed",
+    "input": {
+      "effect": "issue_audit_receipt",
+      "request": {
+        "tenant_id": "tenant-example",
+        "session_id": "session-example",
+        "release_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+        "receipt_sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+        "key_id": "receipt-example",
+        "purpose": "audit-receipt",
+        "kind": "terminal"
+      },
+      "authority": {
+        "tenant_id": "tenant-example",
+        "session_id": "session-example",
+        "release_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+        "receipt_sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+        "key_id": "receipt-example",
+        "key_active": true,
+        "signer_available": true,
+        "terminal_ready": true,
+        "reservation_state": "consumed",
+        "evidence_source": "verified-history",
+        "assurance_profile": "recorded-history"
+      }
+    },
+    "expected": {
+      "allow": false,
+      "reason": "Issuance requires an unconsumed exclusive reservation."
+    }
+  },
+  {
+    "name": "authority reservation_state unreserved",
+    "input": {
+      "effect": "issue_audit_receipt",
+      "request": {
+        "tenant_id": "tenant-example",
+        "session_id": "session-example",
+        "release_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+        "receipt_sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+        "key_id": "receipt-example",
+        "purpose": "audit-receipt",
+        "kind": "terminal"
+      },
+      "authority": {
+        "tenant_id": "tenant-example",
+        "session_id": "session-example",
+        "release_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+        "receipt_sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+        "key_id": "receipt-example",
+        "key_active": true,
+        "signer_available": true,
+        "terminal_ready": true,
+        "reservation_state": "unreserved",
+        "evidence_source": "verified-history",
+        "assurance_profile": "recorded-history"
+      }
+    },
+    "expected": {
+      "allow": false,
+      "reason": "Issuance requires an unconsumed exclusive reservation."
+    }
+  },
+  {
+    "name": "authority evidence_source caller-upload",
+    "input": {
+      "effect": "issue_audit_receipt",
+      "request": {
+        "tenant_id": "tenant-example",
+        "session_id": "session-example",
+        "release_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+        "receipt_sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+        "key_id": "receipt-example",
+        "purpose": "audit-receipt",
+        "kind": "terminal"
+      },
+      "authority": {
+        "tenant_id": "tenant-example",
+        "session_id": "session-example",
+        "release_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+        "receipt_sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+        "key_id": "receipt-example",
+        "key_active": true,
+        "signer_available": true,
+        "terminal_ready": true,
+        "reservation_state": "reserved",
+        "evidence_source": "caller-upload",
+        "assurance_profile": "recorded-history"
+      }
+    },
+    "expected": {
+      "allow": false,
+      "reason": "Caller-provided history is not signing authority."
+    }
+  },
+  {
+    "name": "authority assurance_profile proven-execution",
+    "input": {
+      "effect": "issue_audit_receipt",
+      "request": {
+        "tenant_id": "tenant-example",
+        "session_id": "session-example",
+        "release_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+        "receipt_sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+        "key_id": "receipt-example",
+        "purpose": "audit-receipt",
+        "kind": "terminal"
+      },
+      "authority": {
+        "tenant_id": "tenant-example",
+        "session_id": "session-example",
+        "release_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+        "receipt_sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+        "key_id": "receipt-example",
+        "key_active": true,
+        "signer_available": true,
+        "terminal_ready": true,
+        "reservation_state": "reserved",
+        "evidence_source": "verified-history",
+        "assurance_profile": "proven-execution"
+      }
+    },
+    "expected": {
+      "allow": false,
+      "reason": "This policy cannot authorize claims of proven execution."
+    }
+  },
+  {
+    "name": "missing request tenant_id",
+    "input": {
+      "effect": "issue_audit_receipt",
+      "request": {
+        "session_id": "session-example",
+        "release_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+        "receipt_sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+        "key_id": "receipt-example",
+        "purpose": "audit-receipt",
+        "kind": "terminal"
+      },
+      "authority": {
+        "tenant_id": "tenant-example",
+        "session_id": "session-example",
+        "release_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+        "receipt_sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+        "key_id": "receipt-example",
+        "key_active": true,
+        "signer_available": true,
+        "terminal_ready": true,
+        "reservation_state": "reserved",
+        "evidence_source": "verified-history",
+        "assurance_profile": "recorded-history"
+      }
+    },
+    "expected": {
+      "allow": false,
+      "reason": "The signing request is malformed."
+    }
+  },
+  {
+    "name": "missing request session_id",
+    "input": {
+      "effect": "issue_audit_receipt",
+      "request": {
+        "tenant_id": "tenant-example",
+        "release_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+        "receipt_sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+        "key_id": "receipt-example",
+        "purpose": "audit-receipt",
+        "kind": "terminal"
+      },
+      "authority": {
+        "tenant_id": "tenant-example",
+        "session_id": "session-example",
+        "release_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+        "receipt_sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+        "key_id": "receipt-example",
+        "key_active": true,
+        "signer_available": true,
+        "terminal_ready": true,
+        "reservation_state": "reserved",
+        "evidence_source": "verified-history",
+        "assurance_profile": "recorded-history"
+      }
+    },
+    "expected": {
+      "allow": false,
+      "reason": "The signing request is malformed."
+    }
+  },
+  {
+    "name": "missing request release_sha256",
+    "input": {
+      "effect": "issue_audit_receipt",
+      "request": {
+        "tenant_id": "tenant-example",
+        "session_id": "session-example",
+        "receipt_sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+        "key_id": "receipt-example",
+        "purpose": "audit-receipt",
+        "kind": "terminal"
+      },
+      "authority": {
+        "tenant_id": "tenant-example",
+        "session_id": "session-example",
+        "release_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+        "receipt_sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+        "key_id": "receipt-example",
+        "key_active": true,
+        "signer_available": true,
+        "terminal_ready": true,
+        "reservation_state": "reserved",
+        "evidence_source": "verified-history",
+        "assurance_profile": "recorded-history"
+      }
+    },
+    "expected": {
+      "allow": false,
+      "reason": "The signing request is malformed."
+    }
+  },
+  {
+    "name": "missing request receipt_sha256",
+    "input": {
+      "effect": "issue_audit_receipt",
+      "request": {
+        "tenant_id": "tenant-example",
+        "session_id": "session-example",
+        "release_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+        "key_id": "receipt-example",
+        "purpose": "audit-receipt",
+        "kind": "terminal"
+      },
+      "authority": {
+        "tenant_id": "tenant-example",
+        "session_id": "session-example",
+        "release_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+        "receipt_sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+        "key_id": "receipt-example",
+        "key_active": true,
+        "signer_available": true,
+        "terminal_ready": true,
+        "reservation_state": "reserved",
+        "evidence_source": "verified-history",
+        "assurance_profile": "recorded-history"
+      }
+    },
+    "expected": {
+      "allow": false,
+      "reason": "The signing request is malformed."
+    }
+  },
+  {
+    "name": "missing request key_id",
+    "input": {
+      "effect": "issue_audit_receipt",
+      "request": {
+        "tenant_id": "tenant-example",
+        "session_id": "session-example",
+        "release_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+        "receipt_sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+        "purpose": "audit-receipt",
+        "kind": "terminal"
+      },
+      "authority": {
+        "tenant_id": "tenant-example",
+        "session_id": "session-example",
+        "release_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+        "receipt_sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+        "key_id": "receipt-example",
+        "key_active": true,
+        "signer_available": true,
+        "terminal_ready": true,
+        "reservation_state": "reserved",
+        "evidence_source": "verified-history",
+        "assurance_profile": "recorded-history"
+      }
+    },
+    "expected": {
+      "allow": false,
+      "reason": "The signing request is malformed."
+    }
+  },
+  {
+    "name": "missing request purpose",
+    "input": {
+      "effect": "issue_audit_receipt",
+      "request": {
+        "tenant_id": "tenant-example",
+        "session_id": "session-example",
+        "release_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+        "receipt_sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+        "key_id": "receipt-example",
+        "kind": "terminal"
+      },
+      "authority": {
+        "tenant_id": "tenant-example",
+        "session_id": "session-example",
+        "release_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+        "receipt_sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+        "key_id": "receipt-example",
+        "key_active": true,
+        "signer_available": true,
+        "terminal_ready": true,
+        "reservation_state": "reserved",
+        "evidence_source": "verified-history",
+        "assurance_profile": "recorded-history"
+      }
+    },
+    "expected": {
+      "allow": false,
+      "reason": "The signing request is malformed."
+    }
+  },
+  {
+    "name": "missing request kind",
+    "input": {
+      "effect": "issue_audit_receipt",
+      "request": {
+        "tenant_id": "tenant-example",
+        "session_id": "session-example",
+        "release_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+        "receipt_sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+        "key_id": "receipt-example",
+        "purpose": "audit-receipt"
+      },
+      "authority": {
+        "tenant_id": "tenant-example",
+        "session_id": "session-example",
+        "release_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+        "receipt_sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+        "key_id": "receipt-example",
+        "key_active": true,
+        "signer_available": true,
+        "terminal_ready": true,
+        "reservation_state": "reserved",
+        "evidence_source": "verified-history",
+        "assurance_profile": "recorded-history"
+      }
+    },
+    "expected": {
+      "allow": false,
+      "reason": "The signing request is malformed."
+    }
+  },
+  {
+    "name": "string instead of boolean authority",
+    "input": {
+      "effect": "issue_audit_receipt",
+      "request": {
+        "tenant_id": "tenant-example",
+        "session_id": "session-example",
+        "release_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+        "receipt_sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+        "key_id": "receipt-example",
+        "purpose": "audit-receipt",
+        "kind": "terminal"
+      },
+      "authority": {
+        "tenant_id": "tenant-example",
+        "session_id": "session-example",
+        "release_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+        "receipt_sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+        "key_id": "receipt-example",
+        "key_active": "true",
+        "signer_available": true,
+        "terminal_ready": true,
+        "reservation_state": "reserved",
+        "evidence_source": "verified-history",
+        "assurance_profile": "recorded-history"
+      }
+    },
+    "expected": {
+      "allow": false,
+      "reason": "Independent authority state is required."
+    }
+  },
+  {
+    "name": "no authority",
+    "input": {
+      "effect": "issue_audit_receipt",
+      "request": {
+        "tenant_id": "tenant-example",
+        "session_id": "session-example",
+        "release_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+        "receipt_sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+        "key_id": "receipt-example",
+        "purpose": "audit-receipt",
+        "kind": "terminal"
+      },
+      "authority": null
+    },
+    "expected": {
+      "allow": false,
+      "reason": "Independent authority state is required."
+    }
+  },
+  {
+    "name": "arbitrary document to sign",
+    "input": {
+      "effect": "issue_audit_receipt",
+      "request": {
+        "tenant_id": "tenant-example",
+        "session_id": "session-example",
+        "release_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+        "receipt_sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+        "key_id": "receipt-example",
+        "purpose": "audit-receipt",
+        "kind": "terminal",
+        "bytes": "SYNTHETIC_PRIVATE_IP"
+      },
+      "authority": {
+        "tenant_id": "tenant-example",
+        "session_id": "session-example",
+        "release_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+        "receipt_sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+        "key_id": "receipt-example",
+        "key_active": true,
+        "signer_available": true,
+        "terminal_ready": true,
+        "reservation_state": "reserved",
+        "evidence_source": "verified-history",
+        "assurance_profile": "recorded-history"
+      }
+    },
+    "expected": {
+      "allow": false,
+      "reason": "The signing request contains unauthorized fields."
+    }
+  },
+  {
+    "name": "caller asserts enforcement",
+    "input": {
+      "effect": "issue_audit_receipt",
+      "request": {
+        "tenant_id": "tenant-example",
+        "session_id": "session-example",
+        "release_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+        "receipt_sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+        "key_id": "receipt-example",
+        "purpose": "audit-receipt",
+        "kind": "terminal",
+        "policy_enforcement_verified": true
+      },
+      "authority": {
+        "tenant_id": "tenant-example",
+        "session_id": "session-example",
+        "release_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+        "receipt_sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+        "key_id": "receipt-example",
+        "key_active": true,
+        "signer_available": true,
+        "terminal_ready": true,
+        "reservation_state": "reserved",
+        "evidence_source": "verified-history",
+        "assurance_profile": "recorded-history"
+      }
+    },
+    "expected": {
+      "allow": false,
+      "reason": "The signing request contains unauthorized fields."
+    }
+  },
+  {
+    "name": "nested caller authority",
+    "input": {
+      "effect": "issue_audit_receipt",
+      "request": {
+        "tenant_id": "tenant-example",
+        "session_id": "session-example",
+        "release_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+        "receipt_sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+        "key_id": "receipt-example",
+        "purpose": "audit-receipt",
+        "kind": "terminal",
+        "authority": {
+          "tenant_id": "tenant-example",
+          "session_id": "session-example",
+          "release_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+          "receipt_sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+          "key_id": "receipt-example",
+          "key_active": true,
+          "signer_available": true,
+          "terminal_ready": true,
+          "reservation_state": "reserved",
+          "evidence_source": "verified-history",
+          "assurance_profile": "recorded-history"
+        }
+      },
+      "authority": {
+        "tenant_id": "tenant-example",
+        "session_id": "session-example",
+        "release_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+        "receipt_sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+        "key_id": "receipt-example",
+        "key_active": true,
+        "signer_available": true,
+        "terminal_ready": true,
+        "reservation_state": "reserved",
+        "evidence_source": "verified-history",
+        "assurance_profile": "recorded-history"
+      }
+    },
+    "expected": {
+      "allow": false,
+      "reason": "The signing request contains unauthorized fields."
+    }
+  },
+  {
+    "name": "unsupported authority fields",
+    "input": {
+      "effect": "issue_audit_receipt",
+      "request": {
+        "tenant_id": "tenant-example",
+        "session_id": "session-example",
+        "release_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+        "receipt_sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+        "key_id": "receipt-example",
+        "purpose": "audit-receipt",
+        "kind": "terminal"
+      },
+      "authority": {
+        "tenant_id": "tenant-example",
+        "session_id": "session-example",
+        "release_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+        "receipt_sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+        "key_id": "receipt-example",
+        "key_active": true,
+        "signer_available": true,
+        "terminal_ready": true,
+        "reservation_state": "reserved",
+        "evidence_source": "verified-history",
+        "assurance_profile": "recorded-history",
+        "override": true
+      }
+    },
+    "expected": {
+      "allow": false,
+      "reason": "The authority state has an unsupported format."
+    }
+  },
+  {
+    "name": "wrong operation",
+    "input": {
+      "effect": "sign_arbitrary_bytes",
+      "request": {
+        "tenant_id": "tenant-example",
+        "session_id": "session-example",
+        "release_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+        "receipt_sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+        "key_id": "receipt-example",
+        "purpose": "audit-receipt",
+        "kind": "terminal"
+      },
+      "authority": {
+        "tenant_id": "tenant-example",
+        "session_id": "session-example",
+        "release_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+        "receipt_sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+        "key_id": "receipt-example",
+        "key_active": true,
+        "signer_available": true,
+        "terminal_ready": true,
+        "reservation_state": "reserved",
+        "evidence_source": "verified-history",
+        "assurance_profile": "recorded-history"
+      }
+    },
+    "expected": {
+      "allow": false,
+      "reason": "Only audit receipt issuance is permitted."
+    }
+  }
+]

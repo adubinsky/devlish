@@ -1,0 +1,55 @@
+Rule:
+  id: audit.authorize_terminal_receipt
+  version: 1.0.0
+
+Ask "Which operation is requested?" as effect
+Ask "What does the caller request?" as request
+Ask "What state did the authority independently supply?" as authority
+
+# This policy never authenticates JSON. Only the protected host may supply authority.
+If effect is not "issue_audit_receipt":
+  Respond with record with false as allow and "Only audit receipt issuance is permitted." as reason
+
+request_shape equals record with "text" as tenant_id and "text" as session_id and "text" as release_sha256 and "text" as receipt_sha256 and "text" as key_id and "text" as purpose and "text" as kind
+If not request matches shape request_shape:
+  Respond with record with false as allow and "The signing request is malformed." as reason
+request_fields equals keys of request
+If count of request_fields is not 7:
+  Respond with record with false as allow and "The signing request contains unauthorized fields." as reason
+
+state_shape equals record with "text" as tenant_id and "text" as session_id and "text" as release_sha256 and "text" as receipt_sha256 and "text" as key_id and "boolean" as key_active and "boolean" as signer_available and "boolean" as terminal_ready and "text" as reservation_state and "text" as evidence_source and "text" as assurance_profile
+If not authority matches shape state_shape:
+  Respond with record with false as allow and "Independent authority state is required." as reason
+state_fields equals keys of authority
+If count of state_fields is not 11:
+  Respond with record with false as allow and "The authority state has an unsupported format." as reason
+
+If purpose of request is not "audit-receipt":
+  Respond with record with false as allow and "Release signing and receipt signing are separate roles." as reason
+If kind of request is not "terminal":
+  Respond with record with false as allow and "This policy only authorizes terminal receipts." as reason
+If signer_available of authority is not true:
+  Respond with record with false as allow and "The signing authority is unavailable." as reason
+If key_active of authority is not true:
+  Respond with record with false as allow and "The selected receipt key is inactive or revoked." as reason
+If terminal_ready of authority is not true:
+  Respond with record with false as allow and "Paused or incomplete history cannot receive a terminal receipt." as reason
+If reservation_state of authority is not "reserved":
+  Respond with record with false as allow and "Issuance requires an unconsumed exclusive reservation." as reason
+If evidence_source of authority is not "verified-history":
+  Respond with record with false as allow and "Caller-provided history is not signing authority." as reason
+If assurance_profile of authority is not "recorded-history":
+  Respond with record with false as allow and "This policy cannot authorize claims of proven execution." as reason
+
+If tenant_id of request is not tenant_id of authority:
+  Respond with record with false as allow and "The request belongs to a different tenant." as reason
+If session_id of request is not session_id of authority:
+  Respond with record with false as allow and "The request belongs to a different session." as reason
+If release_sha256 of request is not release_sha256 of authority:
+  Respond with record with false as allow and "The request names a different release." as reason
+If receipt_sha256 of request is not receipt_sha256 of authority:
+  Respond with record with false as allow and "The request differs from the authority-prepared receipt." as reason
+If key_id of request is not key_id of authority:
+  Respond with record with false as allow and "The request selects an unauthorized signing key." as reason
+
+Respond with record with true as allow and "The reserved terminal receipt matches the authority state; signing records history without proving execution." as reason

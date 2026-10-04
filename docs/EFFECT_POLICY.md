@@ -127,3 +127,16 @@ by this wrapper; string checks cannot enforce filesystem containment in the
 presence of symlinks or races. HTTP redirects and work performed inside an
 allowed host service also need host-level constraints. Do not authorize broad
 filesystem, network, or process capabilities based on this example alone.
+
+## Host-supplied authority context
+
+`EffectPolicy::evaluate_with_authority` adds a separate `authority` input for
+host-owned decisions such as receipt issuance. Request fields cannot populate
+this input. Ordinary `evaluate` and `PolicyHost` calls supply null authority.
+The policy still runs without external effects and under the same instruction
+budget. Supplying authority is a host assertion, not authentication or attestation;
+the caller of this Rust API must protect its origin and bind any later action to
+the evaluated snapshot.
+
+See the [Devlish receipt authorization example](../examples/receipt_authority/README.md)
+for rules, synthetic cases and the required protected-host integration contract.
