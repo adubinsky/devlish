@@ -86,3 +86,7 @@ output handling. Report the actual checked executable/containment identities in
 the outcome. Platform tests must cover substitution, check/exec races, symlink
 swaps, loader overrides and disclosure. Signed logs and replay still cannot prove
 that a compromised runtime performed the claimed execution.
+
+The [Linux sealed snapshot primitive](../../docs/SEALED_TOOL_SNAPSHOTS.md) now
+provides byte retention for a future launcher. It does not execute the snapshot
+or satisfy the remaining catalog, loader or containment requirements.

@@ -12,6 +12,8 @@ pub mod service;
 #[cfg(feature = "native")]
 pub mod verified_session;
 #[cfg(feature = "native")]
+pub mod tool_snapshot;
+#[cfg(feature = "native")]
 pub mod receipt_issuer;
 #[cfg(feature = "native")]
 pub mod receipt_journal;
