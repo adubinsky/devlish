@@ -1,8 +1,31 @@
 use devlish_audit::{read_bounded, verify, Purpose, MAX_ARTIFACT_BYTES, MAX_METADATA_BYTES};
 use serde_json::json;
 use std::{collections::BTreeMap, path::Path};
-const USAGE: &str = "Usage: devlish-audit init-admission <new-state.json> --requirements <operator-requirements.json>\n       devlish-audit verify-release <manifest.json> --signature <signature.json> --trust <operator-trust.json> --requirements <operator-requirements.json> --artifacts <operator-artifacts.json> [--evidence <evidence.json> | --prepare-receipt <request.json>]\n       devlish-audit verify <file> --signature <signature.json> --trust <operator-trust.json> --purpose <release-manifest|release-artifact|audit-evidence|audit-receipt>\n       devlish-audit verify-log <log.jsonl> --receipt <receipt.json> --signature <signature.json> --trust <operator-trust.json> --receipt-sha256 <retained-digest> --session-id <expected-session> --release-sha256 <expected-release-digest>";
+const USAGE: &str = "Usage: devlish-audit verify-issuance <log.jsonl> --pending <pending.json> --completed <completed.json> --trust <operator-trust.json> --expectations <operator-expectations.json>\n       devlish-audit init-admission <new-state.json> --requirements <operator-requirements.json>\n       devlish-audit verify-release <manifest.json> --signature <signature.json> --trust <operator-trust.json> --requirements <operator-requirements.json> --artifacts <operator-artifacts.json> [--evidence <evidence.json> | --prepare-receipt <request.json>]\n       devlish-audit verify <file> --signature <signature.json> --trust <operator-trust.json> --purpose <release-manifest|release-artifact|audit-evidence|audit-receipt>\n       devlish-audit verify-log <log.jsonl> --receipt <receipt.json> --signature <signature.json> --trust <operator-trust.json> --receipt-sha256 <retained-digest> --session-id <expected-session> --release-sha256 <expected-release-digest>";
 fn run(args: &[String]) -> Result<serde_json::Value, String> {
+    if args.first().map(String::as_str) == Some("verify-issuance") {
+        if args.len() != 10 {
+            return Err(USAGE.into());
+        }
+        let mut options = BTreeMap::new();
+        for pair in args[2..].chunks_exact(2) {
+            if !["--pending", "--completed", "--trust", "--expectations"]
+                .contains(&pair[0].as_str())
+                || options.insert(pair[0].as_str(), pair[1].as_str()).is_some()
+            {
+                return Err(USAGE.into());
+            }
+        }
+        let metadata = |name| read_bounded(Path::new(options[name]), MAX_METADATA_BYTES);
+        let report = devlish_audit::issuance::verify_issuance(
+            &read_bounded(Path::new(&args[1]), MAX_ARTIFACT_BYTES)?,
+            &metadata("--pending")?,
+            &metadata("--completed")?,
+            &metadata("--trust")?,
+            &metadata("--expectations")?,
+        )?;
+        return serde_json::to_value(report).map_err(|e| e.to_string());
+    }
     if args.first().map(String::as_str) == Some("init-admission") {
         if args.len() != 4 || args[2] != "--requirements" {
             return Err(USAGE.into());

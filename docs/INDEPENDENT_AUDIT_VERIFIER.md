@@ -181,6 +181,51 @@ values to use for the verification options. It generates an ephemeral demo key
 and uses a clearly synthetic session and all-zero release digest. It is a test
 fixture generator, not independent custody or production receipt issuance.
 
+## Independently check saved issuance records
+
+After a terminal receipt has been issued, verify the retained pending and
+completed records against the execution log, current operator trust and
+independently retained expectations:
+
+```bash
+devlish-audit verify-issuance evidence.jsonl \
+  --pending operation.pending.json --completed operation.completed.json \
+  --trust /operator/trust.json --expectations /operator/issuance-expectations.json
+```
+
+The expectations file has exactly these fields:
+
+```json
+{
+  "tenant_id": "operator-tenant",
+  "session_id": "operator-session",
+  "key_id": "operator-receipt-key",
+  "key_public_sha256": "<SHA-256 of the raw 32-byte Ed25519 public key>",
+  "receipt_sha256": "<independently retained exact receipt digest>",
+  "release_manifest_sha256": "<expected release manifest digest>"
+}
+```
+
+Obtain these values independently of the candidate issuance records. The
+command recomputes the terminal operation ID, checks the record identities and
+receipt digests, then verifies the actual signature, current key purpose and
+revocation, exact receipt bytes and complete log. A saved successful
+`signature_verification` report is never used as authority. Missing completion,
+checkpoint receipts, substituted metadata and revoked keys fail closed. This is
+read-only: verification cannot reopen a slot or retry signing.
+
+Passing means `issuance_records_consistent: true`, with a nested freshly
+computed receipt verification. The output binds both record snapshots and the
+expectations to hashes and is repeatable for identical inputs. The saved
+records themselves are unsigned. The receipt currently signs the session and
+release, not the tenant label, so `tenant_binding_authenticated` remains false.
+`stored_verification_trusted`, `signer_authorization_verified`,
+`issuer_history_replayed`, `execution_origin_verified` and
+`policy_enforcement_verified` also remain false. This check does not prove
+reservation ordering, unique issuance, Devlish authorization or protected key
+custody. It does not authenticate the release manifest; use `verify-release`
+for that separate check.
+
 ## Next increments
 
 - DEVL-119 / DEVL-217: publisher-signed verifier releases and build provenance;

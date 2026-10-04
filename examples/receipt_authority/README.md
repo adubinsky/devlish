@@ -129,3 +129,16 @@ snapshots, protect the policy pin and storage, and retain evidence independently
 The Rust API is not a boundary against malicious code in the same process.
 Offline process reports do not yet replay this receipt-issuer journal; the supplied
 Devlish policy cases are repeatable independently.
+
+## Verify the retained issuance
+
+The independent `devlish-audit verify-issuance` command rechecks the saved
+pending/completed records with current trust and independently supplied receipt,
+session, tenant, release and public-key expectations. See
+[the verifier guide](../../docs/INDEPENDENT_AUDIT_VERIFIER.md#independently-check-saved-issuance-records)
+for the command and input format. The issuer integration test feeds its actual
+saved records to this checker.
+
+This proves consistency with a freshly verified receipt and log. It does not
+replay issuer decisions or authenticate the unsigned tenant label. Saved
+verification flags cannot establish stronger assurance or bypass revocation.

@@ -252,6 +252,28 @@ fn devlish_approvals_guard_backend_and_result_verifies_independently() {
     assert_eq!(records.values[0]["phase"], "prepare_audit_receipt");
     assert_eq!(records.values[1]["phase"], "issue_audit_receipt");
     assert_eq!(records.values[2]["status"], "completed");
+    let expectations = json!({"tenant_id":"tenant","session_id":"session","key_id":"receipt",
+        "key_public_sha256":sha256(f.backend.key.public_key().as_ref()),
+        "receipt_sha256":sha256(&result.receipt),"release_manifest_sha256":f.release_digest});
+    let independently_checked = devlish_audit::issuance::verify_issuance(
+        &f.log,
+        &fs::read(
+            f.directory
+                .join(format!("{}.pending.json", result.operation_id)),
+        )
+        .unwrap(),
+        &fs::read(
+            f.directory
+                .join(format!("{}.completed.json", result.operation_id)),
+        )
+        .unwrap(),
+        &bytes(&f.trust),
+        &bytes(&expectations),
+    )
+    .unwrap();
+    assert!(independently_checked.issuance_records_consistent);
+    assert!(!independently_checked.signer_authorization_verified);
+    assert!(!independently_checked.tenant_binding_authenticated);
     assert!(issuer
         .issue(
             &f.release,

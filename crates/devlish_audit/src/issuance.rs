@@ -1,16 +1,17 @@
 //! Durable local receipt reservation. Requires an operator-owned directory.
 //! This is storage and signature validation, not signing authority or isolation.
 use crate::{sha256, verify, Purpose};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::{
     fs::{File, OpenOptions},
     io::Write,
     path::{Path, PathBuf},
 };
 
-#[derive(Serialize)]
+#[derive(Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
 struct Pending {
-    format: &'static str,
+    format: String,
     format_version: u32,
     tenant_id: String,
     session_id: String,
@@ -73,6 +74,18 @@ fn identity(value: &str) -> Result<(), String> {
     Ok(())
 }
 
+/// Stable slot identity; changing a release, receipt or key must not reopen it.
+pub fn terminal_operation_id(tenant: &str, session: &str) -> Result<String, String> {
+    identity(tenant)?;
+    identity(session)?;
+    Ok(sha256(
+        &serde_json::to_vec(&serde_json::json!({
+            "tenant_id":tenant,"session_id":session,"kind":"terminal"
+        }))
+        .map_err(|e| e.to_string())?,
+    ))
+}
+
 fn check_directory(directory: &Path) -> Result<(), String> {
     #[cfg(not(unix))]
     {
@@ -131,14 +144,9 @@ pub(crate) fn reserve(
     let directory = directory.canonicalize().map_err(|e| e.to_string())?;
     // Neither release, receipt nor key enters this identity: changing any of them
     // must not create another terminal-signing slot for the same tenant/session.
-    let operation = sha256(
-        &serde_json::to_vec(&serde_json::json!({
-            "tenant_id":tenant,"session_id":session,"kind":"terminal"
-        }))
-        .map_err(|e| e.to_string())?,
-    );
+    let operation = terminal_operation_id(tenant, session)?;
     let pending = Pending {
-        format: "devlish-receipt-reservation",
+        format: "devlish-receipt-reservation".into(),
         format_version: 1,
         tenant_id: tenant.into(),
         session_id: session.into(),
@@ -195,6 +203,141 @@ impl ReceiptReservation {
             &serde_json::to_vec(&result).map_err(|e| e.to_string())?,
         )
     }
+}
+
+/// Independently obtained expectations, never read from candidate records.
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct IssuanceExpectations {
+    pub tenant_id: String,
+    pub session_id: String,
+    pub key_id: String,
+    pub key_public_sha256: String,
+    pub receipt_sha256: String,
+    pub release_manifest_sha256: String,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct Completed {
+    format: String,
+    format_version: u32,
+    operation_id: String,
+    receipt_sha256: String,
+    key_id: String,
+    signature: serde_json::Value,
+    // Historical assertions are required for schema compatibility, but never
+    // used as evidence. Fresh trust and cryptographic verification decide.
+    #[serde(rename = "signature_verification")]
+    _signature_verification: serde_json::Value,
+    #[serde(rename = "signature_verified")]
+    _signature_verified: bool,
+    #[serde(rename = "signer_authorization_verified")]
+    _signer_authorization_verified: bool,
+    #[serde(rename = "execution_origin_verified")]
+    _execution_origin_verified: bool,
+    #[serde(rename = "policy_enforcement_verified")]
+    _policy_enforcement_verified: bool,
+}
+
+#[derive(Debug, Serialize)]
+pub struct IssuanceVerification {
+    pub format: &'static str,
+    pub format_version: u32,
+    pub operation_id: String,
+    pub pending_file_sha256: String,
+    pub completed_file_sha256: String,
+    pub expectations_sha256: String,
+    pub issuance_records_consistent: bool,
+    pub stored_verification_trusted: bool,
+    pub tenant_binding_authenticated: bool,
+    pub signer_authorization_verified: bool,
+    pub issuer_history_replayed: bool,
+    pub execution_origin_verified: bool,
+    pub policy_enforcement_verified: bool,
+    pub receipt: crate::receipt::ReceiptVerification,
+    pub explanation: &'static str,
+}
+
+/// Read-only verification of one saved terminal issuance. This never opens a
+/// signing slot, retries a backend or treats a saved report as trusted evidence.
+pub fn verify_issuance(
+    log: &[u8],
+    pending_bytes: &[u8],
+    completed_bytes: &[u8],
+    trust: &[u8],
+    expectations: &[u8],
+) -> Result<IssuanceVerification, String> {
+    if [pending_bytes, completed_bytes, expectations]
+        .iter()
+        .any(|bytes| bytes.len() as u64 > crate::MAX_METADATA_BYTES)
+    {
+        return Err("issuance metadata exceeds the size limit".into());
+    }
+    let expected: IssuanceExpectations = serde_json::from_slice(expectations)
+        .map_err(|e| format!("invalid independent issuance expectations: {e}"))?;
+    let pending: Pending = serde_json::from_slice(pending_bytes)
+        .map_err(|e| format!("invalid pending issuance record: {e}"))?;
+    let completed: Completed = serde_json::from_slice(completed_bytes)
+        .map_err(|e| format!("invalid completed issuance record: {e}"))?;
+    let operation = terminal_operation_id(&expected.tenant_id, &expected.session_id)?;
+    identity(&expected.key_id)?;
+    let expected_key = crate::hex(&crate::decode::<32>(&expected.key_public_sha256)?);
+    if pending.format != "devlish-receipt-reservation"
+        || pending.format_version != 1
+        || completed.format != "devlish-receipt-issuance"
+        || completed.format_version != 1
+    {
+        return Err("unsupported issuance record format".into());
+    }
+    if pending.tenant_id != expected.tenant_id
+        || pending.session_id != expected.session_id
+        || pending.key_id != expected.key_id
+        || pending.key_public_sha256 != expected_key
+        || completed.key_id != expected.key_id
+        || completed.operation_id != operation
+    {
+        return Err("issuance identity does not match independent expectations".into());
+    }
+    let receipt_digest = sha256(pending.receipt.as_bytes());
+    if pending.receipt_sha256 != receipt_digest || completed.receipt_sha256 != receipt_digest {
+        return Err("issuance records disagree with the retained receipt bytes".into());
+    }
+    let signature = serde_json::to_vec(&completed.signature).map_err(|e| e.to_string())?;
+    let receipt = crate::receipt::verify_receipt(
+        log,
+        pending.receipt.as_bytes(),
+        &signature,
+        trust,
+        crate::receipt::ExpectedReceipt {
+            sha256: &expected.receipt_sha256,
+            session_id: &expected.session_id,
+            release_sha256: &expected.release_manifest_sha256,
+        },
+    )?;
+    if !receipt.terminal_receipt_verified
+        || receipt.receipt_signature.signer_key_id != expected.key_id
+        || receipt.receipt_signature.signer_public_key_sha256 != expected_key
+    {
+        return Err("issuance requires a terminal receipt signed by the pinned key".into());
+    }
+    Ok(IssuanceVerification {
+        format: "devlish-issuance-verification",
+        format_version: 1,
+        operation_id: operation,
+        pending_file_sha256: sha256(pending_bytes),
+        completed_file_sha256: sha256(completed_bytes),
+        expectations_sha256: sha256(expectations),
+        issuance_records_consistent: true,
+        stored_verification_trusted: false,
+        tenant_binding_authenticated: false,
+        signer_authorization_verified: false,
+        issuer_history_replayed: false,
+        execution_origin_verified: false,
+        policy_enforcement_verified: false,
+        receipt,
+        explanation: "The saved records agree with independent expectations and a freshly verified terminal receipt and log. Stored verification flags are ignored. The unsigned reservation does not authenticate tenant binding, authorization, issuance order, uniqueness or protected execution.",
+    })
 }
 
 #[cfg(all(test, unix))]
