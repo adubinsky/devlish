@@ -216,3 +216,23 @@ fn signed_receipt_count_head_and_version_are_checked() {
         assert!(f.check().is_err(), "{field}");
     }
 }
+
+#[test]
+fn recorded_session_and_verified_release_cannot_disagree_with_receipt() {
+    let mut entries = records();
+    entries[0]["session_id"] = json!("session-a");
+    entries[0]["verified_release"] =
+        json!({"session_id":"session-a","release_manifest_sha256":"a".repeat(64)});
+    assert_eq!(
+        Fixture::new(&entries, "terminal")
+            .check()
+            .unwrap()
+            .session_binding_source,
+        "receipt-signer-and-recorded-host-session"
+    );
+    entries[0]["session_id"] = json!("session-b");
+    assert!(Fixture::new(&entries, "terminal").check().is_err());
+    entries[0]["session_id"] = json!("session-a");
+    entries[0]["verified_release"]["release_manifest_sha256"] = json!("b".repeat(64));
+    assert!(Fixture::new(&entries, "terminal").check().is_err());
+}

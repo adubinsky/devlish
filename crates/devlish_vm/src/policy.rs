@@ -93,6 +93,8 @@ pub struct PolicyHost<'a> {
     next_id: u64,
     recording_failed: bool,
     capture_evidence: bool,
+    redact_diagnostics: bool,
+    allowed_effects: Option<std::collections::BTreeSet<String>>,
 }
 
 impl<'a> PolicyHost<'a> {
@@ -108,6 +110,8 @@ impl<'a> PolicyHost<'a> {
             next_id: 0,
             recording_failed: false,
             capture_evidence: false,
+            redact_diagnostics: false,
+            allowed_effects: None,
         }
     }
 
@@ -115,6 +119,18 @@ impl<'a> PolicyHost<'a> {
     /// this material as sensitive data; default decision logs contain only hashes.
     pub fn with_evidence(mut self) -> Self {
         self.capture_evidence = true;
+        self
+    }
+
+    /// Do not copy data-dependent policy reasons into ordinary logs or errors.
+    pub fn with_redacted_diagnostics(mut self) -> Self {
+        self.redact_diagnostics = true;
+        self
+    }
+
+    /// Immutable release permissions intersect the Devlish policy decision.
+    pub fn with_allowed_effects(mut self, effects: std::collections::BTreeSet<String>) -> Self {
+        self.allowed_effects = Some(effects);
         self
     }
 
@@ -141,19 +157,37 @@ impl<'a> PolicyHost<'a> {
         }
         self.next_id += 1;
         let id = self.next_id;
-        let (allow, reason) = self
-            .policy
-            .evaluate(kind, &request)
-            .unwrap_or_else(|error| (false, format!("policy evaluation failed: {error}")));
+        let (allow, reason) = if self
+            .allowed_effects
+            .as_ref()
+            .is_some_and(|effects| !effects.contains(kind))
+        {
+            (
+                false,
+                "Effect is not permitted by the approved release.".to_string(),
+            )
+        } else {
+            self.policy
+                .evaluate(kind, &request)
+                .unwrap_or_else(|error| (false, format!("policy evaluation failed: {error}")))
+        };
         let mut decision = json!({"type": "effect_decision", "effect_id": id,
             "effect": kind, "request_sha256": digest(&request),
             "policy": self.policy.identity(), "allow": allow, "reason": reason});
+        if self.redact_diagnostics {
+            decision["reason_sha256"] = json!(digest(&json!(reason)));
+            decision["reason"] = json!("Policy decision recorded; diagnostic content withheld.");
+        }
         if self.capture_evidence {
             decision["request"] = request;
         }
         self.persist(decision)?;
         if !allow {
-            return Err(format!("Policy denied {kind}: {reason}"));
+            return Err(if self.redact_diagnostics {
+                format!("Policy denied {kind}; diagnostic content withheld")
+            } else {
+                format!("Policy denied {kind}: {reason}")
+            });
         }
         let result = action(self.inner);
         let exchange = match &result {

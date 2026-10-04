@@ -29,6 +29,27 @@ impl PolicyLog {
         emit_events: bool,
         capture_evidence: bool,
     ) -> Result<Self, String> {
+        Self::create_for_bound_run(
+            path,
+            policy,
+            program,
+            input,
+            emit_events,
+            capture_evidence,
+            None,
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub fn create_for_bound_run(
+        path: &Path,
+        policy: &Value,
+        program: &Value,
+        input: &Value,
+        emit_events: bool,
+        capture_evidence: bool,
+        binding: Option<&Value>,
+    ) -> Result<Self, String> {
         let executable = std::env::current_exe().map_err(|e| e.to_string())?;
         let runtime = crate::integrity::read_regular_file(&executable)?;
         let mut options = OpenOptions::new();
@@ -46,12 +67,21 @@ impl PolicyLog {
             sequence: 0,
             previous_hash: String::new(),
         };
-        log.record(&json!({"type":"policy_run_started", "format_version":3,
+        let mut start = json!({"type":"policy_run_started", "format_version":3,
             "runtime_file_sha256":sha256_hex(&runtime),
             "emit_events":emit_events, "capture_evidence":capture_evidence,
             "policy":policy,
             "program_sha256": sha256_hex(&serde_json::to_vec_pretty(program).map_err(|e| e.to_string())?),
-            "input_sha256": sha256_hex(&serde_json::to_vec(input).map_err(|e| e.to_string())?)}))?;
+            "input_sha256": sha256_hex(&serde_json::to_vec(input).map_err(|e| e.to_string())?)});
+        if let Some(binding) = binding {
+            if binding["runtime_file_sha256"] != start["runtime_file_sha256"] {
+                return Err("runtime file changed after release verification".into());
+            }
+            start["redact_diagnostics"] = json!(true);
+            start["verified_release"] = binding.clone();
+            start["session_id"] = binding["session_id"].clone();
+        }
+        log.record(&start)?;
         // Persist the newly created directory entry as well as the file contents.
         #[cfg(unix)]
         File::open(

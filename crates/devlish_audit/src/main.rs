@@ -1,8 +1,114 @@
 use devlish_audit::{read_bounded, verify, Purpose, MAX_ARTIFACT_BYTES, MAX_METADATA_BYTES};
 use serde_json::json;
 use std::{collections::BTreeMap, path::Path};
-const USAGE: &str = "Usage: devlish-audit verify <file> --signature <signature.json> --trust <operator-trust.json> --purpose <release-artifact|audit-evidence|audit-receipt>\n       devlish-audit verify-log <log.jsonl> --receipt <receipt.json> --signature <signature.json> --trust <operator-trust.json> --receipt-sha256 <retained-digest> --session-id <expected-session> --release-sha256 <expected-release-digest>";
+const USAGE: &str = "Usage: devlish-audit init-admission <new-state.json> --requirements <operator-requirements.json>\n       devlish-audit verify-release <manifest.json> --signature <signature.json> --trust <operator-trust.json> --requirements <operator-requirements.json> --artifacts <operator-artifacts.json> [--evidence <evidence.json>]\n       devlish-audit verify <file> --signature <signature.json> --trust <operator-trust.json> --purpose <release-manifest|release-artifact|audit-evidence|audit-receipt>\n       devlish-audit verify-log <log.jsonl> --receipt <receipt.json> --signature <signature.json> --trust <operator-trust.json> --receipt-sha256 <retained-digest> --session-id <expected-session> --release-sha256 <expected-release-digest>";
 fn run(args: &[String]) -> Result<serde_json::Value, String> {
+    if args.first().map(String::as_str) == Some("init-admission") {
+        if args.len() != 4 || args[2] != "--requirements" {
+            return Err(USAGE.into());
+        }
+        devlish_audit::admission::initialize(
+            Path::new(&args[1]),
+            &read_bounded(Path::new(&args[3]), MAX_METADATA_BYTES)?,
+        )?;
+        return Ok(
+            json!({"format":"devlish-admission-initialized","format_version":1,"initialized":true}),
+        );
+    }
+    if args.first().map(String::as_str) == Some("verify-release") {
+        if ![10, 12].contains(&args.len()) {
+            return Err(USAGE.into());
+        }
+        let mut options = BTreeMap::new();
+        for pair in args[2..].chunks_exact(2) {
+            if ![
+                "--signature",
+                "--trust",
+                "--requirements",
+                "--artifacts",
+                "--evidence",
+            ]
+            .contains(&pair[0].as_str())
+                || options.insert(pair[0].as_str(), pair[1].as_str()).is_some()
+            {
+                return Err(USAGE.into());
+            }
+        }
+        if ["--signature", "--trust", "--requirements", "--artifacts"]
+            .iter()
+            .any(|key| !options.contains_key(key))
+        {
+            return Err(USAGE.into());
+        }
+        #[derive(serde::Deserialize)]
+        #[serde(deny_unknown_fields)]
+        struct LocalArtifact {
+            id: String,
+            path: std::path::PathBuf,
+        }
+        let index_path = Path::new(options["--artifacts"]);
+        let index: Vec<LocalArtifact> =
+            serde_json::from_slice(&read_bounded(index_path, MAX_METADATA_BYTES)?)
+                .map_err(|e| format!("invalid artifact mapping: {e}"))?;
+        let mut paths = BTreeMap::new();
+        for entry in index {
+            if paths.insert(entry.id, entry.path).is_some() {
+                return Err("duplicate artifact mapping".into());
+            }
+        }
+        let report = devlish_audit::release::verify_release(
+            &read_bounded(Path::new(&args[1]), MAX_METADATA_BYTES)?,
+            &read_bounded(Path::new(options["--signature"]), MAX_METADATA_BYTES)?,
+            &read_bounded(Path::new(options["--trust"]), MAX_METADATA_BYTES)?,
+            &read_bounded(Path::new(options["--requirements"]), MAX_METADATA_BYTES)?,
+            |id| {
+                let path = paths
+                    .get(id)
+                    .ok_or_else(|| format!("missing artifact mapping: {id}"))?;
+                read_bounded(
+                    &index_path.parent().unwrap_or(Path::new(".")).join(path),
+                    MAX_ARTIFACT_BYTES,
+                )
+            },
+        )?;
+        if let Some(evidence_path) = options.get("--evidence") {
+            #[derive(serde::Deserialize)]
+            #[serde(deny_unknown_fields)]
+            struct Evidence {
+                application_report: String,
+                policy_report: String,
+                log: String,
+                receipt: String,
+                signature: String,
+                trust: String,
+                retained_receipt_sha256: String,
+                session_id: String,
+            }
+            let path = Path::new(evidence_path);
+            let evidence: Evidence =
+                serde_json::from_slice(&read_bounded(path, MAX_METADATA_BYTES)?)
+                    .map_err(|e| format!("invalid evidence mapping: {e}"))?;
+            let read = |name: &str, limit| {
+                read_bounded(&path.parent().unwrap_or(Path::new(".")).join(name), limit)
+            };
+            let log = read(&evidence.log, MAX_ARTIFACT_BYTES)?;
+            let receipt = report.bind_receipt(
+                &log,
+                &read(&evidence.receipt, MAX_METADATA_BYTES)?,
+                &read(&evidence.signature, MAX_METADATA_BYTES)?,
+                &read(&evidence.trust, MAX_METADATA_BYTES)?,
+                &evidence.retained_receipt_sha256,
+                &evidence.session_id,
+            )?;
+            let reports = report.bind_run_reports(
+                &read(&evidence.application_report, MAX_ARTIFACT_BYTES)?,
+                &read(&evidence.policy_report, MAX_ARTIFACT_BYTES)?,
+                &log,
+            )?;
+            return Ok(json!({"release":report,"reports":reports,"receipt":receipt}));
+        }
+        return serde_json::to_value(report).map_err(|e| e.to_string());
+    }
     if args.first().map(String::as_str) == Some("verify-log") {
         if args.len() != 14 {
             return Err(USAGE.into());

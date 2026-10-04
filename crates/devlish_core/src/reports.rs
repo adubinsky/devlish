@@ -434,8 +434,24 @@ fn process(args: &[String]) -> Result<Value, String> {
     let mut replay_records = Records::default();
     let mut vm = Vm::new(program, input).map_err(|e| e.message)?;
     vm.set_emit_events(start["emit_events"].as_bool().ok_or("missing event mode")?);
-    let outcome = vm
-        .run(&mut PolicyHost::new(&mut replay_host, &policy, &mut replay_records).with_evidence());
+    let guarded = PolicyHost::new(&mut replay_host, &policy, &mut replay_records).with_evidence();
+    let mut guarded = if start["redact_diagnostics"] == true {
+        guarded.with_redacted_diagnostics()
+    } else {
+        guarded
+    };
+    if let Some(binding) = start.get("verified_release") {
+        let effects: std::collections::BTreeSet<String> =
+            serde_json::from_value(binding["allowed_effects"].clone())
+                .map_err(|e| format!("invalid recorded permissions: {e}"))?;
+        let limit = binding["instruction_limit"]
+            .as_u64()
+            .filter(|limit| *limit > 0 && *limit <= 10_000_000)
+            .ok_or("invalid recorded instruction limit")?;
+        vm.set_instruction_limit(limit);
+        guarded = guarded.with_allowed_effects(effects);
+    }
+    let outcome = vm.run(&mut guarded);
     let result = match &outcome {
         Ok(value) => json!({"ok":value}),
         Err(error) => json!({"err":error.message}),

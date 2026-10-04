@@ -3,7 +3,10 @@ use ring::{digest, signature};
 use serde::{Deserialize, Serialize};
 use std::{collections::BTreeSet, fs::OpenOptions, io::Read, path::Path};
 
+pub mod admission;
+pub mod binding;
 pub mod receipt;
+pub mod release;
 
 pub const MAX_ARTIFACT_BYTES: u64 = 64 * 1024 * 1024;
 pub const MAX_METADATA_BYTES: u64 = 64 * 1024;
@@ -12,20 +15,23 @@ pub const MAX_METADATA_BYTES: u64 = 64 * 1024;
 #[serde(rename_all = "kebab-case")]
 pub enum Purpose {
     ReleaseArtifact,
+    ReleaseManifest,
     AuditEvidence,
     AuditReceipt,
 }
 impl Purpose {
     pub fn parse(value: &str) -> Result<Self, String> {
         match value {
+            "release-manifest" => Ok(Self::ReleaseManifest),
             "release-artifact" => Ok(Self::ReleaseArtifact),
             "audit-evidence" => Ok(Self::AuditEvidence),
             "audit-receipt" => Ok(Self::AuditReceipt),
-            _ => Err("purpose must be release-artifact, audit-evidence or audit-receipt".into()),
+            _ => Err("purpose must be release-manifest, release-artifact, audit-evidence or audit-receipt".into()),
         }
     }
     fn name(self) -> &'static str {
         match self {
+            Self::ReleaseManifest => "release-manifest",
             Self::ReleaseArtifact => "release-artifact",
             Self::AuditEvidence => "audit-evidence",
             Self::AuditReceipt => "audit-receipt",

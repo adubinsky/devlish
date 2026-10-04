@@ -192,3 +192,290 @@ fixture generator, not independent custody or production receipt issuance.
 
 Keep orchestration and disclosure policy in Devlish. This native component is
 the narrow cryptographic verification mechanism, not a new agent orchestrator.
+
+## Signed release admission (DEVL-217, first increment)
+
+`verify-release` verifies an exact-byte manifest under the new
+`release-manifest` signature purpose. A `release-artifact` signature cannot be
+relabelled or reused. This remains a native offline verification primitive; it
+does not move agent orchestration or business policy out of Devlish.
+
+```bash
+cargo run --manifest-path crates/devlish_audit/Cargo.toml -- verify-release manifest.json \
+  --signature signature.json --trust operator-trust.json \
+  --requirements operator-requirements.json --artifacts operator-artifacts.json
+```
+
+The manifest has the following shape. Replace the illustrative digest and
+artifact list with the actual complete release before signing exact JSON bytes
+with `signing_message(Purpose::ReleaseManifest, bytes)`:
+
+```json
+{
+  "format": "devlish-release-manifest",
+  "format_version": 1,
+  "release_id": "nppi-demo-2",
+  "environment": "staging",
+  "target": "aarch64-apple-darwin",
+  "sequence": 2,
+  "valid_from": 1790985600,
+  "valid_until": 1791072000,
+  "repository": "https://github.com/adubinsky/devlish",
+  "commit": "REPLACE_WITH_APPROVED_COMMIT",
+  "workflow": "release",
+  "policy_id": "nppi",
+  "policy_version": "1",
+  "artifacts": [
+    {"id": "runtime", "role": "runtime", "sha256": "REPLACE_WITH_SHA256"}
+  ]
+}
+```
+
+Required artifact roles are `runtime`, `compiler`, `policy`, `tool-catalog`,
+`permissions`, `containment`, `source-closure`, and `build-attestation`.
+Additional external programs such as `ls` or `grep` use `tool`. Every artifact
+has a unique ASCII alphanumeric/underscore/hyphen ID and a lowercase SHA-256
+hex digest. All supplied artifact snapshots must match. Digests authenticate
+bytes only: this increment does not interpret the catalog, permission or
+containment documents, verify builder attestations, or ensure the catalog lists
+every external program. Such semantics remain a prerequisite for deployment.
+
+Operator requirements are separate from the candidate manifest:
+
+```json
+{
+  "format": "devlish-release-requirements",
+  "format_version": 1,
+  "environment": "staging",
+  "target": "aarch64-apple-darwin",
+  "repository": "https://github.com/adubinsky/devlish",
+  "commit": "REPLACE_WITH_APPROVED_COMMIT",
+  "workflow": "release",
+  "policy_id": "nppi",
+  "policy_version": "1",
+  "minimum_sequence": 2,
+  "evaluated_at": 1791000000,
+  "revocations_valid_from": 1790985600,
+  "revocations_valid_until": 1791072000,
+  "revoked_manifest_sha256": [],
+  "authorized_release_keys": ["release-authority"]
+}
+```
+
+The release authority must also be an unrevoked key in the existing operator
+trust file with purpose `release-manifest`. A builder key is not implicitly a
+release authority. Scope fields must match exactly; both validity windows use
+Unix seconds and include the start but exclude the end. A signed release below
+the supplied sequence floor is rejected, as is a revoked manifest digest.
+
+The artifact mapping is an operator-supplied JSON array, with one entry per
+manifest ID. Relative paths resolve beside the mapping file:
+
+```json
+[
+  {"id": "runtime", "path": "bin/devlish-core"},
+  {"id": "grep", "path": "/usr/bin/grep"}
+]
+```
+
+Candidate manifests cannot choose paths to read. Files are read as bounded
+regular-file snapshots; they are never executed. Changing a listed tool fails
+verification, but replacing it after verification is still possible until the
+protected launcher is implemented (DEVL-220).
+
+For repeatable historical audits, evaluation time is explicit and the report
+includes the exact requirements digest, time, floor and manifest digest. This
+is **not a live deployment authorization**: a caller could supply an old time,
+stale trust or a lower floor. The operator must protect those inputs outside
+model/user-writable storage. This increment neither reads a trusted clock nor
+atomically advances durable rollback state.
+
+The release tests in `crates/devlish_audit/tests/releases.rs` generate
+throwaway signing keys and synthetic artifacts. They cover repeatability,
+wrong scope, expired/future releases and revocation windows, rollback, revoked
+keys/releases, authority separation, missing/duplicate artifacts, manifest
+mutation, and replacement of an external tool through the real CLI.
+
+Remaining DEVL-217 work includes authenticated builder provenance (DEVL-119),
+protected/fresh trust and revocation distribution, and protected execution across all runtime entry points.
+The governed CLI additions below provide local rollback state and a limited host-effect catalog. Receipt issuance and mandatory runtime loading must consume
+the verified identity rather than merely accept a caller's digest. Reports
+continue to set `build_provenance_verified`, `execution_origin_verified` and
+`policy_enforcement_verified` to false.
+
+
+### Bind reports and receipts to the verified release
+
+Add `--evidence evidence.json` to `verify-release` to verify the release and
+cross-check an application report, policy report, signed receipt, and format-3
+log in one invocation. No saved verification report is accepted as a trust
+credential. The same log snapshot is used throughout.
+
+```json
+{
+  "application_report": "application-report.json",
+  "policy_report": "policy-report.json",
+  "log": "run.jsonl",
+  "receipt": "receipt.json",
+  "signature": "receipt.sig.json",
+  "trust": "operator-receipt-trust.json",
+  "retained_receipt_sha256": "REPLACE_WITH_INDEPENDENTLY_RETAINED_DIGEST",
+  "session_id": "expected-session"
+}
+```
+
+Paths resolve beside this operator-supplied evidence file. Protect the retained
+digest and receipt trust independently. The receipt must name the exact verified
+manifest digest. The log must record a release-approved runtime file digest,
+policy canonical digest and program canonical digest; include a `program`
+artifact in the manifest. Canonical policy/program digests are calculated from
+the verified JSON snapshots using the existing pretty-JSON hashing convention.
+Every effect decision must use the start record's policy identity.
+
+Application file entries must match release artifact IDs, roles and exact
+hashes, and include runtime and policy entries. This binding currently supports
+`runtime`, `policy`, `program`, and `tool` application roles; reports with
+`source` or `configuration` roles are rejected until their mapping is defined.
+The policy report must name the same policy file as the application report,
+and the log must match that policy and an application runtime entry. Existing
+core reports are unchanged; the independent verifier emits a separate binding
+result alongside the release and receipt results.
+
+The combined result may set `release_manifest_verified` on the receipt, while
+`report_claims_independently_verified`, `execution_origin_verified` and
+`policy_enforcement_verified` remain false. Self-hashed passing reports can be
+fabricated: matching approved identities does not prove their tests ran. This
+command does not replay the process, authenticate the golden-case baseline,
+issue receipts, or install mandatory enforcement at runtime. Those remain
+separate work.
+
+## Operator-selected execution and durable admission
+
+The CLI now supports `run-verified`. The operator sets
+`DEVLISH_VERIFIED_PROFILE` to a profile that selects the program, policy,
+release authority, artifact mapping and admission-state file. When this
+variable is set, all commands except `run-verified`, help and version are
+blocked. Server, MCP, harness, REPL and ordinary `run` have no silent fallback;
+they need dedicated governed adapters before they can be enabled in this mode.
+Without this environment variable, existing development commands still work.
+
+```json
+{
+  "format": "devlish-verified-profile",
+  "format_version": 1,
+  "manifest": "manifest.json",
+  "signature": "signature.json",
+  "trust": "operator-trust.json",
+  "requirements": "operator-requirements.json",
+  "admission_state": "admission.json",
+  "runtime_id": "runtime",
+  "program_id": "agent",
+  "policy_id": "policy",
+  "permissions_id": "permissions",
+  "catalog_id": "tool-catalog",
+  "containment_id": "containment",
+  "artifacts": [
+    {"id": "agent", "path": "agent.dvlc.json"},
+    {"id": "policy", "path": "policy.dvlc.json"}
+  ]
+}
+```
+
+Paths resolve beside the profile. Add mappings for every other manifest
+artifact. The runtime mapping is always replaced with the current executable's
+path, so a caller cannot offer a different signed file in its place. Program
+and policy must be compiled JSON. Policy Rule ID/version must agree with the
+manifest. The runner consumes the exact verified program/policy buffers,
+without reopening or compiling the path. A runtime file recheck before the
+start record rejects changes since admission; this still does not measure
+process memory or exclude injection.
+
+Provision the state file once, before enabling the execution profile:
+
+```bash
+devlish-audit init-admission admission.json --requirements operator-requirements.json
+DEVLISH_VERIFIED_PROFILE=operator-profile.json devlish-core run-verified \
+  --policy-log session-001.jsonl --session-id session-001 --input '{}'
+```
+
+The execution command accepts only input, a new policy-log path, session ID and
+optional `--policy-evidence`. It selects neither a different policy nor a
+provider override. Raw evidence capture is sensitive and remains opt-in.
+Execution uses the host clock instead of the requirements document's historical
+evaluation time. The start record includes both the original requirements
+hash and the effective requirements hash, release identity and session ID.
+Receipt verification checks recorded session/release associations when present.
+
+On Unix, admission takes a nonblocking exclusive OS file lock and retains it
+for the run. State is scoped to environment, target, repository and policy ID.
+It rejects lower sequences and different manifest bytes at an already accepted
+sequence, and persists the new floor before dispatch. State must already
+exist as a private, single-link regular file; symlinks are rejected. Missing or
+malformed state fails closed. An interrupted in-place state update can require
+operator recovery; it never silently resets the floor. Initialization uses
+exclusive creation and cannot overwrite existing state. Other platforms fail
+closed until a supported locking implementation is added.
+
+These are in-process admission controls, not a protected executor. The service
+launcher, environment, profile, trust, clock and state directory must be under
+operator control. A user who can replace the state or unset the profile can
+bypass this local boundary. The current host still shares process privileges
+with the runtime; policies and file permissions are not a substitute for OS
+containment. Root compromise, signer isolation, fresh revocation distribution,
+external-process catalog/containment support and disclosure controls for other adapters
+remain separate work. Signed receipt issuance has not been added.
+
+
+### Enforced release controls in the verified CLI
+
+The selected permissions, catalog and containment snapshots must use these
+schemas. Include each as a hashed artifact in the signed release and an entry
+in the operator profile mapping:
+
+```json
+{
+  "format": "devlish-runtime-permissions",
+  "format_version": 1,
+  "allowed_effects": ["llm_complete", "respond"],
+  "instruction_limit": 100000
+}
+```
+
+```json
+{
+  "format": "devlish-tool-catalog",
+  "format_version": 1,
+  "host_effects": ["llm_complete", "respond"]
+}
+```
+
+```json
+{
+  "format": "devlish-containment-profile",
+  "format_version": 1,
+  "mode": "in-process"
+}
+```
+
+Effects must be known native host operations. Duplicates, unknown effects and
+permissions outside the catalog are rejected before execution. The allowed
+set intersects the Devlish policy: neither can grant something the other
+denies. The signed instruction limit must be between 1 and 10,000,000 and is
+applied to the program VM. This is a VM instruction budget, not a wall-clock
+or network timeout. The only supported containment mode is explicitly
+`in-process`; claiming hardware or OS isolation fails admission. External
+program launch is not part of this host-effect catalog.
+
+The log records the selected control hashes, allowed effects and instruction
+limit. Offline process replay uses those recorded limits and the redacted
+diagnostic mode, preserving repeatability. That replay agreement does not
+independently authenticate the recorded control values; release approval and
+protected execution remain separate checks.
+
+For `run-verified`, only a policy-approved Respond emits program data to stdout.
+Automatic VM result/context dumps and raw errors are suppressed. Admission
+errors emit a diagnostic digest. Policy decision reasons are represented by
+fixed text plus a reason digest in ordinary logs. Debug event output and the
+legacy audit sink are disabled. An explicit `--policy-evidence` still captures
+sensitive inputs and exchanges for replay and needs protected storage. These
+changes apply to the verified CLI profile, not ordinary development commands.

@@ -108,6 +108,7 @@ pub fn verify_receipt(
     let mut next_effect = 1u64;
     let mut pending: Option<(u64, String)> = None;
     let mut finish: Option<(bool, bool)> = None;
+    let mut host_session_bound = false;
     for line in text.lines() {
         if line.len() > 1024 * 1024 {
             return Err("log record exceeds 1 MiB limit".into());
@@ -127,7 +128,23 @@ pub fn verify_receipt(
         }
         let record = &envelope.record;
         match record["type"].as_str() {
-            Some("policy_run_started") if count == 0 && record["format_version"] == 3 => {}
+            Some("policy_run_started") if count == 0 && record["format_version"] == 3 => {
+                if let Some(session) = record.get("session_id") {
+                    if session.as_str() != Some(expected.session_id) {
+                        return Err("log session differs from expected receipt session".into());
+                    }
+                    host_session_bound = true;
+                }
+                if let Some(binding) = record.get("verified_release") {
+                    if !host_session_bound
+                        || binding["session_id"] != record["session_id"]
+                        || binding["release_manifest_sha256"].as_str()
+                            != Some(expected.release_sha256)
+                    {
+                        return Err("log verified release differs from receipt".into());
+                    }
+                }
+            }
             Some("effect_decision") if count > 0 => {
                 if pending.is_some() {
                     return Err("new decision before prior effect outcome".into());
@@ -197,7 +214,11 @@ pub fn verify_receipt(
         retained_receipt_digest_matched: true,
         receipt_sha256: sha256(receipt),
         session_id: receipt_data.session_id,
-        session_binding_source: "receipt-signer; format-3 log has no host session ID",
+        session_binding_source: if host_session_bound {
+            "receipt-signer-and-recorded-host-session"
+        } else {
+            "receipt-signer; format-3 log has no host session ID"
+        },
         release_manifest_sha256: receipt_data.release_manifest_sha256,
         release_manifest_verified: false,
         log_head_sha256: previous,

@@ -11,6 +11,7 @@ use std::process::ExitCode;
 
 mod harness;
 mod reports;
+mod verified_run;
 mod serve;
 
 use devlish_core::logutil;
@@ -75,6 +76,10 @@ fn main() -> ExitCode {
 }
 
 fn run(args: Vec<String>) -> Result<(), String> {
+    if env::var_os("DEVLISH_VERIFIED_PROFILE").is_some()
+        && !args.first().is_some_and(|a| ["run-verified", "help", "--help", "-h", "version", "--version", "-v"].contains(&a.as_str())) {
+        return Err("verified profile requires run-verified; other execution routes are disabled".into());
+    }
     logutil::init_from_env_and_args(&args)?;
     if args.is_empty() {
         print_help();
@@ -94,6 +99,8 @@ fn run(args: Vec<String>) -> Result<(), String> {
         "artifact" => run_artifact(args),
         "compile" => run_compile(args),
         "run" => run_execute(args),
+        "run-verified" => verified_run::run(args).map_err(|error| format!(
+            "verified execution rejected; diagnostic sha256: {}", sha256_hex(error.as_bytes()))),
         "disassemble" => run_disassemble(args),
         "validate" => run_validate(args),
         "lint" => run_lint(args),
@@ -166,6 +173,7 @@ Run options:
                               (falls back to DEVLISH_AUDIT_LOG)
   --policy <file>             Enforce a Devlish effect policy (requires --policy-log)
   --policy-evidence          Include sensitive effect data in the log for offline reports
+  run-verified              Run operator-selected release (DEVLISH_VERIFIED_PROFILE)
   --policy-sha256 <digest>    Pin the exact compiled policy bytes to an approved digest
   --policy-log <path>         Create an exclusive, durable policy decision log
   --journal <dir>             Archive input, bytecode, and every effect exchange
@@ -325,6 +333,13 @@ fn select_effective_version(
 }
 
 fn run_execute(args: Vec<String>) -> Result<(), String> {
+    run_execute_loaded(args, None)
+}
+
+fn run_execute_loaded(
+    args: Vec<String>,
+    verified: Option<verified_run::VerifiedInputs>,
+) -> Result<(), String> {
     let config = RunConfig::parse(args)?;
     if config.policy.is_some() != config.policy_log.is_some() {
         return Err("--policy and --policy-log must be supplied together".into());
@@ -338,7 +353,7 @@ fn run_execute(args: Vec<String>) -> Result<(), String> {
     if config.policy_sha256.is_some() && config.policy.is_none() {
         return Err("--policy-sha256 requires --policy".into());
     }
-    let policy = config.policy.as_ref().map(|path| {
+    let policy = if let Some(loaded) = &verified { Some(loaded.policy.clone()) } else { config.policy.as_ref().map(|path| {
         let mut policy = if let Some(expected) = &config.policy_sha256 {
             if path.extension().is_some_and(|ext| ext == "dvl") {
                 return Err("--policy-sha256 requires compiled bytecode; compile the policy first".into());
@@ -355,7 +370,7 @@ fn run_execute(args: Vec<String>) -> Result<(), String> {
             policy.set_file_digest(expected.to_ascii_lowercase());
         }
         Ok::<_, String>(policy)
-    }).transpose()?;
+    }).transpose()? };
     if config.journal.is_some()
         && config.audit_log.is_none()
         && env::var("DEVLISH_AUDIT_LOG")
@@ -368,7 +383,7 @@ fn run_execute(args: Vec<String>) -> Result<(), String> {
         );
     }
 
-    let package: Value = if let Some(as_of) = &config.as_of {
+    let package: Value = if let Some(loaded) = &verified { loaded.program.clone() } else if let Some(as_of) = &config.as_of {
         // Gather every candidate version, then pick the one in force on the date.
         let mut versions: Vec<(PathBuf, Value)> = Vec::new();
         for path in std::iter::once(&config.input).chain(config.extra_inputs.iter()) {
@@ -432,12 +447,12 @@ fn run_execute(args: Vec<String>) -> Result<(), String> {
         }
     }
 
-    let audit_path = config.audit_log.clone().or_else(|| {
+    let audit_path = if verified.is_some() { None } else { config.audit_log.clone().or_else(|| {
         env::var("DEVLISH_AUDIT_LOG")
             .ok()
             .filter(|value| !value.is_empty())
             .map(PathBuf::from)
-    });
+    }) };
     if config.journal.is_some()
         && package
             .get("manifest")
@@ -475,13 +490,16 @@ fn run_execute(args: Vec<String>) -> Result<(), String> {
     };
     let mut policy_log = match (&policy, &config.policy_log) {
         (Some(policy), Some(path)) => {
-            Some(PolicyLog::create_for_run(path, policy.identity(), &package, &input, !config.quiet, config.policy_evidence)?)
+            Some(PolicyLog::create_for_bound_run(path, policy.identity(), &package, &input, !config.quiet, config.policy_evidence, verified.as_ref().map(|v| &v.log_context))?)
         }
         _ => None,
     };
     let vm = Vm::new(package, input);
     match vm {
         Err(error) => {
+            if verified.is_some() {
+                return Err("verified VM initialization failed".into());
+            }
             let failure = json!({
                 "success": false,
                 "error": error.message,
@@ -495,12 +513,20 @@ fn run_execute(args: Vec<String>) -> Result<(), String> {
             Err(error.message)
         }
         Ok(mut vm) => {
+            if let Some(loaded) = &verified {
+                vm.set_instruction_limit(loaded.instruction_limit);
+            }
             if config.quiet {
                 vm.set_emit_events(false);
             }
             let execution = match (&policy, policy_log.as_mut()) {
                 (Some(policy), Some(log)) => {
                     let guarded = PolicyHost::new(host, policy, log);
+                    let guarded = if let Some(loaded) = &verified {
+                        guarded.with_redacted_diagnostics().with_allowed_effects(loaded.allowed_effects.clone())
+                    } else {
+                        guarded
+                    };
                     let mut guarded = if config.policy_evidence { guarded.with_evidence() } else { guarded };
                     let result = vm.run(&mut guarded);
                     if guarded.recording_failed() {
@@ -526,7 +552,9 @@ fn run_execute(args: Vec<String>) -> Result<(), String> {
                         .get("responded")
                         .and_then(Value::as_bool)
                         .unwrap_or(false);
-                    if !responded {
+                    if !responded && verified.is_some() {
+                        println!("{}", json!({"success":true,"response_emitted":false}));
+                    } else if !responded {
                         println!(
                             "{}",
                             serde_json::to_string_pretty(&result).unwrap_or_default()
@@ -553,6 +581,9 @@ fn run_execute(args: Vec<String>) -> Result<(), String> {
                     Ok(())
                 }
                 Err(error) => {
+                    if verified.is_some() {
+                        return Err("verified program execution failed; details withheld".into());
+                    }
                     // If the error message is valid JSON (from Fail with record),
                     // write it to stdout as structured output instead of the
                     // generic failure envelope.

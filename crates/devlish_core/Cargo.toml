@@ -15,6 +15,7 @@ name = "devlish-core"
 path = "src/main.rs"
 
 [dependencies]
+devlish-audit = { path = "../devlish_audit" }
 devlish-vm = { path = "../devlish_vm" }
 devlish-llm = { path = "../devlish_llm", optional = true }
 serde = { version = "=1.0.228", features = ["derive"] }
@@ -28,3 +29,6 @@ tiny_http = { version = "0.12", optional = true }
 [features]
 default = ["native"]
 native = ["ureq", "calamine", "devlish-llm", "tiny_http"]
+
+[dev-dependencies]
+ring = "=0.17.14"
