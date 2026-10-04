@@ -799,13 +799,18 @@ finish:
     #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
     fn synthetic_broker_with_devlish_authority(substitute_request: bool) {
         use crate::tool_broker_test_support as broker;
+        use std::os::unix::fs::PermissionsExt;
         use std::{
             ffi::CString,
             os::fd::{AsFd, AsRawFd},
         };
         broker::check_notification_sizes();
         let fixture = linked_static_fixture(
-            if substitute_request { "broker-deny" } else { "broker-allow" },
+            if substitute_request {
+                "broker-deny"
+            } else {
+                "broker-allow"
+            },
             r#".text
     .global _start
     _start:
@@ -869,6 +874,22 @@ finish:
             .select("public-grep", &["--public-only".into()], 150)
             .unwrap();
         let prepared = PreparedCatalogTool::load(selected, CONTAINMENT).unwrap();
+        let slot_directory = fixture.dir.join("launch-slots");
+        std::fs::create_dir(&slot_directory).unwrap();
+        std::fs::set_permissions(&slot_directory, std::fs::Permissions::from_mode(0o700)).unwrap();
+        let slots = crate::tool_reservations::ToolReservations::open(&slot_directory).unwrap();
+        let mut reservation = Some(
+            slots
+                .reserve(
+                    "tenant",
+                    "synthetic-broker-session",
+                    1,
+                    prepared.selection(),
+                )
+                .unwrap(),
+        );
+        let operation_id = reservation.as_ref().unwrap().operation_id().to_string();
+        let mut consumed = None;
         let rules = crate::tool_landlock::LandlockRuleset::deny_file_access().unwrap();
         let streams = crate::tool_streams::ToolStreams::new(if substitute_request {
             b""
@@ -990,6 +1011,9 @@ finish:
                     broker::reply(&listener, request.id, false);
                     break;
                 }
+                consumed = Some(reservation.take().unwrap().consume().unwrap());
+                // A slow persistence operation cannot extend the execution budget.
+                assert!(std::time::Instant::now() < streams.deadline());
                 authorization_consumed = true;
                 authority["reservation_state"] = serde_json::json!("consumed");
                 broker::reply(&listener, request.id, true);
@@ -1011,7 +1035,7 @@ finish:
                 broker::reply(&listener, request.id, false);
             }
         }
-        // No listener remains after this test's explicit second-exec denial.
+        // No listener remains after initial denial or explicit second-exec denial.
         // Further exec requests fail closed in the kernel. Move sole reaping
         // ownership to the bounded collector before any candidate output escapes.
         drop(listener);
@@ -1027,6 +1051,32 @@ finish:
             assert_eq!(captured.exit_code(), 37);
             assert_eq!(captured.stdout(), b"public build output\n");
             assert_eq!(captured.stderr(), b"completed\n");
+        }
+        // Restart-style reopening cannot repeat this logical effect, regardless
+        // of whether it executed or stopped at the authorization boundary.
+        drop(reservation);
+        let reopened = crate::tool_reservations::ToolReservations::open(&slot_directory).unwrap();
+        assert!(reopened
+            .reserve(
+                "tenant",
+                "synthetic-broker-session",
+                1,
+                prepared.selection()
+            )
+            .is_err());
+        let bytes = std::fs::read(slot_directory.join(format!("{operation_id}.jsonl"))).unwrap();
+        let records: Vec<serde_json::Value> = bytes
+            .split(|b| *b == b'\n')
+            .filter(|line| !line.is_empty())
+            .map(|line| serde_json::from_slice(line).unwrap())
+            .collect();
+        if let Some(consumed) = consumed {
+            assert_eq!(records.len(), 2);
+            assert_eq!(records[1]["state"], "consumed");
+            assert_eq!(devlish_audit::sha256(&bytes), consumed.evidence_sha256());
+        } else {
+            assert_eq!(records.len(), 1);
+            assert_eq!(records[0]["state"], "reserved");
         }
         let mut status = 0;
         assert_eq!(

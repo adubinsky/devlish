@@ -2,7 +2,8 @@
 
 `ToolReservations` is a native storage primitive for a future governed launcher.
 It does not authorize or start a process. Production external execution remains
-disabled, and the synthetic broker is not yet connected to this store.
+disabled. The synthetic broker now reserves a slot before fork and consumes it
+after Devlish approval, before its first kernel continuation.
 
 The operator supplies a private directory owned by the service identity, a tenant,
 a session and a positive effect number. The store hashes a domain-separated JSON
@@ -51,3 +52,15 @@ terminal outcome recording and independent audit reporting remains required.
 
 Sources: [exclusive creation and descriptor-relative access](https://man7.org/linux/man-pages/man2/open.2.html)
 and [file and directory synchronization](https://man7.org/linux/man-pages/man2/fsync.2.html).
+
+## Composed broker checks
+
+The allowed synthetic case persists consumption before continuing the first exec,
+rechecks the stream deadline after persistence, and compares the saved bytes with
+the returned digest after collection. The denied private-export case leaves an
+unconsumed reservation and never enters the candidate tool. Both cases reopen the
+store and require a repeat reservation of the same effect to fail. Child descriptor
+cleanup excludes the slot file and directory from candidate inheritance.
+
+These tests still use synthetic admission/authority state. They do not implement
+a production session counter, outcome reconciliation, or a broker service.
