@@ -48,7 +48,7 @@ profile and tests. Do not widen this profile implicitly to make a tool work.
 The Devlish policy must still govern arguments, input disclosure and output.
 
 The next launcher must combine signed selection and image preparation with
-descriptor closure, an empty controlled environment, safe working directory,
+[descriptor closure](TOOL_DESCRIPTOR_ISOLATION.md), an empty controlled environment, safe working directory,
 network/IPC/process restrictions, resource/output limits, protected expiry
 checks and terminal recording. It must account for the transition into the
 first executable and prohibit later unapproved executable transitions.
