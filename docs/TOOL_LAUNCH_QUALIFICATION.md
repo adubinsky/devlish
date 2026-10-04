@@ -12,7 +12,7 @@ assurance separate from the complete launch boundary.
 | Filesystem data access | Empty Landlock ABI-3 allowlist primitive | Additional syscall restrictions; separate approved input profile if files are needed |
 | Inherited capabilities | Close unlisted descriptors in a disposable child | Configure and bound standard I/O; authenticate every retained descriptor |
 | Network, IPC, process creation and later execution | Not implemented | Enforce and adversarially test before enabling dispatch |
-| Resource and output limits | Not implemented for child processes | Wall/CPU/memory/process/output limits, termination and cleanup |
+| Resource and output limits | Fixed child resource ceilings (see TOOL_RESOURCE_LIMITS.md) | Wall deadline, bounded output, process controls, termination and cleanup |
 | Policy, disclosure and evidence | Declared tool effect, Devlish policy and replay tested with fake adapters | Connect real launcher, record identity/outcome commitments, release only approved output |
 
 ## Composed Linux test
@@ -25,7 +25,7 @@ then replaces the original pathname with non-executable data.
 
 In a disposable fork child, trusted test setup closes standard I/O, applies the
 filesystem restriction, closes all other descriptors except the checked image,
-and calls `execveat` on that retained descriptor with an empty environment. The
+lowers child resource limits, and calls `execveat` on that retained descriptor with an empty environment. The
 parent requires the expected exit status. No source pathname is reopened during
 execution. The original inspection-only linker test remains separate.
 
@@ -34,8 +34,8 @@ linker is a test/build dependency. It does not run arbitrary model-selected
 programs, use production credentials, contact a provider, or enable dispatch.
 The test proves these primitives compose on the tested Linux kernel, including
 the exec transition; it does not qualify a hostile arbitrary executable. The
-fixture has no file/network I/O, and limits or syscall filtering absent from
-the production design cannot be inferred from its successful exit.
+fixture has no file/network I/O, and syscall filtering, output bounds or wall deadlines cannot be inferred from
+its successful exit.
 
 ```bash
 cargo test --locked --manifest-path crates/devlish_core/Cargo.toml --lib \

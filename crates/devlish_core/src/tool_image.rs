@@ -642,6 +642,9 @@ finish:
                 if crate::tool_descriptors::close_unlisted(&[image_fd]).is_err() {
                     libc::_exit(111);
                 }
+                if crate::tool_limits::restrict_child().is_err() {
+                    libc::_exit(113);
+                }
                 libc::syscall(
                     libc::SYS_execveat,
                     image_fd,
