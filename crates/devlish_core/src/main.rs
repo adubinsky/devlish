@@ -16,6 +16,8 @@ mod serve;
 mod verified_run;
 #[cfg(feature = "native")]
 mod verified_serve;
+#[cfg(feature = "native")]
+mod verified_credentials;
 
 use devlish_core::logutil;
 
@@ -1356,6 +1358,8 @@ fn capitalize(s: &str) -> String {
 /// Credentials flow only to host methods, never to program variables.
 struct CredentialStore {
     entries: Vec<(String, String)>,
+    #[cfg(feature = "native")]
+    verified_source: Option<verified_credentials::VerifiedCredentials>,
 }
 
 impl CredentialStore {
@@ -1383,10 +1387,29 @@ impl CredentialStore {
             entries.push((key.clone(), value.clone()));
         }
 
-        Self { entries }
+        Self {
+            entries,
+            #[cfg(feature = "native")]
+            verified_source: None,
+        }
+    }
+
+    #[cfg(feature = "native")]
+    fn verified() -> Result<Self, String> {
+        let directory = env::var_os("DEVLISH_CREDENTIALS_DIR").map(PathBuf::from);
+        Ok(Self {
+            entries: Vec::new(),
+            verified_source: Some(verified_credentials::VerifiedCredentials::new(
+                directory.as_deref(),
+            )?),
+        })
     }
 
     fn resolve(&self, key: &str) -> Option<String> {
+        #[cfg(feature = "native")]
+        if let Some(source) = &self.verified_source {
+            return source.resolve(key);
+        }
         // Walk entries in reverse so later (higher priority) entries win
         for (k, v) in self.entries.iter().rev() {
             if k == key {
@@ -3750,6 +3773,8 @@ impl HostEffects for ReplHost {
         let mut native = NativeHost::new(
             CredentialStore {
                 entries: Vec::new(),
+                #[cfg(feature = "native")]
+                verified_source: None,
             },
             None,
         );
@@ -3759,6 +3784,8 @@ impl HostEffects for ReplHost {
         let mut native = NativeHost::new(
             CredentialStore {
                 entries: Vec::new(),
+                #[cfg(feature = "native")]
+                verified_source: None,
             },
             None,
         );

@@ -705,7 +705,8 @@ runner. The admission lock remains held through execution and final recording.
 Replacing artifact paths after admission cannot replace the retained program or
 policy. Relative deployment paths are anchored to the admission working directory
 without resolving symlinks, so a later working-directory change cannot redirect
-the program-local credential lookup. Log-path collisions fail before any host effect and preserve old evidence.
+an adapter using that source location. The built-in verified CLI and HTTP adapters
+now select credentials separately, without program-local dotenv lookup. Log-path collisions fail before any host effect and preserve old evidence.
 
 `run-verified` uses this API directly. Other adapters must authenticate their
 clients, select operator-controlled profiles/log paths, install protected host
@@ -856,3 +857,37 @@ Checking release files alone still does not evaluate any run, and standalone
 `verify-log` does not apply release requirements. Use `verify-release` with receipt
 evidence for the stronger check. This option demands recorded-control consistency,
 not actual-execution assurance.
+
+### Explicit verified credential sources
+
+Verified CLI and HTTP adapters no longer read either the user's
+`~/.devlish/.env` or a program-local `.env`. This is a change for verified
+mode: move needed credentials to the operator process environment or select a
+mounted directory with an absolute `DEVLISH_CREDENTIALS_DIR` path. Legacy development-mode
+credential lookup is unchanged.
+
+When the directory is set, it is the only credential source: a missing, unsafe
+or invalid file does not fall back to the environment. Each filename is the
+approved credential lookup name, such as `OPENROUTER_API_KEY`; separators and
+other non-identifier characters are rejected. On Unix, the directory must be
+owned by root or the effective service user, with no group/other mode permissions.
+Files must be regular, have one hard link, the same ownership restrictions, and
+no group/other mode permissions. Symlink credential leaves and the final directory
+component are rejected, including directory paths ending in `/` or `/.`. Parent
+traversal (`..`) is rejected; ancestor paths remain operator-controlled. FIFOs are rejected.
+The opened directory descriptor is retained for that execution, so pathname
+replacement cannot redirect lookups. Directory mode is checked at source creation;
+file metadata is checked when resolving each credential.
+
+Files are at most 8,192 bytes of UTF-8 text. One terminal newline (LF or CRLF) is
+accepted; empty values, NULs and embedded newlines are rejected. Environment-only
+credentials use the same content limits. No secret value or path is returned in
+verified diagnostics. An invalid configured directory rejects CLI startup before
+the run log and rejects HTTP startup or a later request with a generic error.
+
+This supports operator-mounted secrets without claiming secret isolation by
+itself. It checks Unix mode bits, not ACLs, and relies on the operator to protect
+ACLs, parent paths, environment and credential source integrity. Same-user/root
+processes and a compromised host remain outside its protection. A separate service
+identity and protected execution deployment are still required. No secrets are
+placed in the signed catalog; the catalog pins the credential lookup name.

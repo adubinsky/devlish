@@ -124,6 +124,7 @@ impl Fixture {
             .current_dir(&self.dir)
             .env("DEVLISH_VERIFIED_PROFILE", self.dir.join("profile.json"))
             .env_remove("DEVLISH_AUDIT_LOG")
+            .env_remove("DEVLISH_CREDENTIALS_DIR")
             .args(args)
             .output()
             .unwrap()
@@ -783,20 +784,27 @@ struct VerifiedServer {
 #[cfg(unix)]
 impl VerifiedServer {
     fn start(f: &Fixture) -> Self {
+        Self::start_with_credentials(f, None)
+    }
+    fn start_with_credentials(f: &Fixture, credentials: Option<&std::path::Path>) -> Self {
         use std::{io::BufRead, os::unix::fs::PermissionsExt, process::Stdio};
         let logs = f.dir.join("http-logs");
         fs::create_dir(&logs).unwrap();
         fs::set_permissions(&logs, fs::Permissions::from_mode(0o700)).unwrap();
-        let mut child = Command::new(env!("CARGO_BIN_EXE_devlish-core"))
+        let mut command = Command::new(env!("CARGO_BIN_EXE_devlish-core"));
+        command
             .env("DEVLISH_VERIFIED_PROFILE", f.dir.join("profile.json"))
             .env("DEVLISH_SERVE_TOKEN", "a".repeat(64))
             .env_remove("DEVLISH_AUDIT_LOG")
+            .env_remove("DEVLISH_CREDENTIALS_DIR")
             .args(["serve-verified", "--bind", "127.0.0.1:0", "--log-dir"])
             .arg(logs)
             .stdout(Stdio::piped())
-            .stderr(Stdio::null())
-            .spawn()
-            .unwrap();
+            .stderr(Stdio::null());
+        if let Some(directory) = credentials {
+            command.env("DEVLISH_CREDENTIALS_DIR", directory);
+        }
+        let mut child = command.spawn().unwrap();
         let stdout = child.stdout.take().unwrap();
         let (tx, rx) = std::sync::mpsc::channel();
         std::thread::spawn(move || {
@@ -1078,4 +1086,52 @@ fn verified_http_enforces_the_same_signed_effect_budget() {
         serde_json::from_str::<Value>(log.lines().nth(1).unwrap()).unwrap()["record"]["allow"],
         false
     );
+}
+
+#[cfg(unix)]
+#[test]
+fn invalid_operator_credential_source_rejects_cli_before_log() {
+    let f = Fixture::new();
+    let output = Command::new(env!("CARGO_BIN_EXE_devlish-core"))
+        .current_dir(&f.dir)
+        .env("DEVLISH_VERIFIED_PROFILE", f.dir.join("profile.json"))
+        .env(
+            "DEVLISH_CREDENTIALS_DIR",
+            f.dir.join("missing-sensitive-directory"),
+        )
+        .args([
+            "run-verified",
+            "--policy-log",
+            "run.jsonl",
+            "--session-id",
+            "bad-credentials",
+        ])
+        .output()
+        .unwrap();
+    assert!(!output.status.success());
+    assert!(!String::from_utf8_lossy(&output.stderr).contains("missing-sensitive-directory"));
+    f.assert_no_dispatch();
+}
+
+#[cfg(unix)]
+#[test]
+fn verified_http_rechecks_operator_credential_source_without_exposing_it() {
+    use std::os::unix::fs::PermissionsExt;
+    let f = Fixture::new();
+    let directory = f.dir.join("sensitive-credentials");
+    fs::create_dir(&directory).unwrap();
+    fs::set_permissions(&directory, fs::Permissions::from_mode(0o700)).unwrap();
+    let server = VerifiedServer::start_with_credentials(&f, Some(&directory));
+    let command = |session| json!({"session_id":session,"input":null}).to_string();
+    assert_eq!(
+        server
+            .request("POST", "/v1/run", true, &command("good-source"))
+            .0,
+        200
+    );
+    fs::set_permissions(&directory, fs::Permissions::from_mode(0o755)).unwrap();
+    let (status, response) = server.request("POST", "/v1/run", true, &command("bad-source"));
+    assert_eq!(status, 503);
+    assert!(!response.to_string().contains("sensitive-credentials"));
+    assert!(!f.dir.join("http-logs/bad-source.jsonl").exists());
 }

@@ -234,7 +234,8 @@ impl VerifiedSession {
         })
     }
 
-    /// Trusted adapters may use this path only for operator credential lookup.
+    /// Anchored source location for trusted adapters; built-in credential sources
+    /// are configured separately and do not read program-local dotenv files.
     /// The program is never reopened for execution.
     pub fn program_path(&self) -> &Path {
         &self.program_path

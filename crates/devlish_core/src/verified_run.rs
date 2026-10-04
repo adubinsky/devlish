@@ -37,10 +37,7 @@ pub(super) fn run(args: Vec<String>) -> Result<(), String> {
         .ok_or("run-verified requires an operator-configured DEVLISH_VERIFIED_PROFILE")?;
     let admitted =
         devlish_core::verified_session::VerifiedSession::admit(&path, session, evidence)?;
-    let mut host = super::NativeHost::new(
-        super::CredentialStore::new(&[], Some(admitted.program_path())),
-        None,
-    );
+    let mut host = super::NativeHost::new(super::CredentialStore::verified()?, None);
     host.verified_model_route = Some(admitted.model_route());
     let completion = admitted.execute(input, Path::new(log), &mut host)?;
     if !completion.response_emitted {

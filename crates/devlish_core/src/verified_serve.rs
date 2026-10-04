@@ -74,6 +74,7 @@ pub(super) fn run(args: Vec<String>) -> Result<(), String> {
     let logs = private_log_directory(Path::new(options.get("--log-dir").ok_or(USAGE)?))?;
     // Refuse to listen for an invalid deployment; every request admits afresh too.
     drop(VerifiedSession::admit(&profile, "server-startup", false)?);
+    drop(super::CredentialStore::verified()?);
     let state = State {
         profile,
         logs,
@@ -205,10 +206,17 @@ fn handle(mut request: Request, state: &State) -> Result<(), String> {
             json!({"error":"session already exists; no retry performed"}),
         );
     }
-    let mut host = super::NativeHost::new(
-        super::CredentialStore::new(&[], Some(admitted.program_path())),
-        None,
-    );
+    let credentials = match super::CredentialStore::verified() {
+        Ok(credentials) => credentials,
+        Err(_) => {
+            return reply(
+                request,
+                503,
+                json!({"error":"operator credential source unavailable"}),
+            )
+        }
+    };
+    let mut host = super::NativeHost::new(credentials, None);
     host.verified_model_route = Some(admitted.model_route());
     host.response_buffer = Some(ResponseBuffer::new());
     let result = admitted.execute(command.input, &log, &mut host);
