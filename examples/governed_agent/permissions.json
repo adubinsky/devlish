@@ -6,5 +6,13 @@
     "call_service",
     "respond"
   ],
-  "instruction_limit": 50000
+  "instruction_limit": 50000,
+  "effect_budget": {
+    "total": 4,
+    "per_effect": {
+      "llm_complete": 1,
+      "call_service": 2,
+      "respond": 1
+    }
+  }
 }

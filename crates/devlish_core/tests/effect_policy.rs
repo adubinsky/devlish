@@ -290,3 +290,81 @@ fn cli_requires_recording_and_rejects_unsupported_replay_combination() {
         );
     }
 }
+
+#[test]
+fn effect_budget_caps_total_and_per_kind_before_host_dispatch() {
+    use devlish_vm::effect_budget::EffectBudget;
+    for (budget, permitted) in [
+        (json!({"total":2,"per_effect":{}}), 2),
+        (json!({"total":4,"per_effect":{"write_file":1}}), 1),
+        (json!({"total":4,"per_effect":{"write_file":0}}), 0),
+    ] {
+        let policy = policy("Respond with record with true as allow and \"Allowed\" as reason");
+        let mut host = Host::default();
+        let mut records = Records::default();
+        let mut guarded = PolicyHost::new(&mut host, &policy, &mut records)
+            .with_effect_budget(EffectBudget::parse(&budget).unwrap());
+        for attempt in 0..5 {
+            assert_eq!(guarded.write_file(&json!({})).is_ok(), attempt < permitted);
+        }
+        assert_eq!(host.writes, permitted);
+        assert_eq!(
+            records
+                .records
+                .iter()
+                .filter(|r| r["type"] == "effect_outcome")
+                .count(),
+            permitted
+        );
+        assert_eq!(records.records.last().unwrap()["allow"], false);
+    }
+}
+
+#[test]
+fn failed_denied_and_uncatalogued_attempts_consume_budget_without_refunds() {
+    use devlish_vm::effect_budget::EffectBudget;
+    let policy = policy("Ask \"Request?\" as request\nIf path of request equals \"denied\":\n  Respond with record with false as allow and \"Denied\" as reason\nRespond with record with true as allow and \"Allowed\" as reason");
+    for scenario in ["policy", "host", "permissions"] {
+        let mut host = Host {
+            fail: scenario == "host",
+            ..Host::default()
+        };
+        let mut records = Records::default();
+        let mut guarded = PolicyHost::new(&mut host, &policy, &mut records)
+            .with_allowed_effects(["write_file".into()].into())
+            .with_effect_budget(EffectBudget::parse(&json!({"total":1,"per_effect":{}})).unwrap());
+        let first = match scenario {
+            "policy" => guarded.write_file(&json!({"path":"denied"})),
+            "host" => guarded.write_file(&json!({"path":"approved"})),
+            _ => guarded.respond(&Value::Null),
+        };
+        assert!(first.is_err());
+        assert!(guarded
+            .write_file(&json!({"path":"approved"}))
+            .unwrap_err()
+            .contains("budget is exhausted"));
+        assert_eq!(host.writes, usize::from(scenario == "host"));
+        assert_eq!(records.records.last().unwrap()["allow"], false);
+    }
+}
+
+#[test]
+fn invalid_effect_budgets_fail_closed_and_names_must_match_permissions() {
+    use devlish_vm::effect_budget::EffectBudget;
+    for value in [
+        Value::Null,
+        json!({}),
+        json!({"total":0,"per_effect":{}}),
+        json!({"total":10001,"per_effect":{}}),
+        json!({"total":1.5,"per_effect":{}}),
+        json!({"total":2,"per_effect":{"respond":-1}}),
+        json!({"total":2,"per_effect":{"respond":3}}),
+        json!({"total":2,"per_effect":{"respond":"1"}}),
+        json!({"total":2,"per_effect":{"":1}}),
+        json!({"total":2,"per_effect":{},"reset":true}),
+    ] {
+        assert!(EffectBudget::parse(&value).is_err(), "{value}");
+    }
+    let budget = EffectBudget::parse(&json!({"total":2,"per_effect":{"write_file":1}})).unwrap();
+    assert!(budget.validate_effects(&["respond".into()].into()).is_err());
+}

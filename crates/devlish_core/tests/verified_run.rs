@@ -395,6 +395,10 @@ fn verified_evidence_replays_with_release_permissions_and_redacted_diagnostics()
         "--policy-evidence",
     ]);
     assert!(result.status.success());
+    assert_process_replays(&f);
+}
+
+fn assert_process_replays(f: &Fixture) {
     let files: Vec<_> = ["runtime", "program", "policy"]
         .iter()
         .map(|id| {
@@ -945,4 +949,88 @@ fn verified_http_startup_rejects_unsafe_binding_storage_and_missing_authenticati
         assert!(!output.status.success());
         assert!(!String::from_utf8_lossy(&output.stdout).contains("listening"));
     }
+}
+
+#[test]
+fn signed_effect_budget_denial_replays_without_live_effects() {
+    let mut f = Fixture::new();
+    f.profile["allow_raw_evidence"] = json!(true);
+    replace_compiled(&mut f, "program", "Get the current time as first\nGet the current time as second\nRespond with \"verified success\"");
+    replace_json(
+        &mut f,
+        "tool-catalog",
+        json!({"format":"devlish-tool-catalog","format_version":1,"host_effects":["clock_now","respond"]}),
+    );
+    replace_json(
+        &mut f,
+        "permissions",
+        json!({"format":"devlish-runtime-permissions","format_version":1,"allowed_effects":["clock_now","respond"],"instruction_limit":1000,"effect_budget":{"total":3,"per_effect":{"clock_now":1}}}),
+    );
+    let result = f.command(&[
+        "run-verified",
+        "--policy-log",
+        "run.jsonl",
+        "--session-id",
+        "budget-test",
+        "--policy-evidence",
+    ]);
+    assert!(!result.status.success());
+    assert!(result.stdout.is_empty());
+    let records: Vec<Value> = fs::read_to_string(f.dir.join("run.jsonl"))
+        .unwrap()
+        .lines()
+        .map(|line| serde_json::from_str::<Value>(line).unwrap()["record"].clone())
+        .collect();
+    assert_eq!(
+        records[0]["verified_release"]["effect_budget"],
+        json!({"total":3,"per_effect":{"clock_now":1}})
+    );
+    assert_eq!(
+        records
+            .iter()
+            .filter(|r| r["type"] == "effect_outcome")
+            .count(),
+        1
+    );
+    assert_eq!(records[3]["allow"], false);
+    assert_eq!(records.last().unwrap()["success"], false);
+    assert_process_replays(&f);
+}
+
+#[test]
+fn signed_effect_budget_with_unknown_permission_fails_before_log() {
+    let mut f = Fixture::new();
+    replace_json(
+        &mut f,
+        "permissions",
+        json!({"format":"devlish-runtime-permissions","format_version":1,"allowed_effects":["respond"],"instruction_limit":1000,"effect_budget":{"total":1,"per_effect":{"llm_complete":1}}}),
+    );
+    assert!(!f.run().status.success());
+    f.assert_no_dispatch();
+}
+
+#[cfg(unix)]
+#[test]
+fn verified_http_enforces_the_same_signed_effect_budget() {
+    let mut f = Fixture::new();
+    replace_json(
+        &mut f,
+        "permissions",
+        json!({"format":"devlish-runtime-permissions","format_version":1,"allowed_effects":["respond"],"instruction_limit":1000,"effect_budget":{"total":1,"per_effect":{"respond":0}}}),
+    );
+    let server = VerifiedServer::start(&f);
+    let (status, response) = server.request(
+        "POST",
+        "/v1/run",
+        true,
+        &json!({"session_id":"budget-http","input":null}).to_string(),
+    );
+    assert_eq!(status, 500);
+    assert!(response.get("responses").is_none());
+    let log = fs::read_to_string(f.dir.join("http-logs/budget-http.jsonl")).unwrap();
+    assert!(!log.contains("effect_outcome"));
+    assert_eq!(
+        serde_json::from_str::<Value>(log.lines().nth(1).unwrap()).unwrap()["record"]["allow"],
+        false
+    );
 }

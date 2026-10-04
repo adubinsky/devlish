@@ -247,3 +247,34 @@ fn caught_recorder_failure_still_blocks_later_effects_and_completion() {
             .any(|v| v["type"] == "policy_run_finished"));
     }
 }
+
+#[test]
+fn caught_host_failure_cannot_refund_effect_budget() {
+    let source = "Try:\n  Respond with \"first\"\nOtherwise:\n  Respond with \"retry\"";
+    let mut host = Host {
+        fail: true,
+        ..Host::default()
+    };
+    let mut recorder = Recorder::default();
+    let runner = run(source, true, &["respond"], 1000)
+        .with_effect_budget(
+            devlish_vm::effect_budget::EffectBudget::parse(
+                &json!({"total":1,"per_effect":{"respond":1}}),
+            )
+            .unwrap(),
+        )
+        .unwrap();
+    assert_eq!(
+        runner.run(&mut host, &mut recorder),
+        Err(RunError::Execution)
+    );
+    assert_eq!(host.responses, vec![json!("first")]);
+    let decisions: Vec<_> = recorder
+        .values
+        .iter()
+        .filter(|r| r["type"] == "effect_decision")
+        .collect();
+    assert_eq!(decisions.len(), 2);
+    assert_eq!(decisions[0]["allow"], true);
+    assert_eq!(decisions[1]["allow"], false);
+}

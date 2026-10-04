@@ -119,6 +119,10 @@ fn run(
     let result = vm
         .run(
             &mut PolicyHost::new(&mut host, &policy, &mut records)
+                .with_effect_budget(
+                    devlish_vm::effect_budget::EffectBudget::parse(&permissions["effect_budget"])
+                        .unwrap(),
+                )
                 .with_redacted_diagnostics()
                 .with_allowed_effects(
                     serde_json::from_value(permissions["allowed_effects"].clone()).unwrap(),
@@ -412,6 +416,16 @@ fn shared_runner_preserves_agent_decisions_and_exposes_only_completion() {
             ["llm_complete", "call_service", "respond"]
                 .map(String::from)
                 .into(),
+        )
+        .unwrap()
+        .with_effect_budget(
+            devlish_vm::effect_budget::EffectBudget::parse(
+                &serde_json::from_str::<Value>(include_str!(
+                    "../../../examples/governed_agent/permissions.json"
+                ))
+                .unwrap()["effect_budget"],
+            )
+            .unwrap(),
         )
         .unwrap()
         .run(&mut host, &mut records);

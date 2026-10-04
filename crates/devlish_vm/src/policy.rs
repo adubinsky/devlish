@@ -109,6 +109,7 @@ pub struct PolicyHost<'a> {
     capture_evidence: bool,
     redact_diagnostics: bool,
     allowed_effects: Option<std::collections::BTreeSet<String>>,
+    effect_budget: Option<crate::effect_budget::EffectBudget>,
 }
 
 impl<'a> PolicyHost<'a> {
@@ -126,6 +127,7 @@ impl<'a> PolicyHost<'a> {
             capture_evidence: false,
             redact_diagnostics: false,
             allowed_effects: None,
+            effect_budget: None,
         }
     }
 
@@ -145,6 +147,13 @@ impl<'a> PolicyHost<'a> {
     /// Immutable release permissions intersect the Devlish policy decision.
     pub fn with_allowed_effects(mut self, effects: std::collections::BTreeSet<String>) -> Self {
         self.allowed_effects = Some(effects);
+        self
+    }
+
+    /// Install a fresh trusted budget once, before execution. Attempts consume
+    /// it before policy evaluation/dispatch; caught errors cannot refund counts.
+    pub fn with_effect_budget(mut self, budget: crate::effect_budget::EffectBudget) -> Self {
+        self.effect_budget = Some(budget);
         self
     }
 
@@ -171,7 +180,13 @@ impl<'a> PolicyHost<'a> {
         }
         self.next_id += 1;
         let id = self.next_id;
-        let (allow, reason) = if self
+        let budget_allows = self
+            .effect_budget
+            .as_mut()
+            .is_none_or(|budget| budget.consume_attempt(kind));
+        let (allow, reason) = if !budget_allows {
+            (false, "Effect attempt budget is exhausted.".to_string())
+        } else if self
             .allowed_effects
             .as_ref()
             .is_some_and(|effects| !effects.contains(kind))

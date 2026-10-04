@@ -771,3 +771,43 @@ or connection-count limits; a slow local client can block this sequential
 service. Deploying it to untrusted clients requires availability controls and
 protected execution/credential isolation. No successful response claims that
 signatures independently prove policy enforcement.
+
+### Signed effect-attempt budgets
+
+Signed runtime permissions can include an `effect_budget` alongside the instruction
+limit and effect allowlist:
+
+```json
+{
+  "total": 4,
+  "per_effect": {"llm_complete": 1, "call_service": 2, "respond": 1}
+}
+```
+
+`total` must be an integer from 1 through 10,000. Per-effect limits must be
+integers from zero through `total`, and their names must appear in the approved
+permission allowlist. Omitted per-effect entries share only the total cap. A
+zero per-effect limit forbids dispatch of that effect. Unknown fields, malformed
+limits and references to unapproved effects fail admission before a log is created.
+
+Every attempted host effect consumes the total cap and its applicable per-effect
+cap before policy evaluation or dispatch. Policy denials, permission denials and
+host errors consume attempts too. A Devlish `Try`/`Otherwise` cannot refund or
+reset them. Exhaustion records a denial before returning an error; other effect
+kinds may still run if their limits and the remaining total permit it. Recording
+failure continues to block all later effects. The native wrapper provides the
+counter; Devlish still validates plans, selects steps and authorizes effect data.
+
+CLI and authenticated HTTP sessions use these same limits. The session start
+binds the configured budget, and offline process replay reconstructs fresh
+counters to reproduce the decisions, including denials. This remains evidence
+replay, not proof of real-world execution. Standalone policy reports evaluate
+Devlish rules in isolation; process reports additionally reproduce release limits.
+
+Budgets are per execution and count calls, not money, model tokens, elapsed time
+or successful business writes. A new session obtains a new budget; this is not
+cross-session rate limiting or safe retry. Existing version-1 permission files
+with the field omitted or null retain their instruction limit without a separate
+effect-count cap. Adding a budget changes the signed permission bytes and requires
+an approved release. The finite agent example explicitly requests one model call,
+two service calls and one public response.

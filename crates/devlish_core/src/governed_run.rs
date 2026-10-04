@@ -48,6 +48,7 @@ pub struct GovernedRun {
     policy: EffectPolicy,
     allowed_effects: BTreeSet<String>,
     capture_evidence: bool,
+    effect_budget: Option<devlish_vm::effect_budget::EffectBudget>,
 }
 impl GovernedRun {
     pub fn new(
@@ -68,7 +69,19 @@ impl GovernedRun {
             policy,
             allowed_effects,
             capture_evidence: false,
+            effect_budget: None,
         })
+    }
+
+    pub fn with_effect_budget(
+        mut self,
+        budget: devlish_vm::effect_budget::EffectBudget,
+    ) -> Result<Self, RunError> {
+        budget
+            .validate_effects(&self.allowed_effects)
+            .map_err(|_| RunError::InvalidControls)?;
+        self.effect_budget = Some(budget);
+        Ok(self)
     }
 
     /// Trusted operator opt-in only. The caller must also declare capture in the
@@ -86,6 +99,11 @@ impl GovernedRun {
         let guarded = PolicyHost::new(host, &self.policy, recorder)
             .with_redacted_diagnostics()
             .with_allowed_effects(self.allowed_effects);
+        let guarded = if let Some(budget) = self.effect_budget {
+            guarded.with_effect_budget(budget)
+        } else {
+            guarded
+        };
         let mut guarded = if self.capture_evidence {
             guarded.with_evidence()
         } else {

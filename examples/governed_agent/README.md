@@ -62,6 +62,9 @@ validation and instruction budget enforce sequencing and counts.
 ## Bounds and evidence
 
 There is one model call and at most two business tool calls per run.
+The signed `effect_budget` independently caps the run at four attempts: one
+model call, two service calls and one response. Denied or failed attempts count;
+catching an error cannot reset the counters.
 `permissions.json` sets a 50,000-instruction VM limit and lists the same host
 effects as `catalog.json`: `llm_complete`, `call_service`, `respond`. The test
 host consumes these files and wraps every effect in `PolicyHost`. Every decision

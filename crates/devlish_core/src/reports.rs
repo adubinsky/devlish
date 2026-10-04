@@ -471,6 +471,11 @@ fn process(args: &[String]) -> Result<Value, String> {
             .filter(|limit| *limit > 0 && *limit <= 10_000_000)
             .ok_or("invalid recorded instruction limit")?;
         vm.set_instruction_limit(limit);
+        if let Some(value) = binding.get("effect_budget").filter(|v| !v.is_null()) {
+            let budget = devlish_vm::effect_budget::EffectBudget::parse(value)?;
+            budget.validate_effects(&effects)?;
+            guarded = guarded.with_effect_budget(budget);
+        }
         guarded = guarded.with_allowed_effects(effects);
     }
     let outcome = vm.run(&mut guarded);

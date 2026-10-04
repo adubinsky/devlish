@@ -48,6 +48,7 @@ pub struct VerifiedSession {
     policy: EffectPolicy,
     log_context: Value,
     instruction_limit: u64,
+    effect_budget: Option<devlish_vm::effect_budget::EffectBudget>,
     allowed_effects: std::collections::BTreeSet<String>,
     llm_route: Option<devlish_llm::governed::ApprovedModel>,
     program_path: PathBuf,
@@ -216,6 +217,7 @@ impl VerifiedSession {
                 .min(typed_requirements.revocations_valid_until),
             llm_route: controls.llm_route,
             instruction_limit: controls.instruction_limit,
+            effect_budget: controls.effect_budget.clone(),
             allowed_effects: controls.allowed_effects.clone(),
             program,
             policy,
@@ -226,6 +228,7 @@ impl VerifiedSession {
                 "runtime_file_sha256":runtime.sha256,
             "permissions_sha256":sha256(&permissions_bytes),"catalog_sha256":sha256(&catalog_bytes),"containment_sha256":sha256(&containment_bytes),
             "instruction_limit":controls.instruction_limit,"allowed_effects":controls.allowed_effects,
+            "effect_budget":controls.effect_budget.as_ref().map(|budget| budget.to_value()),
                 "assurance":"in-process-verified-loading", "execution_origin_verified":false
             }),
         })
@@ -273,6 +276,11 @@ impl VerifiedSession {
             self.allowed_effects,
         )
         .map_err(|e| e.to_string())?;
+        let run = if let Some(budget) = self.effect_budget {
+            run.with_effect_budget(budget).map_err(|e| e.to_string())?
+        } else {
+            run
+        };
         let run = if self.evidence {
             run.with_replay_evidence()
         } else {
@@ -286,6 +294,8 @@ impl VerifiedSession {
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct Permissions {
+    #[serde(default)]
+    effect_budget: Option<Value>,
     format: String,
     format_version: u32,
     allowed_effects: Vec<String>,
@@ -308,6 +318,7 @@ struct Containment {
     mode: String,
 }
 struct Controls {
+    effect_budget: Option<devlish_vm::effect_budget::EffectBudget>,
     llm_route: Option<devlish_llm::governed::ApprovedModel>,
     allowed_effects: std::collections::BTreeSet<String>,
     instruction_limit: u64,
@@ -364,6 +375,14 @@ impl Controls {
         {
             return Err("unknown, duplicate or uncatalogued release effect".into());
         }
+        let effect_budget = p
+            .effect_budget
+            .as_ref()
+            .map(devlish_vm::effect_budget::EffectBudget::parse)
+            .transpose()?;
+        if let Some(budget) = &effect_budget {
+            budget.validate_effects(&allowed_effects)?;
+        }
         let llm_route = c
             .llm_route
             .as_ref()
@@ -373,6 +392,7 @@ impl Controls {
             return Err("verified model effects require an approved catalog route".into());
         }
         Ok(Self {
+            effect_budget,
             llm_route,
             allowed_effects,
             instruction_limit: p.instruction_limit,
