@@ -206,6 +206,8 @@ Run options:
   --audit-log <path>          Append governed-run audit records to a JSONL log
                               (falls back to DEVLISH_AUDIT_LOG)
   --policy <file>             Enforce a Devlish effect policy (requires --policy-log)
+  --default-authorization <allow-unless-forbidden|deny-unless-allowed>
+                             Set the default for explicit policy abstentions
   --policy-evidence          Include sensitive effect data in the log for offline reports
   run-verified              Run operator-selected release (DEVLISH_VERIFIED_PROFILE)
   serve-verified            Serve an operator-selected release on loopback with authentication
@@ -378,6 +380,9 @@ fn run_execute(args: Vec<String>) -> Result<(), String> {
     if config.policy_evidence && config.policy.is_none() {
         return Err("--policy-evidence requires --policy and --policy-log".into());
     }
+    if config.default_authorization.is_some() && config.policy.is_none() {
+        return Err("--default-authorization requires --policy and --policy-log".into());
+    }
     if config.policy_sha256.is_some() && config.policy.is_none() {
         return Err("--policy-sha256 requires --policy".into());
     }
@@ -396,6 +401,9 @@ fn run_execute(args: Vec<String>) -> Result<(), String> {
         };
         if let Some(expected) = &config.policy_sha256 {
             policy.set_file_digest(expected.to_ascii_lowercase());
+        }
+        if let Some(posture) = &config.default_authorization {
+            policy.set_default_authorization(posture)?;
         }
         Ok::<_, String>(policy)
     }).transpose()?;
@@ -496,6 +504,10 @@ fn run_execute(args: Vec<String>) -> Result<(), String> {
         CredentialStore::new(&config.env_overrides, Some(&config.input)),
         audit_path.map(AuditLogWriter::new),
     );
+    native.local_tools = Some(devlish_core::local_tools::LocalTools::new(
+        &env::current_dir().map_err(|_| "local working directory unavailable")?,
+        &env::var_os("PATH").unwrap_or_default(),
+    )?);
     native.llm_provider = config.provider.clone();
     native.llm_model = config.model.clone();
     let mut journaling_host;
@@ -1444,6 +1456,7 @@ fn parse_dotenv(content: &str, entries: &mut Vec<(String, String)>) {
 }
 
 struct NativeHost {
+    local_tools: Option<devlish_core::local_tools::LocalTools>,
     credentials: CredentialStore,
     /// Present when `--audit-log` / `DEVLISH_AUDIT_LOG` is set: governed
     /// runs append hash-chained provenance records to this log.
@@ -1471,6 +1484,7 @@ impl NativeHost {
             .unwrap_or(0)
             .hash(&mut hasher);
         Self {
+            local_tools: None,
             credentials,
             audit_log,
             llm_provider: None,
@@ -2822,6 +2836,10 @@ fn native_effect_disabled(effect: &str) -> String {
 }
 
 impl HostEffects for NativeHost {
+    fn run_tool(&mut self, request: &Value) -> Result<Value, String> {
+        self.local_tools.as_ref().ok_or("local tool execution is not configured for this host")?.run(request)
+    }
+
     fn audit_record(&mut self, record: &Value) -> Result<(), String> {
         match &mut self.audit_log {
             Some(writer) => writer.append(record),
@@ -4531,6 +4549,7 @@ struct RunConfig {
     policy_log: Option<PathBuf>,
     policy_sha256: Option<String>,
     policy_evidence: bool,
+    default_authorization: Option<String>,
     /// Refuse to execute any artifact whose hash is not a published release
     /// in this registry (`--governed`).
     governed: Option<PathBuf>,
@@ -4553,6 +4572,7 @@ impl RunConfig {
         let mut policy_log = None;
         let mut policy_sha256 = None;
         let mut policy_evidence = false;
+        let mut default_authorization = None;
         let mut governed = None;
         let mut provider = None;
         let mut model = None;
@@ -4599,6 +4619,14 @@ impl RunConfig {
                         Some(PathBuf::from(args.get(index).ok_or_else(|| {
                             "--audit-log requires a file path".to_string()
                         })?));
+                }
+                "--default-authorization" => {
+                    index += 1;
+                    let posture = args.get(index).ok_or("--default-authorization requires a posture")?;
+                    if !["allow-unless-forbidden", "deny-unless-allowed"].contains(&posture.as_str()) {
+                        return Err("invalid default authorization posture".into());
+                    }
+                    default_authorization = Some(posture.clone());
                 }
                 "--policy-evidence" => policy_evidence = true,
                 "--policy-sha256" => {
@@ -4691,6 +4719,7 @@ impl RunConfig {
             policy_log,
             policy_sha256,
             policy_evidence,
+            default_authorization,
             governed,
             provider,
             model,

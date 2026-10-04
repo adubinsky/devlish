@@ -12,6 +12,7 @@ pub trait PolicyRecorder {
 pub struct EffectPolicy {
     package: Value,
     identity: Value,
+    default_allow: bool,
 }
 
 impl EffectPolicy {
@@ -30,13 +31,25 @@ impl EffectPolicy {
             .ok_or("effect policy requires a Rule with id and version")?;
         let identity = json!({"rule": rule, "artifact_sha256": sha256_hex(
             &serde_json::to_vec_pretty(&package).expect("JSON values serialize"))});
-        Ok(Self { package, identity })
+        Ok(Self { package, identity, default_allow: false })
     }
 
     /// Host assertion that the loaded bytes matched an independently supplied digest.
     /// This is an integrity pin, not a signature or build-provenance claim.
     pub fn set_file_digest(&mut self, digest: String) {
         self.identity["verified_file_sha256"] = json!(digest);
+    }
+
+    /// Operator configuration, never taken from the effect request. Existing
+    /// policies remain deny-by-default unless explicitly configured otherwise.
+    pub fn set_default_authorization(&mut self, posture: &str) -> Result<(), String> {
+        self.default_allow = match posture {
+            "allow-unless-forbidden" => true,
+            "deny-unless-allowed" => false,
+            _ => return Err("invalid default authorization posture".into()),
+        };
+        self.identity["default_authorization"] = json!(posture);
+        Ok(())
     }
 
     pub fn identity(&self) -> &Value {
@@ -58,6 +71,11 @@ impl EffectPolicy {
         request: &Value,
         authority: &Value,
     ) -> Result<(bool, String), String> {
+        self.evaluate_decision(kind, request, authority).map(|(allow, reason, _)| (allow, reason))
+    }
+
+    fn evaluate_decision(&self, kind: &str, request: &Value, authority: &Value)
+        -> Result<(bool, String, &'static str), String> {
         let mut vm = Vm::new(
             self.package.clone(),
             json!({"effect": kind, "request": request, "authority": authority}),
@@ -69,16 +87,22 @@ impl EffectPolicy {
         let response = result
             .get("response")
             .ok_or("policy must Respond with a decision")?;
-        let allow = response
-            .get("allow")
-            .and_then(Value::as_bool)
-            .ok_or("policy decision requires boolean allow")?;
+        let (allow, origin) = match (response.get("allow"), response.get("decision")) {
+            (Some(Value::Bool(allow)), None) => (*allow, "explicit_rule"),
+            (None, Some(Value::String(decision))) => match decision.as_str() {
+                "allow" => (true, "explicit_rule"),
+                "deny" => (false, "explicit_rule"),
+                "abstain" => (self.default_allow, "default_posture"),
+                _ => return Err("unknown policy decision".into()),
+            },
+            _ => return Err("policy requires exactly one boolean allow or allow/deny/abstain decision".into()),
+        };
         let reason = response
             .get("reason")
             .and_then(Value::as_str)
             .filter(|s| !s.trim().is_empty())
             .ok_or("policy decision requires a nonempty reason")?;
-        Ok((allow, reason.to_owned()))
+        Ok((allow, reason.to_owned(), origin))
     }
 }
 
@@ -195,8 +219,8 @@ impl<'a> PolicyHost<'a> {
             .effect_budget
             .as_mut()
             .is_none_or(|budget| budget.consume_attempt(kind));
-        let (allow, reason) = if !budget_allows {
-            (false, "Effect attempt budget is exhausted.".to_string())
+        let (allow, reason, origin) = if !budget_allows {
+            (false, "Effect attempt budget is exhausted.".to_string(), "effect_budget")
         } else if self
             .allowed_effects
             .as_ref()
@@ -205,15 +229,20 @@ impl<'a> PolicyHost<'a> {
             (
                 false,
                 "Effect is not permitted by the approved release.".to_string(),
+                "release_permissions",
             )
         } else {
             self.policy
-                .evaluate(kind, &request)
-                .unwrap_or_else(|error| (false, format!("policy evaluation failed: {error}")))
+                .evaluate_decision(kind, &request, &Value::Null)
+                .unwrap_or_else(|error| (false, format!("policy evaluation failed: {error}"), "evaluation_error"))
         };
         let mut decision = json!({"type": "effect_decision", "effect_id": id,
             "effect": kind, "request_sha256": digest(&request),
             "policy": self.policy.identity(), "allow": allow, "reason": reason});
+        if let Some(posture) = self.policy.identity().get("default_authorization") {
+            decision["default_authorization"] = posture.clone();
+            decision["decision_origin"] = json!(origin);
+        }
         if self.redact_diagnostics {
             decision["reason_sha256"] = json!(digest(&json!(reason)));
             decision["reason"] = json!("Policy decision recorded; diagnostic content withheld.");

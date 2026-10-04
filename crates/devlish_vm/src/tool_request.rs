@@ -15,10 +15,12 @@ pub fn validate(request: &Value) -> Result<&str, String> {
         .and_then(Value::as_str)
         .ok_or_else(invalid)?;
     if id.is_empty()
+        || id == "."
+        || id == ".."
         || id.len() > 128
         || !id
             .bytes()
-            .all(|c| c.is_ascii_alphanumeric() || b"_-".contains(&c))
+            .all(|c| c.is_ascii_alphanumeric() || b"_-.+".contains(&c))
     {
         return Err(invalid());
     }
@@ -69,11 +71,15 @@ mod tests {
             "".to_string(),
             "/usr/bin/grep".into(),
             "../grep".into(),
+            ".".into(),
+            "..".into(),
             "grép".into(),
             "a".repeat(129),
         ] {
             assert!(validate(&json!({"tool_id":id,"arguments":[]})).is_err());
         }
+        assert!(validate(&json!({"tool_id":"python3.12","arguments":[]})).is_ok());
+        assert!(validate(&json!({"tool_id":"clang++","arguments":[]})).is_ok());
         assert!(
             validate(&json!({"tool_id":"Grep_1-public","arguments":["$(literal); text"]})).is_ok()
         );

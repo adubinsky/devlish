@@ -250,7 +250,7 @@ fn malformed_request_transport_is_bounded_before_adapter_dispatch() {
     }
 }
 #[test]
-fn default_native_runner_has_no_external_execution_fallback() {
+fn local_runner_rejects_names_absent_from_its_search_directories() {
     use std::{fs, process::Command};
     let path = std::env::temp_dir().join(format!("devlish-no-tool-{}.dvl", std::process::id()));
     fs::write(&path, "Permissions:\n  Run catalog tools\n\nrequest equals record with \"public-grep\" as tool_id and list of \"--version\" as arguments\nRun catalog tool request as result").unwrap();
@@ -262,7 +262,7 @@ fn default_native_runner_has_no_external_execution_fallback() {
     fs::remove_file(path).unwrap();
     assert!(!output.status.success());
     assert!(
-        String::from_utf8_lossy(&output.stderr).contains("no verified launcher"),
+        String::from_utf8_lossy(&output.stderr).contains("tool is absent from the local folder and approved PATH directories"),
         "{}",
         String::from_utf8_lossy(&output.stderr)
     );

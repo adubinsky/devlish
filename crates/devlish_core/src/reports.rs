@@ -60,6 +60,14 @@ fn verify(report: &Value, expected_kind: Option<&str>) -> Result<String, String>
 
 pub fn run(mut args: Vec<String>) -> Result<(), String> {
     const USAGE: &str = "Usage: devlish report application <manifest.json> | policy <compiled-policy.json> <cases.json> | process <compiled-program.json> <compiled-policy.json> <input.json> <evidence.jsonl> <application-report.json> <policy-report.json> | receipt-issuer <compiled-policy.json> <journal.jsonl> --sha256 <retained-journal-digest> | explain <report.json> | verify <report.json> [--sha256 <trusted-report-digest>] [--output <new-file>]";
+    let mut posture = None;
+    if let Some(index) = args.iter().position(|s| s == "--default-authorization") {
+        if args.get(1).map(String::as_str) != Some("policy") {
+            return Err("--default-authorization is only accepted for policy reports".into());
+        }
+        posture = Some(args.get(index + 1).ok_or("missing authorization posture")?.clone());
+        args.drain(index..=index + 1);
+    }
     let mut output = None;
     if let Some(index) = args.iter().position(|s| s == "--output") {
         output = Some(PathBuf::from(
@@ -98,7 +106,7 @@ pub fn run(mut args: Vec<String>) -> Result<(), String> {
     }
     let mut report = match args.get(1).map(String::as_str) {
         Some("application") if args.len() == 3 => application(&args[2])?,
-        Some("policy") if args.len() == 4 => policy(&args[2], &args[3])?,
+        Some("policy") if args.len() == 4 => policy(&args[2], &args[3], posture.as_deref())?,
         Some("process") if args.len() == 8 => process(&args[2..])?,
         #[cfg(feature = "native")]
         Some("receipt-issuer") if args.len() == 6 && args[4] == "--sha256" => {
@@ -221,9 +229,10 @@ fn application(path: &str) -> Result<Value, String> {
     ))
 }
 
-fn policy(path: &str, cases_path: &str) -> Result<Value, String> {
+fn policy(path: &str, cases_path: &str, posture: Option<&str>) -> Result<Value, String> {
     let (bytes, package) = read_json(path)?;
-    let policy = EffectPolicy::new(package)?;
+    let mut policy = EffectPolicy::new(package)?;
+    if let Some(posture) = posture { policy.set_default_authorization(posture)?; }
     let (case_bytes, cases) = read_json(cases_path)?;
     let cases = cases
         .as_array()
@@ -349,6 +358,9 @@ fn process(args: &[String]) -> Result<Value, String> {
         return Err("incomplete run: no completion record; effects may be unresolved".into());
     }
     let mut policy = EffectPolicy::new(policy_package)?;
+    if let Some(posture) = start.pointer("/policy/default_authorization") {
+        policy.set_default_authorization(posture.as_str().ok_or("invalid recorded authorization posture")?)?;
+    }
     if let Some(expected) = start
         .pointer("/policy/verified_file_sha256")
         .and_then(Value::as_str)
@@ -364,7 +376,8 @@ fn process(args: &[String]) -> Result<Value, String> {
     {
         return Err("program, policy, or input differs from recorded run".into());
     }
-    if policy_report["details"]["policy_file_sha256"] != sha256_hex(&policy_bytes)
+    if policy_report["details"]["policy"]["default_authorization"] != policy.identity()["default_authorization"]
+        || policy_report["details"]["policy_file_sha256"] != sha256_hex(&policy_bytes)
         || policy_report["details"]["policy"]["artifact_sha256"]
             != policy.identity()["artifact_sha256"]
     {

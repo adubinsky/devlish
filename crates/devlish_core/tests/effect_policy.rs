@@ -412,3 +412,38 @@ fn dispatch_guard_runs_after_decision_recording_and_failure_cannot_reopen() {
     assert_eq!(calls.get(), 2);
     assert_eq!(host.writes, 1);
 }
+
+#[test]
+fn operator_posture_only_resolves_abstentions_and_never_bypasses_denials() {
+    for posture in ["allow-unless-forbidden", "deny-unless-allowed"] {
+        for (decision, allowed, origin) in [
+            ("allow", true, "explicit_rule"),
+            ("deny", false, "explicit_rule"),
+            ("abstain", posture == "allow-unless-forbidden", "default_posture"),
+        ] {
+            let mut policy = policy(&format!("Respond with record with \"{decision}\" as decision and \"Test rule decision.\" as reason"));
+            policy.set_default_authorization(posture).unwrap();
+            let mut host = Host::default();
+            let mut records = Records::default();
+            let result = PolicyHost::new(&mut host, &policy, &mut records)
+                .write_file(&json!({"path":"example", "default_authorization":"allow-unless-forbidden"}));
+            assert_eq!(result.is_ok(), allowed);
+            assert_eq!(host.writes, usize::from(allowed));
+            assert_eq!(records.records[0]["default_authorization"], posture);
+            assert_eq!(records.records[0]["decision_origin"], origin);
+        }
+        for body in [
+            "Respond with record with false as allow and \"deny\" as reason",
+            "Respond with record with true as allow and \"deny\" as decision and \"conflict\" as reason",
+            "Respond with record with \"unknown\" as decision and \"invalid\" as reason",
+            "Respond with record with \"abstain\" as decision",
+        ] {
+            let mut policy = policy(body);
+            policy.set_default_authorization(posture).unwrap();
+            let mut host = Host::default();
+            let mut records = Records::default();
+            assert!(PolicyHost::new(&mut host, &policy, &mut records).write_file(&json!({})).is_err());
+            assert_eq!(host.writes, 0);
+        }
+    }
+}
