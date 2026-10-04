@@ -902,3 +902,12 @@ ACLs, parent paths, environment and credential source integrity. Same-user/root
 processes and a compromised host remain outside its protection. A separate service
 identity and protected execution deployment are still required. No secrets are
 placed in the signed catalog; the catalog pins the credential lookup name.
+
+### Linux deployment qualification candidate
+
+The [Linux service recipe](../deploy/linux/README.md) and unit template connect
+verified admission and mounted credentials to a dedicated service identity.
+They have not been executed or qualified on Linux. The recipe lists ownership,
+bootstrap, debugger/loader, credential, interruption and availability acceptance
+checks, and distinguishes requested restrictions from observed enforcement.
+It does not increase the verifier's execution-assurance claims.
