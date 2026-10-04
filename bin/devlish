@@ -19,6 +19,6 @@ elif command -v devlish-core >/dev/null 2>&1; then
   exec devlish-core "$@"
 else
   echo "devlish-core binary not found." >&2
-  echo "Build it with: cd crates/devlish_core && cargo build --release" >&2
+  echo "Build it with: make build (from the Devlish repository)" >&2
   exit 1
 fi

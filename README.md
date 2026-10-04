@@ -20,71 +20,55 @@ and Node. No Ruby, Python, or Node runtime is needed.
 
 ## Getting Started
 
-```bash
-# Requires Rust (https://rustup.rs)
-git clone https://github.com/adubinsky/devlish
-cd devlish
-./install.sh          # builds devlish-core and adds `devlish` to your PATH
-```
+From a source checkout, install once (requires the Rust toolchain):
 
 ```bash
-# Create a project and write a program
-devlish new my_project
-cd my_project
-
-cat > hello.dvl << 'EOF'
-Ask "What is your name?" as user name
-Print user name
-EOF
-
-# Compile and run
-devlish run hello.dvl --input '{"user_name": "World"}'
-
-# Or compile to bytecode first
-devlish compile hello.dvl --output hello.dvlc.json
-devlish run hello.dvlc.json --input '{"user_name": "World"}'
-
-# Validate syntax
-devlish validate hello.dvl
+make install
 ```
 
-No install at all: the full compiler and VM also run in your browser at
-https://devlish.dev/playground.html (WebAssembly; nothing you type is uploaded).
+This builds and installs the native application as `~/.local/bin/devlish`.
+Put that directory on your PATH if it is not already there. Use `PREFIX` to
+select another installation directory. Installed users need no Rust commands,
+separate compilation step, or checkout to run the application.
 
-## CLI Commands
+## Three Application Modes
 
-```text
-devlish compile <file.dvl> [--output path.dvlc.json]   Compile to bytecode
-devlish run <file> [--input json] [--method name] [--env KEY=VALUE]
-            [--provider NAME] [--model NAME] [--log-level LEVEL|--quiet]
-                                                       Run a .dvl or .dvlc.json file
-devlish validate <file.dvl>                            Check syntax (alias: lint)
-devlish disassemble <file.dvlc.json>                   Show bytecode instructions
-devlish fmt <file.dvl>                                 Format a source file
-devlish repl                                           Interactive read-eval-print loop
-devlish new <project_name>                             Create a new project
-/opt/devlish/runtime/devlish-core serve-verified --log-dir DIR                   Authenticated loopback signed-session service
-devlish serve [--bind HOST:PORT] [--log-level LEVEL]   HTTP daemon (/v1/health|compile|run|lint|…)
-/opt/devlish/runtime/devlish-core run-verified          Operator-selected signed release
-devlish harness run|resume|init-config                 Outbound LLM sessions
-devlish mcp [--tools-dir dir]                          Start MCP server (JSON-RPC over stdio)
-devlish course                                         Interactive beginner course
-devlish evidence <rule.dvl>                            Run golden cases, emit hashed evidence report
-devlish artifact hash|verify                           Inspect or verify exact file bytes
-devlish report application|policy|process|receipt-issuer|verify|explain  Tamper-evidence reports
-devlish audit-verify <log.jsonl>                       Verify the hash chain of an audit log
-devlish replay <log.jsonl>                             Re-run a journaled run offline, verify output
-devlish release <verb>                                 Release lifecycle: propose, approve,
-                                                       publish, retire, list, verify
-devlish version | help
+```bash
+devlish                     # Interactive model prompt
+devlish --run workflow.dvl  # Run a Devlish workflow; -r is equivalent
+devlish --server            # Long-lived HTTP service; -s is equivalent
 ```
 
-Logging: `--log-level error|info|debug` (or `DEVLISH_LOG`); `--quiet` forces `error`.
-HTTP caller guide: `docs/SERVE_QUICKSTART.md`. Live spin-up/down check:
-`./scripts/llm_serve_harness.sh` (OpenAI or OpenRouter).
+The prompt stays open between requests. Type `/exit` or send EOF to close it;
+`/clear` starts a fresh conversation. Each turn executes a Devlish program,
+enforces a Devlish policy, and creates a hash-chained decision log in
+`.devlish/sessions/`. The bundled program supports conversation with the model.
+A project can supply `.devlish/agent.dvl` and `.devlish/policy.dvl` to define its
+workflow and rules. Both are compiled and captured when the prompt opens.
+The bundled chat program does not automatically edit files or execute tools.
 
-The `run` command auto-compiles `.dvl` files in memory. Implicit file
-arguments work: `devlish script.dvl` is the same as `devlish run script.dvl`.
+Model/provider settings use `~/.devlish/config.toml` (or `DEVLISH_CONFIG`);
+credentials use environment variables or the existing credential resolver.
+See [application setup](docs/APPLICATION.md) for OpenRouter configuration.
+
+File mode imports and compiles the source in memory, executes it, and exits.
+For example:
+
+```bash
+devlish -r examples/local_tools/tool.dvl --input '{"tool_request":{"tool_id":"ls","arguments":["-1"]}}'
+```
+
+Server mode listens on `127.0.0.1:7420` and stays in the foreground until
+stopped, suitable for a service manager running it in the background. It hosts
+requests; it does not continually run an agent. Set `DEVLISH_SERVE_TOKEN` to
+require bearer authentication. See [HTTP caller guide](docs/SERVE_QUICKSTART.md).
+The HTTP host currently has fewer effects than the file and prompt host; this
+entry point does not add local-tool execution to HTTP requests.
+
+Developer and audit interfaces remain available for existing integrations;
+they are not additional steps required to use these three modes. Contributors
+can use `make build` and `make test`. The browser playground remains available
+at https://devlish.dev/playground.html.
 
 ## Governance and Verification
 

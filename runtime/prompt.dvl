@@ -1,0 +1,9 @@
+Rule:
+  id: devlish.interactive_prompt
+  version: 1.0.0
+Permissions:
+  Call language models
+
+Ask "Conversation" as conversation
+Ask the model with conversation as answer
+Respond with answer

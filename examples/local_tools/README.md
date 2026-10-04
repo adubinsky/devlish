@@ -1,6 +1,6 @@
 # Real local programs with operator-selected policy defaults
 
-The ordinary `devlish-core run` command can execute programs found directly in its
+The ordinary `devlish --run` command can execute programs found directly in its
 startup working directory or operator PATH directories. `tool_id` is a simple
 program name using ASCII letters, digits, `_`, `-`, `.`, or `+` (excluding `.`
 and `..`), such as `ls` or `script.sh`; arguments are a list passed directly to the program.
@@ -11,8 +11,8 @@ catalog. The working directory and PATH are captured once, outside model input.
 Build and run a real directory listing, from the repository root:
 
 ```bash
-cargo build --locked --manifest-path crates/devlish_core/Cargo.toml
-crates/devlish_core/target/debug/devlish-core run examples/local_tools/tool.dvl \
+make install
+devlish --run examples/local_tools/tool.dvl \
   --quiet --input '{"tool_request":{"tool_id":"ls","arguments":["-1"]}}' \
   --policy examples/local_tools/policy.dvl --policy-log /tmp/local-listing.jsonl \
   --default-authorization allow-unless-forbidden
@@ -33,7 +33,7 @@ prohibition. Extra listing arguments are also explicitly denied.
 With your existing `OPENROUTER_API_KEY` and a configured model, run:
 
 ```bash
-crates/devlish_core/target/debug/devlish-core run examples/local_tools/agent.dvl \
+devlish --run examples/local_tools/agent.dvl \
   --quiet --provider openrouter --model YOUR_OPENROUTER_MODEL \
   --policy examples/local_tools/policy.dvl --policy-log /tmp/local-agent.jsonl \
   --default-authorization allow-unless-forbidden

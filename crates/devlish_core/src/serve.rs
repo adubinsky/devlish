@@ -43,7 +43,7 @@ pub fn run_serve(args: Vec<String>) -> Result<(), String> {
             value if value.starts_with("--log-level=") => {}
             "--help" | "-h" => {
                 println!(
-                    "Usage: devlish-core serve [--bind HOST:PORT] [--tools-dir DIR] [--log-level LEVEL]\n\n\
+                    "Usage: devlish --server [--bind HOST:PORT] [--tools-dir DIR] [--log-level LEVEL]\n\n\
                      Endpoints:\n\
                        GET  /v1/health\n\
                        POST /v1/compile\n\

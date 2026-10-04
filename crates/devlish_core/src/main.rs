@@ -10,6 +10,7 @@ use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
 mod harness;
+mod prompt;
 mod reports;
 mod serve;
 #[cfg(feature = "native")]
@@ -100,8 +101,7 @@ fn run(args: Vec<String>) -> Result<(), String> {
     }
     logutil::init_from_env_and_args(&args)?;
     if args.is_empty() {
-        print_help();
-        return Ok(());
+        return prompt::run();
     }
 
     match args[0].as_str() {
@@ -116,7 +116,11 @@ fn run(args: Vec<String>) -> Result<(), String> {
         "report" => reports::run(args),
         "artifact" => run_artifact(args),
         "compile" => run_compile(args),
-        "run" => run_execute(args),
+        "--run" | "-r" if args.len() == 2 && ["--help", "-h"].contains(&args[1].as_str()) => {
+            print_help();
+            Ok(())
+        }
+        "--run" | "-r" | "run" => run_execute(args),
         #[cfg(feature = "native")]
         "run-verified" => verified_run::run(args).map_err(|error| {
             format!(
@@ -145,7 +149,7 @@ fn run(args: Vec<String>) -> Result<(), String> {
         "new" => run_new(args),
         "mcp" => run_mcp(args),
         "harness" => harness::run_harness(args),
-        "serve" => serve::run_serve(args),
+        "--server" | "-s" | "serve" => serve::run_serve(args),
         "course" => run_course(args),
         "fmt" | "format" => run_format(args),
         "repl" => run_repl(args),
@@ -165,66 +169,34 @@ fn looks_like_file(arg: &str) -> bool {
 
 fn print_help() {
     println!(
-        "Devlish {VERSION} - AI-first programming language
+        "Devlish {VERSION}
 
-Usage: devlish-core <command> [options]
+Usage:
+  devlish                      Open the interactive model prompt
+  devlish --run FILE            Execute a Devlish workflow (-r)
+  devlish --server              Start the long-lived HTTP service (-s)
 
-Commands:
-  report <kind>              Repeatable application, policy, process, receipt-issuer, and integrity reports
-  artifact hash|verify       Hash a file or verify its exact bytes against a trusted SHA-256
-  compile <file.dvl>          Compile a Devlish source file to bytecode
-  run <file>                  Run a compiled bytecode file or source file
-  disassemble <file.dvlc.json>  Disassemble a bytecode package
-  validate <file.dvl>         Validate a source file (alias: lint)
-  lint <file.dvl>             Validate a source file (alias: validate)
-  evidence <rule.dvl>         Run golden cases and emit a hashed evidence report
-  audit-verify <log.jsonl>    Verify the hash chain of an audit log
-  replay <log.jsonl>          Re-run a journaled governed run offline and verify its output
-  release <verb>              Release lifecycle: propose, approve, publish, retire, list, verify
-  new <project_name>          Create a new Devlish project
-  mcp                         Start MCP server (JSON-RPC over stdio)
-  harness <verb>              Outbound LLM harness: run, resume, init-config
-  serve                       Start HTTP API daemon (compile/run/lint/harness)
-  course                      Walk through the interactive beginner course
-  fmt <file.dvl>              Format a Devlish source file
-  repl                        Interactive read-eval-print loop
-  version                     Show version
-  help                        Show this help
+File mode compiles source automatically. No separate compile step is needed.
+Server mode stays in the foreground until stopped; default: 127.0.0.1:7420.
 
-Options:
-  -h, --help                  Show this help
-  -v, --version               Show version
+Optional file settings:
+  --input JSON                 Workflow input
+  --provider NAME --model ID   Override configured model settings
+  --policy FILE --policy-log FILE
+                               Enforce policy and record its decisions
+  --default-authorization allow-unless-forbidden|deny-unless-allowed
+                               Choose the default for policy abstentions
+  --quiet                     Suppress execution events
 
-Compile options:
-  --target bytecode           Compilation target (only bytecode supported)
-  --output, -o <path>         Write output to file instead of stdout
+Optional server setting:
+  --bind HOST:PORT              Listening address
 
-Run options:
-  --input <json>              Input data as JSON string
-  --method <name>             Method to invoke (for class-based programs)
-  --env KEY=VALUE             Set a credential/environment variable (repeatable)
-  --audit-log <path>          Append governed-run audit records to a JSONL log
-                              (falls back to DEVLISH_AUDIT_LOG)
-  --policy <file>             Enforce a Devlish effect policy (requires --policy-log)
-  --default-authorization <allow-unless-forbidden|deny-unless-allowed>
-                             Set the default for explicit policy abstentions
-  --policy-evidence          Include sensitive effect data in the log for offline reports
-  run-verified              Run operator-selected release (DEVLISH_VERIFIED_PROFILE)
-  serve-verified            Serve an operator-selected release on loopback with authentication
-  --policy-sha256 <digest>    Pin the exact compiled policy bytes to an approved digest
-  --policy-log <path>         Create an exclusive, durable policy decision log
-  --journal <dir>             Archive input, bytecode, and every effect exchange
-                              as content-addressed attachments (enables replay;
-                              requires --audit-log)
-  --governed <registry.json>  Refuse to run any artifact that is not a published
-                              release in the registry
-  --quiet                     Shorthand for --log-level error (suppress VM events)
-  --log-level LEVEL           error | info | debug (default info; or DEVLISH_LOG)
-  --provider NAME             Outbound LLM provider: openai, openrouter, anthropic, ollama
-  --model NAME                Outbound LLM model id
+  -h, --help                   Show help
+  -v, --version                Show version
 
-Implicit run:
-  devlish-core <file.dvl>     Equivalent to: devlish-core run <file.dvl>"
+Model settings: ~/.devlish/config.toml (or DEVLISH_CONFIG).
+Prompt customization: .devlish/agent.dvl and .devlish/policy.dvl.
+Developer and audit interfaces remain available for existing integrations."
     );
 }
 
@@ -370,7 +342,14 @@ fn select_effective_version(
 }
 
 fn run_execute(args: Vec<String>) -> Result<(), String> {
-    let config = RunConfig::parse(args)?;
+    execute_config(RunConfig::parse(args)?, None, None).map(|_| ())
+}
+
+fn execute_config(
+    config: RunConfig,
+    program_override: Option<Value>,
+    policy_override: Option<Value>,
+) -> Result<Value, String> {
     if config.policy.is_some() != config.policy_log.is_some() {
         return Err("--policy and --policy-log must be supplied together".into());
     }
@@ -397,7 +376,10 @@ fn run_execute(args: Vec<String>) -> Result<(), String> {
                 .map_err(|e| format!("invalid verified policy bytecode: {e}"))?;
             EffectPolicy::new(package)?
         } else {
-            EffectPolicy::new(load_package(path)?)?
+            EffectPolicy::new(match &policy_override {
+                Some(package) => package.clone(),
+                None => load_package(path)?,
+            })?
         };
         if let Some(expected) = &config.policy_sha256 {
             policy.set_file_digest(expected.to_ascii_lowercase());
@@ -419,7 +401,9 @@ fn run_execute(args: Vec<String>) -> Result<(), String> {
         );
     }
 
-    let package: Value = if let Some(as_of) = &config.as_of {
+    let package: Value = if let Some(package) = program_override {
+        package
+    } else if let Some(as_of) = &config.as_of {
         // Gather every candidate version, then pick the one in force on the date.
         let mut versions: Vec<(PathBuf, Value)> = Vec::new();
         for path in std::iter::once(&config.input).chain(config.extra_inputs.iter()) {
@@ -605,7 +589,7 @@ fn run_execute(args: Vec<String>) -> Result<(), String> {
                             }
                         }
                     }
-                    Ok(())
+                    Ok(result)
                 }
                 Err(error) => {
                     // If the error message is valid JSON (from Fail with record),
@@ -4728,7 +4712,7 @@ impl RunConfig {
 }
 
 fn usage() -> String {
-    "Usage: devlish-core <command> [options]\n\nRun 'devlish-core help' for available commands."
+    "Usage: devlish | devlish --run FILE | devlish --server\n\nRun 'devlish --help' for details."
         .to_string()
 }
 
@@ -4737,8 +4721,7 @@ fn compile_usage() -> String {
 }
 
 fn run_usage() -> String {
-    "Usage: devlish-core run <file> [<file>...] [--input '{\"key\":\"value\"}'] [--method <name>] [--as-of YYYY-MM-DD] [--audit-log <path>] [--policy <file> --policy-log <new-path> [--policy-sha256 <digest>]] [--provider NAME] [--model NAME] [--log-level LEVEL|--quiet]"
-        .to_string()
+    "Usage: devlish --run FILE [--input JSON] [--policy FILE --policy-log FILE]\n\nRun 'devlish --help' for details.".to_string()
 }
 
 #[cfg(test)]

@@ -1,0 +1,314 @@
+//! Public entry points: prompt, file, and long-lived service.
+use serde_json::{json, Value};
+use std::{
+    fs,
+    io::Write,
+    path::PathBuf,
+    process::{Command, Stdio},
+    sync::atomic::{AtomicU64, Ordering},
+    time::Duration,
+};
+static NEXT: AtomicU64 = AtomicU64::new(0);
+struct Fixture(PathBuf);
+impl Fixture {
+    fn new() -> Self {
+        let root = std::env::temp_dir().join(format!(
+            "devlish-modes-{}-{}",
+            std::process::id(),
+            NEXT.fetch_add(1, Ordering::Relaxed)
+        ));
+        fs::create_dir_all(root.join(".devlish")).unwrap();
+        Self(root)
+    }
+    fn command(&self) -> Command {
+        let mut cmd = Command::new(env!("CARGO_BIN_EXE_devlish-core"));
+        cmd.current_dir(&self.0)
+            .env_remove("DEVLISH_VERIFIED_PROFILE")
+            .env_remove("DEVLISH_AUDIT_LOG")
+            .env_remove("DEVLISH_DEFAULT_AUTHORIZATION")
+            .env("HOME", &self.0)
+            .env("DEVLISH_CONFIG", self.0.join("config.toml"));
+        cmd
+    }
+    fn prompt(&self, input: &str) -> std::process::Output {
+        let mut child = self
+            .command()
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .unwrap();
+        child
+            .stdin
+            .take()
+            .unwrap()
+            .write_all(input.as_bytes())
+            .unwrap();
+        child.wait_with_output().unwrap()
+    }
+}
+impl Drop for Fixture {
+    fn drop(&mut self) {
+        let _ = fs::remove_dir_all(&self.0);
+    }
+}
+
+#[test]
+fn no_arguments_opens_model_prompt_and_eof_or_exit_closes_it() {
+    let f = Fixture::new();
+    for input in ["", "/exit\n", "/clear\n/exit\n"] {
+        let out = f.prompt(input);
+        assert!(out.status.success());
+        let text = String::from_utf8(out.stdout).unwrap();
+        assert!(text.contains("devlish> "));
+        assert!(!text.contains("Type Devlish statements"));
+        assert!(!f.0.join(".devlish/sessions").exists());
+    }
+}
+
+#[test]
+fn file_modes_compile_in_memory_and_preserve_input_and_failures() {
+    let f = Fixture::new();
+    fs::write(
+        f.0.join("workflow.dvl"),
+        "Ask \"Name?\" as name\nRespond with name\n",
+    )
+    .unwrap();
+    for mode in ["--run", "-r"] {
+        let out = f
+            .command()
+            .args([
+                mode,
+                "workflow.dvl",
+                "--quiet",
+                "--input",
+                "{\"name\":\"World\"}",
+            ])
+            .output()
+            .unwrap();
+        assert!(
+            out.status.success(),
+            "{}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+        assert!(String::from_utf8_lossy(&out.stdout).contains("World"));
+        assert!(!f.0.join("workflow.dvlc.json").exists());
+        assert!(!f
+            .command()
+            .args([mode, "missing.dvl"])
+            .output()
+            .unwrap()
+            .status
+            .success());
+    }
+}
+
+#[test]
+fn prompt_turns_use_real_devlish_model_effects_conversation_and_policy_logs() {
+    let f = Fixture::new();
+    let server = tiny_http::Server::http("127.0.0.1:0").unwrap();
+    fs::write(f.0.join("config.toml"), format!("default_provider = \"ollama\"\ndefault_model = \"test-model\"\n[ollama]\nbase_url = \"http://{}\"\n", server.server_addr())).unwrap();
+    let model = std::thread::spawn(move || {
+        let mut prompts = Vec::new();
+        for index in 0..3 {
+            let mut request = server
+                .recv_timeout(Duration::from_secs(15))
+                .unwrap()
+                .unwrap();
+            assert_eq!(request.url(), "/chat/completions");
+            let mut body = String::new();
+            request.as_reader().read_to_string(&mut body).unwrap();
+            let body: Value = serde_json::from_str(&body).unwrap();
+            prompts.push(body["messages"][0]["content"].as_str().unwrap().to_string());
+            request
+                .respond(
+                    tiny_http::Response::from_string(
+                        json!({"choices":[{"message":{"content":format!("answer {index}")}}]})
+                            .to_string(),
+                    )
+                    .with_header(
+                        tiny_http::Header::from_bytes("Content-Type", "application/json").unwrap(),
+                    ),
+                )
+                .unwrap();
+        }
+        prompts
+    });
+    let out = f.prompt("First request\nSecond request\n/clear\nFresh request\n/exit\n");
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let text = String::from_utf8(out.stdout).unwrap();
+    assert!(
+        text.contains("answer 0") && text.contains("answer 1"),
+        "{text}"
+    );
+    let prompts = model.join().unwrap();
+    assert!(
+        prompts[1].contains("First request")
+            && prompts[1].contains("answer 0")
+            && prompts[1].contains("Second request")
+    );
+    assert!(prompts[2].contains("Fresh request"));
+    assert!(!prompts[2].contains("First request") && !prompts[2].contains("answer 0"));
+    let logs: Vec<_> = fs::read_dir(f.0.join(".devlish/sessions"))
+        .unwrap()
+        .collect();
+    assert_eq!(logs.len(), 3);
+    for log in logs {
+        let log = fs::read_to_string(log.unwrap().path()).unwrap();
+        assert!(log.contains("policy_run_finished"));
+        assert!(log.contains("llm_complete") && log.contains("respond"));
+        assert!(!log.contains("First request"));
+    }
+}
+
+#[test]
+fn explicit_prompt_policy_denial_blocks_model_before_credentials_or_network() {
+    let f = Fixture::new();
+    fs::write(f.0.join(".devlish/policy.dvl"), "Rule:\n  id: prompt.denial\n  version: 1.0.0\n\nRespond with record with false as allow and \"Company policy prohibits outbound messages.\" as reason\n").unwrap();
+    let out = f.prompt("A prohibited message\n/exit\n");
+    let text = format!(
+        "{}{}",
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert!(
+        text.contains("Company policy prohibits outbound messages."),
+        "{text}"
+    );
+    assert!(!text.contains("missing API key"));
+    let log = fs::read_dir(f.0.join(".devlish/sessions"))
+        .unwrap()
+        .next()
+        .unwrap()
+        .unwrap()
+        .path();
+    let log = fs::read_to_string(log).unwrap();
+    let records: Vec<Value> = log
+        .lines()
+        .map(|line| serde_json::from_str(line).unwrap())
+        .collect();
+    assert!(records
+        .iter()
+        .any(|r| r["record"]["type"] == "effect_decision" && r["record"]["allow"] == false));
+    assert!(!records
+        .iter()
+        .any(|r| r["record"]["type"] == "effect_outcome"));
+}
+
+#[test]
+fn server_modes_stay_running_and_answer_health_requests() {
+    let f = Fixture::new();
+    for mode in ["--server", "-s"] {
+        let socket = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let address = socket.local_addr().unwrap();
+        drop(socket);
+        let mut child = f
+            .command()
+            .args([mode, "--bind", &address.to_string()])
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn()
+            .unwrap();
+        let url = format!("http://{address}/v1/health");
+        let mut healthy = false;
+        for _ in 0..100 {
+            if let Ok(response) = ureq::get(&url).timeout(Duration::from_millis(100)).call() {
+                let body: Value = response.into_json().unwrap();
+                healthy = body["ok"] == true;
+                break;
+            }
+            if child.try_wait().unwrap().is_some() {
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(20));
+        }
+        let running = child.try_wait().unwrap().is_none();
+        let _ = child.kill();
+        let _ = child.wait();
+        assert!(
+            healthy && running,
+            "{mode} should host a long-lived service"
+        );
+    }
+}
+
+#[test]
+fn installing_produces_a_standalone_devlish_entry_point() {
+    let f = Fixture::new();
+    let repo = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
+    // Exercise the real install target using the already compiled test binary.
+    let out = Command::new("make")
+        .current_dir(repo)
+        .arg("install")
+        .arg("CARGO=true")
+        .arg(format!("BINARY={}", env!("CARGO_BIN_EXE_devlish-core")))
+        .arg(format!("PREFIX={}", f.0.join("installed").display()))
+        .output()
+        .unwrap();
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let executable = f.0.join("installed/bin/devlish");
+    let out = Command::new(executable)
+        .current_dir(&f.0)
+        .env_remove("DEVLISH_VERIFIED_PROFILE")
+        .stdin(Stdio::null())
+        .output()
+        .unwrap();
+    assert!(out.status.success());
+    assert!(String::from_utf8_lossy(&out.stdout).contains("devlish> "));
+}
+
+#[test]
+fn invalid_custom_policy_stops_startup_instead_of_using_the_builtin_policy() {
+    let f = Fixture::new();
+    fs::write(f.0.join(".devlish/policy.dvl"), "Respond with true\n").unwrap();
+    let out = f.prompt("Never send this\n");
+    assert!(!out.status.success());
+    assert!(!String::from_utf8_lossy(&out.stdout).contains("devlish> "));
+    assert!(!f.0.join(".devlish/sessions").exists());
+}
+
+#[cfg(unix)]
+#[test]
+fn custom_prompt_program_uses_the_same_local_tools_and_operator_posture() {
+    use std::os::unix::fs::PermissionsExt;
+    let f = Fixture::new();
+    fs::write(f.0.join("localtool"), "#!/bin/sh\nprintf x >> marker\n").unwrap();
+    fs::set_permissions(f.0.join("localtool"), fs::Permissions::from_mode(0o700)).unwrap();
+    fs::write(f.0.join(".devlish/agent.dvl"), "Permissions:\n  Run catalog tool \"localtool\"\n\nrequest equals record with \"localtool\" as tool_id and list of \"\" as arguments\nRun catalog tool request as result\nRespond with \"Done.\"\n").unwrap();
+    fs::write(f.0.join(".devlish/policy.dvl"), "Rule:\n  id: prompt.local_policy\n  version: 1.0.0\n\nAsk \"Effect?\" as effect\nIf effect equals \"respond\":\n  Respond with record with true as allow and \"Acknowledgement permitted.\" as reason\nRespond with record with \"abstain\" as decision and \"Use the operator default.\" as reason\n").unwrap();
+    for (posture, allowed) in [
+        ("deny-unless-allowed", false),
+        ("allow-unless-forbidden", true),
+    ] {
+        let mut child = f
+            .command()
+            .env("DEVLISH_DEFAULT_AUTHORIZATION", posture)
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .unwrap();
+        child
+            .stdin
+            .take()
+            .unwrap()
+            .write_all(b"Run the workflow\n/exit\n")
+            .unwrap();
+        let out = child.wait_with_output().unwrap();
+        assert!(out.status.success());
+        assert_eq!(f.0.join("marker").exists(), allowed);
+        assert_eq!(
+            String::from_utf8_lossy(&out.stdout).contains("Done."),
+            allowed
+        );
+    }
+    assert_eq!(fs::read_to_string(f.0.join("marker")).unwrap(), "x");
+}
