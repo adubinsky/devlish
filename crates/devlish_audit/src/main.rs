@@ -2,7 +2,7 @@ mod output;
 use devlish_audit::{read_bounded, verify, Purpose, MAX_ARTIFACT_BYTES, MAX_METADATA_BYTES};
 use serde_json::json;
 use std::{collections::BTreeMap, path::Path};
-const USAGE: &str = "Plain-English findings: put --text before any command. JSON remains the default.\nUsage: devlish-audit verify-issuance <log.jsonl> --pending <pending.json> --completed <completed.json> --trust <operator-trust.json> --expectations <operator-expectations.json>\n       devlish-audit init-admission <new-state.json> --requirements <operator-requirements.json>\n       devlish-audit verify-release <manifest.json> --signature <signature.json> --trust <operator-trust.json> --requirements <operator-requirements.json> --artifacts <operator-artifacts.json> [--evidence <evidence.json> | --prepare-receipt <request.json> | --tool-catalog <operator-catalog-id> --tool-request <request.json> [--tool-containment <containment.json>]]\n       devlish-audit verify <file> --signature <signature.json> --trust <operator-trust.json> --purpose <release-manifest|release-artifact|build-statement|audit-evidence|audit-receipt>\n       devlish-audit verify-log <log.jsonl> --receipt <receipt.json> --signature <signature.json> --trust <operator-trust.json> --receipt-sha256 <retained-digest> --session-id <expected-session> --release-sha256 <expected-release-digest>";
+const USAGE: &str = "Plain-English findings: put --text before any command. JSON remains the default.\nUsage: devlish-audit verify-issuance <log.jsonl> --pending <pending.json> --completed <completed.json> --trust <operator-trust.json> --expectations <operator-expectations.json>\n       devlish-audit init-admission <new-state.json> --requirements <operator-requirements.json>\n       devlish-audit verify-release <manifest.json> --signature <signature.json> --trust <operator-trust.json> --requirements <operator-requirements.json> --artifacts <operator-artifacts.json> [--evidence <evidence.json> | --prepare-receipt <request.json> | --tool-catalog <operator-catalog-id> --tool-request <request.json> [--tool-containment <containment.json>] [--tool-reservation <slot.jsonl> --reservation-sha256 <retained-digest>]]\n       devlish-audit verify <file> --signature <signature.json> --trust <operator-trust.json> --purpose <release-manifest|release-artifact|build-statement|audit-evidence|audit-receipt>\n       devlish-audit verify-log <log.jsonl> --receipt <receipt.json> --signature <signature.json> --trust <operator-trust.json> --receipt-sha256 <retained-digest> --session-id <expected-session> --release-sha256 <expected-release-digest>";
 fn run(args: &[String]) -> Result<serde_json::Value, String> {
     if args.first().map(String::as_str) == Some("verify-issuance") {
         if args.len() != 10 {
@@ -40,7 +40,7 @@ fn run(args: &[String]) -> Result<serde_json::Value, String> {
         );
     }
     if args.first().map(String::as_str) == Some("verify-release") {
-        if ![10, 12, 14, 16].contains(&args.len()) {
+        if ![10, 12, 14, 16, 18, 20].contains(&args.len()) {
             return Err(USAGE.into());
         }
         let mut options = BTreeMap::new();
@@ -55,6 +55,8 @@ fn run(args: &[String]) -> Result<serde_json::Value, String> {
                 "--tool-catalog",
                 "--tool-request",
                 "--tool-containment",
+                "--tool-reservation",
+                "--reservation-sha256",
             ]
             .contains(&pair[0].as_str())
                 || options.insert(pair[0].as_str(), pair[1].as_str()).is_some()
@@ -71,6 +73,8 @@ fn run(args: &[String]) -> Result<serde_json::Value, String> {
         if options.contains_key("--tool-catalog") != options.contains_key("--tool-request")
             || (options.contains_key("--tool-containment")
                 && !options.contains_key("--tool-request"))
+            || (options.contains_key("--tool-reservation") != options.contains_key("--reservation-sha256"))
+            || (options.contains_key("--tool-reservation") && !options.contains_key("--tool-request"))
             || (options.contains_key("--evidence") && options.contains_key("--prepare-receipt"))
             || (options.contains_key("--tool-request")
                 && (options.contains_key("--evidence")
@@ -123,16 +127,14 @@ fn run(args: &[String]) -> Result<serde_json::Value, String> {
             let catalog =
                 tool_catalog_snapshot.ok_or("selected catalog is absent from the release")?;
             let request = read_bounded(Path::new(request_path), MAX_METADATA_BYTES)?;
-            let selection = if let Some(containment_path) = options.get("--tool-containment") {
-                report.verify_tool_request_with_containment(
-                    options["--tool-catalog"],
-                    &catalog,
-                    &request,
-                    &read_bounded(Path::new(containment_path), MAX_METADATA_BYTES)?,
-                )?
-            } else {
-                report.verify_tool_request(options["--tool-catalog"], &catalog, &request)?
-            };
+            let containment = options.get("--tool-containment").map(|path|
+                read_bounded(Path::new(path), MAX_METADATA_BYTES)).transpose()?;
+            let reservation = options.get("--tool-reservation").map(|path|
+                read_bounded(Path::new(path), devlish_audit::tool_reservation::MAX_RESERVATION_BYTES)).transpose()?;
+            let selection = report.verify_tool_request_with_launch_evidence(
+                options["--tool-catalog"], &catalog, &request, containment.as_deref(),
+                reservation.as_deref().map(|bytes| (bytes, options["--reservation-sha256"])),
+            )?;
             return Ok(json!({"release":report,"tool_selection":selection}));
         }
         if let Some(request_path) = options.get("--prepare-receipt") {

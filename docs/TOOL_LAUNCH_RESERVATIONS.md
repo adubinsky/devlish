@@ -64,3 +64,34 @@ cleanup excludes the slot file and directory from candidate inheritance.
 
 These tests still use synthetic admission/authority state. They do not implement
 a production session counter, outcome reconciliation, or a broker service.
+
+## Independent anchored verification
+
+Supply the reservation file and its independently retained digest with a signed
+release and exact tool request:
+
+```bash
+devlish-audit --text verify-release manifest.json \
+  --signature signature.json --trust operator-trust.json \
+  --requirements operator-requirements.json --artifacts operator-artifacts.json \
+  --tool-catalog tools --tool-request tool-request.json \
+  --tool-containment containment.json \
+  --tool-reservation slot.jsonl --reservation-sha256 RETAINED_SHA256
+```
+
+Both reservation options require a tool catalog/request, and must appear together.
+The verifier freshly validates the release and selection, reads at most 8 KiB,
+checks the supplied digest, validates one reserved record and at most one linked
+consumption record, recomputes the operation identity, and compares every binding
+to the authenticated selection. Unknown/duplicate fields and incomplete records
+are rejected. The signed containment profile remains an optional separate check.
+
+JSON and English findings state whether the bytes match the supplied anchor,
+whether the selection matches, and whether the local record says consumed. Writer
+authentication, actual execution and policy enforcement remain false. No raw
+arguments, executable paths or tenant/session names appear in the reservation
+report. A digest supplied by the writer with the file is not an independent anchor.
+
+A retained earlier reserved record cannot establish that no later action occurred.
+Neither reserved nor consumed evidence proves execution completion, success, or
+safe retry. This command does not launch anything or reconcile an uncertain action.

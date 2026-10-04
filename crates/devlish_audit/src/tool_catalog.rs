@@ -58,7 +58,7 @@ impl ReleaseVerification {
         catalog_bytes: &[u8],
         request_bytes: &[u8],
     ) -> Result<serde_json::Value, String> {
-        self.verify_tool_request_inner(catalog_id, catalog_bytes, request_bytes, None)
+        self.verify_tool_request_inner(catalog_id, catalog_bytes, request_bytes, None, None)
     }
 
     /// Additionally validate the selected signed containment declaration. This
@@ -75,6 +75,26 @@ impl ReleaseVerification {
             catalog_bytes,
             request_bytes,
             Some(containment_bytes),
+            None,
+        )
+    }
+
+    /// Optionally check anchored launch reservation bytes against this exact
+    /// selection. Local reservation records do not authenticate their writer.
+    pub fn verify_tool_request_with_launch_evidence(
+        &self,
+        catalog_id: &str,
+        catalog_bytes: &[u8],
+        request_bytes: &[u8],
+        containment_bytes: Option<&[u8]>,
+        reservation: Option<(&[u8], &str)>,
+    ) -> Result<serde_json::Value, String> {
+        self.verify_tool_request_inner(
+            catalog_id,
+            catalog_bytes,
+            request_bytes,
+            containment_bytes,
+            reservation,
         )
     }
 
@@ -84,6 +104,7 @@ impl ReleaseVerification {
         catalog_bytes: &[u8],
         request_bytes: &[u8],
         containment_bytes: Option<&[u8]>,
+        reservation: Option<(&[u8], &str)>,
     ) -> Result<serde_json::Value, String> {
         #[derive(Deserialize)]
         #[serde(deny_unknown_fields)]
@@ -105,7 +126,11 @@ impl ReleaseVerification {
         let containment = containment_bytes
             .map(|bytes| selection.verify_containment(bytes))
             .transpose()?;
+        let launch_reservation = reservation
+            .map(|(bytes, digest)| selection.verify_launch_reservation(bytes, digest))
+            .transpose()?;
         Ok(serde_json::json!({
+            "launch_reservation":launch_reservation,
             "format":"devlish-tool-selection-verification", "format_version":1,
             "catalog_id":catalog_id, "tool_id":selection.id(),
             "artifact_id":selection.artifact_id(), "containment_id":selection.containment_id(),

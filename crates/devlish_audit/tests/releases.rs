@@ -1216,6 +1216,86 @@ fn cli_tool_report_reverifies_bytes_trust_and_options_without_executing() {
     assert!(checked_text.contains("Signed containment requirements recognized: Yes"));
     assert!(checked_text.contains("Actual containment enforcement independently established: No"));
     assert!(!checked_text.contains("/work/public.txt"));
+    let release = verify_release(
+        &bytes(&f.manifest),
+        &f.signature(),
+        &bytes(&f.trust),
+        &bytes(&f.requirements),
+        |id| {
+            Ok(if id == "tool-catalog" {
+                bytes(&catalog)
+            } else if id == "containment" {
+                containment.clone()
+            } else {
+                id.as_bytes().to_vec()
+            })
+        },
+    )
+    .unwrap();
+    let verified_catalog = release
+        .tool_catalog("tool-catalog", &bytes(&catalog))
+        .unwrap();
+    let arguments: Vec<String> =
+        serde_json::from_value(catalog["tools"][0]["allowed_arguments"][0].clone()).unwrap();
+    let selected = verified_catalog
+        .select("public-grep", &arguments, 150)
+        .unwrap();
+    let reservation = launch_reservation_fixture(&selected, true);
+    let reservation_digest = sha256(&reservation);
+    fs::write(dir.join("slot.jsonl"), &reservation).unwrap();
+    let mut with_reservation = with_containment.clone();
+    with_reservation.extend([
+        "--tool-reservation",
+        "slot.jsonl",
+        "--reservation-sha256",
+        &reservation_digest,
+    ]);
+    let checked_slot = run(false, &with_reservation);
+    assert!(
+        checked_slot.status.success(),
+        "{}",
+        String::from_utf8_lossy(&checked_slot.stderr)
+    );
+    assert_eq!(checked_slot.stdout, run(false, &with_reservation).stdout);
+    let slot_report: Value = serde_json::from_slice(&checked_slot.stdout).unwrap();
+    let slot = &slot_report["tool_selection"]["launch_reservation"];
+    assert_eq!(slot["reservation_bytes_match_anchor"], true);
+    assert_eq!(slot["reservation_recorded_consumed"], true);
+    for claim in [
+        "reservation_writer_authenticated",
+        "execution_origin_verified",
+        "policy_enforcement_verified",
+    ] {
+        assert_eq!(slot[claim], false);
+    }
+    let slot_text = run(true, &with_reservation);
+    assert!(slot_text.status.success());
+    let slot_text = String::from_utf8(slot_text.stdout).unwrap();
+    assert!(slot_text.contains("Local record states the launch slot was consumed: Yes"));
+    assert!(slot_text.contains("Reservation writer independently authenticated: No"));
+    assert!(!slot_text.contains("/work/public.txt"));
+    fs::write(
+        dir.join("slot.jsonl"),
+        &reservation[..reservation.len() - 1],
+    )
+    .unwrap();
+    assert!(!run(false, &with_reservation).status.success());
+    fs::write(dir.join("slot.jsonl"), &reservation).unwrap();
+    for extra in [
+        vec!["--tool-reservation", "slot.jsonl"],
+        vec!["--reservation-sha256", &reservation_digest],
+        vec![
+            "--tool-reservation",
+            "slot.jsonl",
+            "--reservation-sha256",
+            &reservation_digest,
+        ],
+    ] {
+        assert!(!run(false, &extra).status.success());
+    }
+    let mut missing_anchor = options.to_vec();
+    missing_anchor.extend(["--tool-reservation", "slot.jsonl"]);
+    assert!(!run(false, &missing_anchor).status.success());
     fs::write(dir.join("supplied-containment.json"), b"substituted").unwrap();
     assert!(!run(false, &with_containment).status.success());
     assert!(run(false, &options).status.success());
@@ -1286,6 +1366,7 @@ fn cli_tool_report_reverifies_bytes_trust_and_options_without_executing() {
     fs::write(dir.join("trust.json"), bytes(&f.trust)).unwrap();
     assert!(!run(false, &options).status.success());
     assert!(!run(false, &with_containment).status.success());
+    assert!(!run(false, &with_reservation).status.success());
     fs::remove_dir_all(dir).unwrap();
 }
 
@@ -1427,4 +1508,202 @@ fn signed_tool_containment_rejects_missing_duplicate_and_oversized_metadata() {
     assert!(check_containment(&oversized, &oversized)
         .unwrap_err()
         .contains("metadata limit"));
+}
+
+fn launch_reservation_fixture(
+    selection: &devlish_audit::tool_catalog::ToolSelection<'_>,
+    consumed: bool,
+) -> Vec<u8> {
+    let operation = devlish_audit::tool_reservation::operation_id("tenant", "session", 1).unwrap();
+    let record = json!({"format":"devlish-tool-launch-reservation","format_version":1,
+        "state":"reserved","operation_id":operation,"tenant_id":"tenant","session_id":"session","effect_id":1,
+        "binding":{"release_sha256":selection.manifest_sha256(),"catalog_sha256":selection.catalog_sha256(),
+        "tool_id":selection.id(),"tool_sha256":selection.tool_sha256(),
+        "arguments_sha256":sha256(&bytes(&json!(selection.arguments()))),"containment_sha256":selection.containment_sha256()}});
+    let mut result = bytes(&record);
+    result.push(b'\n');
+    if consumed {
+        let marker =
+            json!({"state":"consumed","operation_id":operation,"reserved_sha256":sha256(&result)});
+        result.extend(bytes(&marker));
+        result.push(b'\n');
+    }
+    result
+}
+
+#[test]
+fn anchored_launch_reservations_bind_selection_without_inventing_execution() {
+    let (mut fixture, catalog) = tool_catalog_fixture();
+    let release = verify_with_catalog(&mut fixture, &catalog);
+    let catalog = release
+        .tool_catalog("tool-catalog", &bytes(&catalog))
+        .unwrap();
+    let arguments = vec![
+        "--fixed-strings".into(),
+        "--".into(),
+        "published".into(),
+        "/work/public.txt".into(),
+    ];
+    let selection = catalog.select("public-grep", &arguments, 150).unwrap();
+    for consumed in [false, true] {
+        let evidence = launch_reservation_fixture(&selection, consumed);
+        let report = selection
+            .verify_launch_reservation(&evidence, &sha256(&evidence))
+            .unwrap();
+        assert_eq!(
+            report,
+            selection
+                .verify_launch_reservation(&evidence, &sha256(&evidence))
+                .unwrap()
+        );
+        assert_eq!(report["reservation_recorded_consumed"], consumed);
+        for claim in [
+            "reservation_writer_authenticated",
+            "execution_origin_verified",
+            "policy_enforcement_verified",
+        ] {
+            assert_eq!(report[claim], false);
+        }
+        assert!(!report.to_string().contains("/work/public.txt"));
+        assert!(!report.to_string().contains("--fixed-strings"));
+        let mut changed = evidence.clone();
+        changed.push(b' ');
+        assert!(selection
+            .verify_launch_reservation(&changed, &sha256(&evidence))
+            .is_err());
+        assert!(selection
+            .verify_launch_reservation(&changed, &sha256(&changed))
+            .is_err());
+        assert!(selection
+            .verify_launch_reservation(&evidence, "untrusted-non-digest")
+            .is_err());
+    }
+    // An independently retained earlier prefix establishes that earlier record,
+    // not the absence of a later execution. No success/never-executed claim exists.
+    let earlier = launch_reservation_fixture(&selection, false);
+    assert_eq!(
+        selection
+            .verify_launch_reservation(&earlier, &sha256(&earlier))
+            .unwrap()["reservation_recorded_consumed"],
+        false
+    );
+}
+
+#[test]
+fn launch_reservation_rejects_rebound_identity_bindings_and_unknown_fields() {
+    let (mut fixture, catalog) = tool_catalog_fixture();
+    let release = verify_with_catalog(&mut fixture, &catalog);
+    let catalog = release
+        .tool_catalog("tool-catalog", &bytes(&catalog))
+        .unwrap();
+    let arguments = vec![
+        "--fixed-strings".into(),
+        "--".into(),
+        "published".into(),
+        "/work/public.txt".into(),
+    ];
+    let selection = catalog.select("public-grep", &arguments, 150).unwrap();
+    let original: Value =
+        serde_json::from_slice(&launch_reservation_fixture(&selection, false)).unwrap();
+    for path in [
+        "/format",
+        "/state",
+        "/operation_id",
+        "/tenant_id",
+        "/session_id",
+        "/binding/release_sha256",
+        "/binding/catalog_sha256",
+        "/binding/tool_id",
+        "/binding/tool_sha256",
+        "/binding/arguments_sha256",
+        "/binding/containment_sha256",
+    ] {
+        let mut changed = original.clone();
+        *changed.pointer_mut(path).unwrap() = json!("substituted");
+        let mut evidence = bytes(&changed);
+        evidence.push(b'\n');
+        assert!(
+            selection
+                .verify_launch_reservation(&evidence, &sha256(&evidence))
+                .is_err(),
+            "{path}"
+        );
+    }
+    for (path, value) in [
+        ("/format_version", json!(2)),
+        ("/effect_id", json!(0)),
+        ("/effect_id", json!(-1)),
+    ] {
+        let mut changed = original.clone();
+        *changed.pointer_mut(path).unwrap() = value;
+        let mut evidence = bytes(&changed);
+        evidence.push(b'\n');
+        assert!(selection
+            .verify_launch_reservation(&evidence, &sha256(&evidence))
+            .is_err());
+    }
+    for nested in [false, true] {
+        let mut changed = original.clone();
+        if nested {
+            changed["binding"]["authority"] = json!("forged");
+        } else {
+            changed["execution_verified"] = json!(true);
+        }
+        let mut evidence = bytes(&changed);
+        evidence.push(b'\n');
+        assert!(selection
+            .verify_launch_reservation(&evidence, &sha256(&evidence))
+            .is_err());
+    }
+}
+
+#[test]
+fn launch_reservation_rejects_broken_consumption_links_duplicates_and_partial_records() {
+    let (mut fixture, catalog) = tool_catalog_fixture();
+    let release = verify_with_catalog(&mut fixture, &catalog);
+    let catalog = release
+        .tool_catalog("tool-catalog", &bytes(&catalog))
+        .unwrap();
+    let arguments = vec![
+        "--fixed-strings".into(),
+        "--".into(),
+        "published".into(),
+        "/work/public.txt".into(),
+    ];
+    let selection = catalog.select("public-grep", &arguments, 150).unwrap();
+    let reserved = launch_reservation_fixture(&selection, false);
+    let consumed = launch_reservation_fixture(&selection, true);
+    let marker: Value = serde_json::from_slice(&consumed[reserved.len()..]).unwrap();
+    for key in ["state", "operation_id", "reserved_sha256"] {
+        let mut changed = marker.clone();
+        changed[key] = json!("substituted");
+        let mut evidence = reserved.clone();
+        evidence.extend(bytes(&changed));
+        evidence.push(b'\n');
+        assert!(selection
+            .verify_launch_reservation(&evidence, &sha256(&evidence))
+            .is_err());
+    }
+    let duplicate = String::from_utf8(reserved.clone())
+        .unwrap()
+        .replacen("{", "{\"state\":\"reserved\",", 1)
+        .into_bytes();
+    let mut unknown_marker = marker.clone();
+    unknown_marker["policy_enforced"] = json!(true);
+    let mut unknown = reserved.clone();
+    unknown.extend(bytes(&unknown_marker));
+    unknown.push(b'\n');
+    for evidence in [
+        Vec::new(),
+        consumed[..consumed.len() - 1].to_vec(),
+        [consumed.clone(), b"\n".to_vec()].concat(),
+        [consumed.clone(), reserved.clone()].concat(),
+        duplicate,
+        unknown,
+        vec![b'x'; 8193],
+    ] {
+        assert!(selection
+            .verify_launch_reservation(&evidence, &sha256(&evidence))
+            .is_err());
+    }
 }

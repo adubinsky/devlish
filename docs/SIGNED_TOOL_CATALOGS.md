@@ -179,3 +179,8 @@ checks; without the flag that finding stays false. English output labels it
 executing-program identity and policy enforcement remain independently unproven.
 Repeated checks of the same inputs produce the same findings, while altered bytes
 or supplied revoked trust fail. No executable or model is invoked.
+
+Optional `--tool-reservation FILE --reservation-sha256 DIGEST` verifies a bounded
+local reservation against an independently retained anchor and the selected signed
+catalog entry. It reports the recorded state without authenticating the writer or
+proving execution. See [launch reservations](TOOL_LAUNCH_RESERVATIONS.md).

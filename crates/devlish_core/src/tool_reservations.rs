@@ -128,7 +128,7 @@ mod unix {
             }))
             .map_err(|_| "invalid launch reservation")?;
             bytes.push(b'\n');
-            if bytes.len() > 4096 {
+            if bytes.len() > devlish_audit::tool_reservation::MAX_RESERVED_RECORD_BYTES {
                 return Err("launch reservation exceeds size limit");
             }
             let name =
@@ -191,26 +191,8 @@ mod unix {
     }
 
     fn operation_id(tenant: &str, session: &str, effect: u64) -> Result<String, &'static str> {
-        for identity in [tenant, session] {
-            if identity.is_empty()
-                || identity.len() > 128
-                || !identity
-                    .bytes()
-                    .all(|b| b.is_ascii_alphanumeric() || b"_.-".contains(&b))
-            {
-                return Err("invalid protected launch identity");
-            }
-        }
-        if effect == 0 {
-            return Err("launch effect number must be positive");
-        }
-        Ok(sha256(
-            &serde_json::to_vec(&json!({
-                "domain":"devlish-tool-launch-slot-v1", "tenant_id":tenant,
-                "session_id":session,"effect_id":effect,
-            }))
-            .map_err(|_| "invalid launch slot")?,
-        ))
+        devlish_audit::tool_reservation::operation_id(tenant, session, effect)
+            .map_err(|_| "invalid protected launch slot identity")
     }
 
     #[cfg(test)]

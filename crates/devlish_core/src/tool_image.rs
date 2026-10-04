@@ -624,7 +624,18 @@ _start:
         let text = String::from_utf8(bytes).unwrap();
         assert!(!text.contains("--public-only"));
         assert!(!text.contains(selected.path()));
-        drop(token);
+        let report = selected
+            .verify_launch_reservation(text.as_bytes(), &devlish_audit::sha256(text.as_bytes()))
+            .unwrap();
+        assert_eq!(report["reservation_recorded_consumed"], false);
+        let consumed = token.consume().unwrap();
+        let saved =
+            std::fs::read(directory.join(format!("{}.jsonl", consumed.operation_id()))).unwrap();
+        let report = selected
+            .verify_launch_reservation(&saved, consumed.evidence_sha256())
+            .unwrap();
+        assert_eq!(report["reservation_recorded_consumed"], true);
+        assert_eq!(report["execution_origin_verified"], false);
         assert!(store.reserve("tenant", "session", 1, &selected).is_err());
     }
     #[test]

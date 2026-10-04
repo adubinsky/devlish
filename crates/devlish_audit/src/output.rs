@@ -13,6 +13,14 @@ fn quoted(value: &str) -> String {
 }
 fn label(key: &str) -> String {
     match key {
+        "reservation_bytes_match_anchor" => "Reservation bytes match supplied anchor".into(),
+        "reservation_binding_verified" => "Reservation matches authenticated tool selection".into(),
+        "reservation_recorded_consumed" => {
+            "Local record states the launch slot was consumed".into()
+        }
+        "reservation_writer_authenticated" => {
+            "Reservation writer independently authenticated".into()
+        }
         "containment_profile_verified" => "Signed containment requirements recognized".into(),
         "containment_enforcement_verified" => {
             "Actual containment enforcement independently established".into()
