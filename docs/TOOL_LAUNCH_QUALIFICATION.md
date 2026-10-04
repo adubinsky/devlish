@@ -12,7 +12,7 @@ assurance separate from the complete launch boundary.
 | Filesystem data access | Empty Landlock ABI-3 allowlist primitive | Additional syscall restrictions; separate approved input profile if files are needed |
 | Inherited capabilities | Close unlisted descriptors in a disposable child | Configure and bound standard I/O; authenticate every retained descriptor |
 | Network, IPC, process creation and later execution | Minimal syscall gate (see TOOL_SYSCALL_GATE.md), not integrated | Qualify initial-exec broker and complete launch integration before enabling dispatch |
-| Resource and output limits | Fixed child resource ceilings (see TOOL_RESOURCE_LIMITS.md) | Wall deadline, bounded output, process controls, termination and cleanup |
+| Resource and output limits | Fixed resource ceilings plus private bounded stream collector (see TOOL_STREAM_SUPERVISION.md) | Integrate deadline checks and collection with the production broker, policy and journal |
 | Policy, disclosure and evidence | Declared tool effect, Devlish policy and replay tested with fake adapters | Connect real launcher, record identity/outcome commitments, release only approved output |
 
 ## Composed Linux test
