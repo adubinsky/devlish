@@ -689,3 +689,29 @@ credential itself. The HTTP client's system DNS lookup can exceed its timeout;
 there is no strict process-wide deadline or network containment claim. Production
 identity isolation, downstream routing constraints and protected adapters remain
 required. Local test servers use synthetic keys; no live-provider test is implied.
+
+
+### Shared admitted sessions
+
+The native library exposes `verified_session::VerifiedSession` for trusted
+adapters. `admit(operator_profile, session_id, capture_evidence)` verifies the
+current executable and exact artifact buffers, enforces the signed controls and
+policy identity, then durably advances and holds the rollback lock. The fields
+containing the program, policy and controls are private; the session is neither
+cloneable nor deserializable. `execute(input, new_log_path, host)` consumes it,
+rechecks the validity window, creates the bound log and calls the shared governed
+runner. The admission lock remains held through execution and final recording.
+Replacing artifact paths after admission cannot replace the retained program or
+policy. Relative deployment paths are anchored to the admission working directory
+without resolving symlinks, so a later working-directory change cannot redirect
+the program-local credential lookup. Log-path collisions fail before any host effect and preserve old evidence.
+
+`run-verified` uses this API directly. Other adapters must authenticate their
+clients, select operator-controlled profiles/log paths, install protected host
+adapters and approved response sinks, and suppress operator diagnostics before
+exposing a route. Session IDs only correlate records; they do not establish a
+user or tenant identity. A valid API object is local admission evidence, not
+proof of protected execution. It cannot make an arbitrary host implementation
+trustworthy. The validity recheck is at execution startup, not continuous
+revocation monitoring during effects. Existing HTTP/MCP routes remain disabled
+under a verified profile until their full boundaries are implemented.

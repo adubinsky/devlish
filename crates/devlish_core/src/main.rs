@@ -19,16 +19,6 @@ use devlish_core::logutil;
 
 const VERSION: &str = "0.1.0";
 
-struct VerifiedInputs {
-    #[cfg(feature = "native")]
-    llm_route: Option<devlish_llm::governed::ApprovedModel>,
-    program: Value,
-    policy: EffectPolicy,
-    log_context: Value,
-    instruction_limit: u64,
-    allowed_effects: std::collections::BTreeSet<String>,
-}
-
 pub(crate) fn devlish_search_paths_for(source_path: Option<&Path>) -> Vec<String> {
     let mut paths = Vec::new();
     if let Some(project_root) = source_path
@@ -347,13 +337,6 @@ fn select_effective_version(
 }
 
 fn run_execute(args: Vec<String>) -> Result<(), String> {
-    run_execute_loaded(args, None)
-}
-
-fn run_execute_loaded(
-    args: Vec<String>,
-    verified: Option<VerifiedInputs>,
-) -> Result<(), String> {
     let config = RunConfig::parse(args)?;
     if config.policy.is_some() != config.policy_log.is_some() {
         return Err("--policy and --policy-log must be supplied together".into());
@@ -367,7 +350,7 @@ fn run_execute_loaded(
     if config.policy_sha256.is_some() && config.policy.is_none() {
         return Err("--policy-sha256 requires --policy".into());
     }
-    let policy = if let Some(loaded) = &verified { Some(loaded.policy.clone()) } else { config.policy.as_ref().map(|path| {
+    let policy = config.policy.as_ref().map(|path| {
         let mut policy = if let Some(expected) = &config.policy_sha256 {
             if path.extension().is_some_and(|ext| ext == "dvl") {
                 return Err("--policy-sha256 requires compiled bytecode; compile the policy first".into());
@@ -384,7 +367,7 @@ fn run_execute_loaded(
             policy.set_file_digest(expected.to_ascii_lowercase());
         }
         Ok::<_, String>(policy)
-    }).transpose()? };
+    }).transpose()?;
     if config.journal.is_some()
         && config.audit_log.is_none()
         && env::var("DEVLISH_AUDIT_LOG")
@@ -397,7 +380,7 @@ fn run_execute_loaded(
         );
     }
 
-    let package: Value = if let Some(loaded) = &verified { loaded.program.clone() } else if let Some(as_of) = &config.as_of {
+    let package: Value = if let Some(as_of) = &config.as_of {
         // Gather every candidate version, then pick the one in force on the date.
         let mut versions: Vec<(PathBuf, Value)> = Vec::new();
         for path in std::iter::once(&config.input).chain(config.extra_inputs.iter()) {
@@ -461,12 +444,12 @@ fn run_execute_loaded(
         }
     }
 
-    let audit_path = if verified.is_some() { None } else { config.audit_log.clone().or_else(|| {
+    let audit_path = config.audit_log.clone().or_else(|| {
         env::var("DEVLISH_AUDIT_LOG")
             .ok()
             .filter(|value| !value.is_empty())
             .map(PathBuf::from)
-    }) };
+    });
     if config.journal.is_some()
         && package
             .get("manifest")
@@ -482,10 +465,6 @@ fn run_execute_loaded(
         CredentialStore::new(&config.env_overrides, Some(&config.input)),
         audit_path.map(AuditLogWriter::new),
     );
-    #[cfg(feature = "native")]
-    if let Some(loaded) = &verified {
-        native.verified_model_route = Some(loaded.llm_route.clone());
-    }
     native.llm_provider = config.provider.clone();
     native.llm_model = config.model.clone();
     let mut journaling_host;
@@ -508,22 +487,10 @@ fn run_execute_loaded(
     };
     let mut policy_log = match (&policy, &config.policy_log) {
         (Some(policy), Some(path)) => {
-            Some(PolicyLog::create_for_bound_run(path, policy.identity(), &package, &input, !config.quiet, config.policy_evidence, verified.as_ref().map(|v| &v.log_context))?)
+            Some(PolicyLog::create_for_run(path, policy.identity(), &package, &input, !config.quiet, config.policy_evidence)?)
         }
         _ => None,
     };
-    if let Some(loaded) = verified {
-        let run = devlish_core::governed_run::GovernedRun::new(
-            package, input, loaded.policy, loaded.instruction_limit, loaded.allowed_effects,
-        ).map_err(|e| e.to_string())?;
-        let run = if config.policy_evidence { run.with_replay_evidence() } else { run };
-        let completion = run.run(host, policy_log.as_mut().ok_or("missing verified policy log")?)
-            .map_err(|e| e.to_string())?;
-        if !completion.response_emitted {
-            println!("{}", json!({"success":true,"response_emitted":false,"paused":completion.paused}));
-        }
-        return Ok(());
-    }
     let vm = Vm::new(package, input);
     match vm {
         Err(error) => {

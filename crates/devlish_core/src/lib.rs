@@ -10,6 +10,8 @@ pub mod policy_log;
 #[cfg(feature = "native")]
 pub mod service;
 #[cfg(feature = "native")]
+pub mod verified_session;
+#[cfg(feature = "native")]
 pub mod receipt_issuer;
 #[cfg(feature = "native")]
 pub mod receipt_journal;

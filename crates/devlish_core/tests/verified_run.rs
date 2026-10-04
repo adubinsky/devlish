@@ -533,3 +533,195 @@ fn verified_model_calls_cannot_fall_back_to_mutable_user_routing() {
     );
     assert_eq!(records.last().unwrap()["record"]["success"], false);
 }
+
+fn library_fixture() -> Fixture {
+    let mut f = Fixture::new();
+    let runtime = fs::read(std::env::current_exe().unwrap()).unwrap();
+    for artifact in f.manifest["artifacts"].as_array_mut().unwrap() {
+        if artifact["id"] == "runtime" {
+            artifact["sha256"] = json!(sha256(&runtime));
+        }
+    }
+    f.save();
+    f
+}
+#[derive(Default)]
+struct LibraryHost {
+    responses: Vec<Value>,
+    events: usize,
+}
+impl devlish_vm::HostEffects for LibraryHost {
+    fn emit_event(&mut self, _: &Value) {
+        self.events += 1;
+    }
+    fn write_file(&mut self, _: &Value) -> Result<(), String> {
+        panic!("unexpected write")
+    }
+    fn respond(&mut self, value: &Value) -> Result<(), String> {
+        self.responses.push(value.clone());
+        Ok(())
+    }
+}
+#[test]
+fn shared_admitted_session_executes_retained_snapshots_after_path_substitution() {
+    let f = library_fixture();
+    let session = devlish_core::verified_session::VerifiedSession::admit(
+        &f.dir.join("profile.json"),
+        "shared-session",
+        false,
+    )
+    .unwrap();
+    assert_eq!(session.program_path(), f.dir.join("program"));
+    assert!(session.model_route().is_none());
+    for path in ["program", "policy", "permissions", "tool-catalog"] {
+        fs::write(f.dir.join(path), b"tampered after admission").unwrap();
+    }
+    let mut host = LibraryHost::default();
+    let completion = session
+        .execute(
+            json!({"private":"SYNTHETIC_PRIVATE_INPUT"}),
+            &f.dir.join("shared.jsonl"),
+            &mut host,
+        )
+        .unwrap();
+    assert!(completion.response_emitted);
+    assert!(!completion.paused);
+    assert_eq!(host.responses, vec![json!("verified success")]);
+    assert_eq!(host.events, 0);
+    let log = fs::read_to_string(f.dir.join("shared.jsonl")).unwrap();
+    assert!(!log.contains("SYNTHETIC_PRIVATE_INPUT"));
+    let start: Value = serde_json::from_str(log.lines().next().unwrap()).unwrap();
+    assert_eq!(start["record"]["session_id"], "shared-session");
+    assert_eq!(
+        start["record"]["verified_release"]["release_manifest_sha256"],
+        sha256(&bytes(&f.manifest))
+    );
+}
+#[test]
+fn shared_session_rejects_log_reuse_before_effects() {
+    let f = library_fixture();
+    fs::write(f.dir.join("occupied.jsonl"), b"existing evidence").unwrap();
+    let session = devlish_core::verified_session::VerifiedSession::admit(
+        &f.dir.join("profile.json"),
+        "shared-session",
+        false,
+    )
+    .unwrap();
+    let mut host = LibraryHost::default();
+    assert!(session
+        .execute(json!({}), &f.dir.join("occupied.jsonl"), &mut host)
+        .is_err());
+    assert!(host.responses.is_empty());
+    assert_eq!(
+        fs::read(f.dir.join("occupied.jsonl")).unwrap(),
+        b"existing evidence"
+    );
+}
+#[test]
+fn shared_session_validates_correlation_id_and_operator_evidence_consent() {
+    let f = library_fixture();
+    for id in ["", "../escape", "space id", "nonascii-é"] {
+        assert!(devlish_core::verified_session::VerifiedSession::admit(
+            &f.dir.join("profile.json"),
+            id,
+            false
+        )
+        .is_err());
+    }
+    assert!(devlish_core::verified_session::VerifiedSession::admit(
+        &f.dir.join("profile.json"),
+        "valid",
+        true
+    )
+    .is_err());
+    assert!(!f.dir.join("run.jsonl").exists());
+}
+#[cfg(unix)]
+#[test]
+fn shared_session_retains_rollback_lock_through_effect_dispatch() {
+    use std::os::fd::AsRawFd;
+    struct LockHost {
+        state: fs::File,
+        calls: usize,
+    }
+    impl devlish_vm::HostEffects for LockHost {
+        fn emit_event(&mut self, _: &Value) {}
+        fn write_file(&mut self, _: &Value) -> Result<(), String> {
+            panic!("unexpected write")
+        }
+        fn respond(&mut self, _: &Value) -> Result<(), String> {
+            assert_eq!(
+                unsafe { libc::flock(self.state.as_raw_fd(), libc::LOCK_EX | libc::LOCK_NB) },
+                -1
+            );
+            assert_eq!(
+                std::io::Error::last_os_error().kind(),
+                std::io::ErrorKind::WouldBlock
+            );
+            self.calls += 1;
+            Ok(())
+        }
+    }
+    let f = library_fixture();
+    let session = devlish_core::verified_session::VerifiedSession::admit(
+        &f.dir.join("profile.json"),
+        "shared-session",
+        false,
+    )
+    .unwrap();
+    let mut host = LockHost {
+        state: fs::File::open(f.dir.join("admission.json")).unwrap(),
+        calls: 0,
+    };
+    session
+        .execute(json!({}), &f.dir.join("shared.jsonl"), &mut host)
+        .unwrap();
+    assert_eq!(host.calls, 1);
+    assert_eq!(
+        unsafe { libc::flock(host.state.as_raw_fd(), libc::LOCK_EX | libc::LOCK_NB) },
+        0
+    );
+}
+
+#[test]
+fn shared_session_anchors_relative_paths_before_working_directory_changes() {
+    const CHILD: &str = "DEVLISH_TEST_RELATIVE_SESSION";
+    if std::env::var_os(CHILD).is_some() {
+        // Only this isolated child changes cwd; the parallel test runner does not.
+        let original = std::env::current_dir().unwrap();
+        let expected = fs::read(original.join("program")).unwrap();
+        let session = devlish_core::verified_session::VerifiedSession::admit(
+            std::path::Path::new("profile.json"),
+            "relative-session",
+            false,
+        )
+        .unwrap();
+        std::env::set_current_dir(original.join("other")).unwrap();
+        assert_eq!(
+            fs::read(session.program_path()).unwrap(),
+            expected,
+            "credential lookup must remain anchored to the admitted program directory"
+        );
+        assert!(session.program_path().is_absolute());
+        return;
+    }
+    let f = library_fixture();
+    fs::create_dir(f.dir.join("other")).unwrap();
+    fs::write(f.dir.join("other/program"), b"synthetic other directory").unwrap();
+    let output = Command::new(std::env::current_exe().unwrap())
+        .current_dir(&f.dir)
+        .env(CHILD, "1")
+        .args([
+            "--exact",
+            "shared_session_anchors_relative_paths_before_working_directory_changes",
+            "--nocapture",
+        ])
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "{}\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
