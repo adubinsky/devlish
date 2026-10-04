@@ -16,6 +16,8 @@ pub mod tool_snapshot;
 #[cfg(feature = "native")]
 pub mod tool_image;
 #[cfg(feature = "native")]
+pub mod tool_landlock;
+#[cfg(feature = "native")]
 pub mod receipt_issuer;
 #[cfg(feature = "native")]
 pub mod receipt_journal;
