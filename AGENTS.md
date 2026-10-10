@@ -1,5 +1,14 @@
 # Mandatory execution boundary
 
+Before proposing or implementing a language feature, read
+`docs/LANGUAGE_REFERENCE.md`, `docs/LANGUAGE_GRAMMAR.ebnf`,
+`docs/STANDARD_LIBRARY_CURRENT.md` and `docs/DEVLISH_LANGUAGE_GAPS.md`.
+Use `docs/DOCUMENTATION.md` to find related references. Check the parser,
+runtime and tests against those documents; report stale claims rather than
+treating a roadmap or legacy packaging guide as implemented behavior.
+Discuss language extensions with the user before implementing them. After an
+agreed change, update the authoring reference and grammar together with tests.
+
 User workflows must execute through Devlish's admitted, governed runtime.
 Rust, Ruby, JavaScript, Python and shell are infrastructure implementation
 languages, never substitute user workflow executors.
