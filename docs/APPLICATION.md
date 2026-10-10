@@ -39,10 +39,43 @@ response. Successful turns remain in the in-memory conversation. Failed turns
 are not added to that conversation. `/clear` clears it; `/exit`, `/quit`, and EOF
 exit. The conversation is bounded to 128 KiB before submitting a turn.
 
-The bundled [prompt program](../runtime/prompt.dvl) calls the model and displays
-its answer. Its [policy](../runtime/prompt-policy.dvl) explicitly allows these
-two effects and denies others. This initial application prompt is conversational;
-a general coding agent loop is separate work.
+The bundled [prompt program](../runtime/prompt.dvl) asks for a JSON plan with
+one through eight steps, validates the entire plan, then executes it in order.
+Each step has exactly `action` and `payload`. Supported actions are `ask_model`
+(text prompt), `run_tool` (a record with exactly `tool_id` and a list of text
+`arguments`), and `respond` (text). Exactly the final step must respond.
+For example, a conversational answer is:
+
+```json
+{"steps":[{"action":"respond","payload":"Hello."}]}
+```
+
+Plans are data, never compiled source. Unknown actions, extra fields, malformed
+payloads, and oversized plans fail before any planned effect. Each dispatched
+effect still passes the VM's declared permissions, captured policy, and durable
+recorder. The bundled permissions and [policy](../runtime/prompt-policy.dvl)
+allow model calls and responses only. To enable a specific tool, copy the prompt
+program to `.devlish/agent.dvl`, add its explicit `Run catalog tool "tool_id"`
+permission, and supply a policy allowing the corresponding request.
+Model or tool observations cannot append steps or trigger replanning; the final
+response is the validated plan's text. There are no automatic retries.
+
+Every prompt turn, including custom agents, has a host-enforced limit of 50,000
+VM instructions and nine effect attempts: at most eight model calls (including
+planning), seven tool calls, and one response. Denied and failed attempts count.
+These are per-turn call limits, not token or monetary budgets. An operator can
+supply `.devlish/limits.json` with exactly `instruction_limit` (1 through
+10,000,000) and `effect_budget` (the existing `total`/`per_effect` budget format).
+The prompt validates and captures this file once at startup; malformed limits
+stop startup. Declaring a larger budget grants no new effects or destinations.
+For example, a workflow that records local phase markers can declare:
+
+```json
+{"instruction_limit":50000,"effect_budget":{"total":16,"per_effect":{"llm_complete":1,"http_request":1,"read_file":1,"write_file":6,"respond":1}}}
+```
+
+See [exact external JSON keys](EXTERNAL_JSON_KEYS.md) for preserving API field
+and URL path casing. A recording or execution failure stops the turn; already completed effects are not rolled back.
 
 A project can replace the program with `.devlish/agent.dvl` and the policy with
 `.devlish/policy.dvl`. The program receives `conversation` as a serialized,

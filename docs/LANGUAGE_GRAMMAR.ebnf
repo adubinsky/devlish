@@ -1,15 +1,16 @@
 (* Devlish language grammar
  *
- * Last updated: 2026-07-10
+ * Last updated: 2026-10-09
  *
  * Status:
  *   Derived from the current implementation in:
  *   - crates/devlish_core/src/lib.rs
  *
  * Scope:
- *   This is a parser-faithful, line-oriented EBNF for the current Devlish
- *   surface language. It describes what the parser accepts today, not an
- *   idealized future grammar.
+ *   This is a line-oriented statement grammar outline. Expression parsing,
+ *   manifest metadata, and class lowering are described only in part;
+ *   crates/devlish_core/src/lib.rs and LANGUAGE_REFERENCE.md are authoritative.
+ *   This outline is not a complete validator for the current language.
  *
  * Notes:
  *   - Devlish currently has two parser modes:
@@ -92,7 +93,13 @@ english_statement   = trigger_statement
                     | http_statement
                     | respond_statement
                     | shorthand_notification_statement
-                    | standalone_check_statement ;
+                    | standalone_check_statement
+                    | catalog_tool_statement
+                    | model_statement
+                    | clock_statement
+                    | random_statement
+                    | checkpoint_statement
+                    | fail_statement ;
 
 
 (* Interactive input and file output *)
@@ -169,7 +176,11 @@ custom_event_trigger = ( "When" | "when" ) , " " , free_text , [ ":" ] ;
 control_statement   = if_statement
                     | otherwise_statement
                     | for_each_statement
-                    | try_statement ;
+                    | try_statement
+                    | while_statement
+                    | until_statement
+                    | break_statement
+                    | continue_statement ;
 
 if_statement        = ( "If" | "if" ) , " " , condition_text , [ ":" ] ;
 otherwise_statement = "Otherwise" , [ ":" ]
@@ -179,6 +190,29 @@ for_each_statement  = ( "For each" | "for each" ) , " " ,
                       collection_text , [ ":" ] ;
 try_statement       = ( "Try" | "try" ) , [ ":" ] ;
 
+
+while_statement     = ( "While" | "while" ) , " " , condition_text , [ ":" ] ;
+until_statement     = ( "Until" | "until" ) , " " , condition_text , [ ":" ] ;
+break_statement     = "Break" | "break" ;
+continue_statement  = "Continue" | "continue" ;
+
+catalog_tool_statement = "Run catalog tool" , " " , expression , " as " , name_phrase ;
+model_statement     = "Ask the model" , [ " " , quoted_string ] , " with " ,
+                      expression , [ " expecting json" ] , " as " , name_phrase ;
+clock_statement     = "Get the current time as " , name_phrase ;
+random_statement    = "Draw a random number" ,
+                      " between " , expression , " and " , expression ,
+                      " as " , name_phrase ;
+checkpoint_statement = "Checkpoint " , expression ,
+                       [ " saving context as " , name_phrase ] ;
+fail_statement      = "Fail with " , expression ;
+
+(* The parser matches the effect phrases above case-insensitively.
+ * Import and Use are compile-time composition; rule identity, inputs,
+ * and policy defaults are documented in LANGUAGE_REFERENCE.md and APPLICATION.md.
+ * Expression helpers include collection callbacks, records, lists, nested fields,
+ * exact decimals/fractions, powers, regex, dates, and module-qualified reads.
+ * The simplified expression productions below do not enumerate those forms. *)
 
 (* HTTP requests *)
 
@@ -251,7 +285,11 @@ permission_line     = "Read files" , [ " " , "from" , " " , quoted_string ]
                     | "Write files" , [ " " , "to" , " " , quoted_string ]
                     | "HTTP requests" , [ " " , "to" , " " , quoted_string ]
                     | "Filesystem operations" , [ " " , "on" , " " , quoted_string ]
-                    | "Call" , " " , name_phrase , " " , "service" ;
+                    | "Call" , " " , name_phrase , " " , "service"
+                    | "Call language models" , [ " via " , quoted_string ]
+                    | "Run catalog tools"
+                    | "Run catalog tool " , quoted_string
+                    | "Clock" | "Current time" | "Randomness" | "Random" ;
 
 
 (* Structured output *)
@@ -471,7 +509,9 @@ standalone_check_statement =
 expression_text     = value_term ,
                       { " " , arithmetic_op , " " , value_term } ;
 arithmetic_op       = "+" | "-" | "*" | "/"
-                    | "plus" | "minus" | "times" | "divided by" ;
+                    | "plus" | "minus" | "times" | "divided by"
+                    | "modulo" | "%" | "integer divided by" | "//"
+                    | "to the power of" | "**" | "^" ;
 
 condition_text      = missing_condition
                     | membership_condition

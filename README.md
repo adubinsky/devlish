@@ -42,10 +42,11 @@ devlish --server            # Long-lived HTTP service; -s is equivalent
 The prompt stays open between requests. Type `/exit` or send EOF to close it;
 `/clear` starts a fresh conversation. Each turn executes a Devlish program,
 enforces a Devlish policy, and creates a hash-chained decision log in
-`.devlish/sessions/`. The bundled program supports conversation with the model.
+`.devlish/sessions/`. The bundled program validates a bounded JSON plan before executing its steps.
 A project can supply `.devlish/agent.dvl` and `.devlish/policy.dvl` to define its
 workflow and rules. Both are compiled and captured when the prompt opens.
-The bundled chat program does not automatically edit files or execute tools.
+The bundled permissions allow model calls and responses; tool execution requires
+explicit agent permissions and policy authorization.
 
 Model/provider settings use `~/.devlish/config.toml` (or `DEVLISH_CONFIG`);
 credentials use environment variables or the existing credential resolver.

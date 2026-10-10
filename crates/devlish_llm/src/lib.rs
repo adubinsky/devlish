@@ -212,6 +212,11 @@ pub fn complete(
 }
 
 fn extract_json_blob(text: &str) -> Option<&str> {
+    // Generated artifacts can contain Markdown fences inside JSON strings.
+    // Prefer a complete JSON response before inspecting prose wrappers.
+    if serde_json::from_str::<Value>(text).is_ok() {
+        return Some(text);
+    }
     if let Some(start) = text.find("```") {
         let after = &text[start + 3..];
         let after = after
@@ -389,6 +394,12 @@ pub fn config_dir() -> PathBuf {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn preserves_json_artifacts_containing_markdown_fences() {
+        let text = json!({"source":"Respond with \"Hello\"", "readme":"```bash\ndevlish -r workflow.dvl\n```"}).to_string();
+        assert_eq!(extract_json_blob(&text), Some(text.as_str()));
+    }
 
     #[test]
     fn extracts_fenced_json() {

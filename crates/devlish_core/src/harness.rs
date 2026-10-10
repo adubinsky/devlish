@@ -30,10 +30,26 @@ pub fn run_harness(args: Vec<String>) -> Result<(), String> {
 
 fn harness_usage() -> String {
     "Usage:\n  \
-     devlish-core harness run <file.dvl> [--provider NAME] [--model NAME] [--input JSON] [--env KEY=VALUE]\n  \
-     devlish-core harness resume <session.json> [--input JSON]\n  \
-     devlish-core harness init-config\n"
+     devlish harness run <file.dvl> [--provider NAME] [--model NAME] [--input JSON] [--env KEY=VALUE]\n             \
+     [--policy FILE --policy-log FILE] [--default-authorization deny-unless-allowed|allow-unless-forbidden]\n  \
+     devlish harness resume <session.json> [--input JSON]\n             \
+     [--policy FILE --policy-log FILE] [--default-authorization deny-unless-allowed|allow-unless-forbidden]\n  \
+     devlish harness init-config\n"
         .to_string()
+}
+
+#[derive(Default)]
+struct PolicyArgs {
+    policy_path: Option<PathBuf>,
+    policy_log: Option<PathBuf>,
+    default_authorization: Option<String>,
+}
+
+fn take_value(args: &[String], index: &mut usize, flag: &str) -> Result<String, String> {
+    *index += 1;
+    args.get(*index)
+        .cloned()
+        .ok_or_else(|| format!("{flag} requires a value"))
 }
 
 fn harness_run(args: Vec<String>) -> Result<(), String> {
@@ -42,42 +58,38 @@ fn harness_run(args: Vec<String>) -> Result<(), String> {
     let mut model: Option<String> = None;
     let mut input = json!({});
     let mut env = Vec::new();
+    let mut policy = PolicyArgs::default();
     let mut index = 2usize;
     while index < args.len() {
         match args[index].as_str() {
             "--provider" => {
-                index += 1;
-                provider = Some(
-                    args.get(index)
-                        .ok_or_else(|| "--provider requires a name".to_string())?
-                        .clone(),
-                );
+                provider = Some(take_value(&args, &mut index, "--provider")?);
             }
             "--model" => {
-                index += 1;
-                model = Some(
-                    args.get(index)
-                        .ok_or_else(|| "--model requires a name".to_string())?
-                        .clone(),
-                );
+                model = Some(take_value(&args, &mut index, "--model")?);
             }
             "--input" => {
-                index += 1;
-                let raw = args
-                    .get(index)
-                    .ok_or_else(|| "--input requires JSON".to_string())?;
-                input = serde_json::from_str(raw)
+                let raw = take_value(&args, &mut index, "--input")?;
+                input = serde_json::from_str(&raw)
                     .map_err(|e| format!("invalid --input JSON: {e}"))?;
             }
             "--env" => {
-                index += 1;
-                let raw = args
-                    .get(index)
-                    .ok_or_else(|| "--env requires KEY=VALUE".to_string())?;
+                let raw = take_value(&args, &mut index, "--env")?;
                 let (k, v) = raw
                     .split_once('=')
                     .ok_or_else(|| format!("invalid --env {raw}"))?;
                 env.push((k.to_string(), v.to_string()));
+            }
+            "--policy" => {
+                policy.policy_path = Some(PathBuf::from(take_value(&args, &mut index, "--policy")?));
+            }
+            "--policy-log" => {
+                policy.policy_log =
+                    Some(PathBuf::from(take_value(&args, &mut index, "--policy-log")?));
+            }
+            "--default-authorization" => {
+                policy.default_authorization =
+                    Some(take_value(&args, &mut index, "--default-authorization")?);
             }
             value if value.starts_with('-') => return Err(format!("unknown option: {value}")),
             value => {
@@ -101,6 +113,9 @@ fn harness_run(args: Vec<String>) -> Result<(), String> {
         provider,
         model,
         search_paths: devlish_search_paths_for(Some(file.as_path())),
+        policy_path: policy.policy_path,
+        policy_log: policy.policy_log,
+        default_authorization: policy.default_authorization,
     });
 
     let session_id = new_session_id();
@@ -132,16 +147,25 @@ fn harness_run(args: Vec<String>) -> Result<(), String> {
 fn harness_resume(args: Vec<String>) -> Result<(), String> {
     let mut session_file: Option<PathBuf> = None;
     let mut extra_input = json!({});
+    let mut policy = PolicyArgs::default();
     let mut index = 2usize;
     while index < args.len() {
         match args[index].as_str() {
             "--input" => {
-                index += 1;
-                let raw = args
-                    .get(index)
-                    .ok_or_else(|| "--input requires JSON".to_string())?;
-                extra_input = serde_json::from_str(raw)
+                let raw = take_value(&args, &mut index, "--input")?;
+                extra_input = serde_json::from_str(&raw)
                     .map_err(|e| format!("invalid --input JSON: {e}"))?;
+            }
+            "--policy" => {
+                policy.policy_path = Some(PathBuf::from(take_value(&args, &mut index, "--policy")?));
+            }
+            "--policy-log" => {
+                policy.policy_log =
+                    Some(PathBuf::from(take_value(&args, &mut index, "--policy-log")?));
+            }
+            "--default-authorization" => {
+                policy.default_authorization =
+                    Some(take_value(&args, &mut index, "--default-authorization")?);
             }
             value if value.starts_with('-') => return Err(format!("unknown option: {value}")),
             value => {
@@ -174,7 +198,6 @@ fn harness_resume(args: Vec<String>) -> Result<(), String> {
         }
     }
 
-    // Merge checkpoint context if present.
     if let Some(checkpoint) = session
         .pointer("/result/checkpoint")
         .or_else(|| session.pointer("/result"))
@@ -200,6 +223,9 @@ fn harness_resume(args: Vec<String>) -> Result<(), String> {
         provider: None,
         model: None,
         search_paths: devlish_search_paths_for(Some(Path::new(source_path))),
+        policy_path: policy.policy_path,
+        policy_log: policy.policy_log,
+        default_authorization: policy.default_authorization,
     });
     println!(
         "{}",

@@ -2,13 +2,18 @@
 //! Returns structured JSON Values (not MCP content wrappers).
 
 use crate::{
-    compile_source_to_json, lint_source, logutil, CompileOptions,
+    compile_source_to_json, lint_source, logutil, policy_log::PolicyLog, CompileOptions,
 };
 use devlish_llm::{complete, response_value, CredentialResolver, LlmConfig, LlmRequest};
-use devlish_vm::{HostEffects, Vm};
+use devlish_vm::{
+    policy::{EffectPolicy, PolicyHost, PolicyRecorder},
+    sha256_hex, HostEffects, Vm,
+};
 use serde_json::{json, Map, Value};
 use std::collections::hash_map::DefaultHasher;
+use std::fs;
 use std::hash::{Hash, Hasher};
+use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -22,6 +27,12 @@ pub struct RunRequest {
     pub provider: Option<String>,
     pub model: Option<String>,
     pub search_paths: Vec<String>,
+    /// Challenge / harness policy source path. Requires `policy_log`.
+    pub policy_path: Option<PathBuf>,
+    /// Hash-chained policy log path. Requires `policy_path`.
+    pub policy_log: Option<PathBuf>,
+    /// Operator default when the policy abstains. Requires `policy_path`.
+    pub default_authorization: Option<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -123,37 +134,172 @@ pub fn service_lint(source: &str) -> ServiceResult {
 }
 
 pub fn service_run(req: RunRequest) -> ServiceResult {
-    let compiled = service_compile(&req.source, req.source_path.clone(), req.search_paths);
+    if req.policy_path.is_some() != req.policy_log.is_some() {
+        return ServiceResult {
+            ok: false,
+            value: json!({"error": "--policy and --policy-log must be supplied together"}),
+        };
+    }
+    if req.default_authorization.is_some() && req.policy_path.is_none() {
+        return ServiceResult {
+            ok: false,
+            value: json!({
+                "error": "--default-authorization requires --policy and --policy-log"
+            }),
+        };
+    }
+    let compiled = service_compile(
+        &req.source,
+        req.source_path.clone(),
+        req.search_paths.clone(),
+    );
     if !compiled.ok {
         return compiled;
     }
     let package = compiled.value;
     let source_file = req.source_path.as_deref().map(Path::new);
     let mut host = ServiceHost::new(&req.env, source_file, req.provider.clone(), req.model.clone());
-    match Vm::new(package, req.input) {
-        Err(error) => ServiceResult {
-            ok: false,
-            value: json!({"error": format!("VM error: {}", error.message)}),
-        },
-        Ok(mut vm) => match vm.run(&mut host) {
-            Ok(result) => ServiceResult {
-                ok: true,
-                value: result,
-            },
-            Err(error) => {
-                if let Ok(structured) = serde_json::from_str::<Value>(&error.message) {
-                    ServiceResult {
-                        ok: false,
-                        value: json!({"error": structured, "failed": true}),
-                    }
-                } else {
-                    ServiceResult {
-                        ok: false,
-                        value: json!({"error": format!("Runtime error: {}", error.message)}),
-                    }
-                }
+    let vm = match Vm::new(package.clone(), req.input.clone()) {
+        Err(error) => {
+            return ServiceResult {
+                ok: false,
+                value: json!({"error": format!("VM error: {}", error.message)}),
             }
+        }
+        Ok(vm) => vm,
+    };
+
+    if let (Some(policy_path), Some(log_path)) = (&req.policy_path, &req.policy_log) {
+        return run_with_policy(vm, &mut host, &package, &req, policy_path, log_path);
+    }
+
+    let mut vm = vm;
+    match vm.run(&mut host) {
+        Ok(result) => ServiceResult {
+            ok: true,
+            value: result,
         },
+        Err(error) => runtime_error_result(&error.message),
+    }
+}
+
+fn run_with_policy(
+    mut vm: Vm,
+    host: &mut ServiceHost,
+    package: &Value,
+    req: &RunRequest,
+    policy_path: &Path,
+    log_path: &Path,
+) -> ServiceResult {
+    let policy_source = match fs::read_to_string(policy_path) {
+        Ok(text) => text,
+        Err(error) => {
+            return ServiceResult {
+                ok: false,
+                value: json!({
+                    "error": format!("failed to read policy {}: {error}", policy_path.display())
+                }),
+            }
+        }
+    };
+    let policy_compiled = service_compile(
+        &policy_source,
+        Some(policy_path.display().to_string()),
+        req.search_paths.clone(),
+    );
+    if !policy_compiled.ok {
+        return policy_compiled;
+    }
+    let mut policy = match EffectPolicy::new(policy_compiled.value) {
+        Ok(policy) => policy,
+        Err(error) => {
+            return ServiceResult {
+                ok: false,
+                value: json!({"error": format!("invalid policy: {error}")}),
+            }
+        }
+    };
+    if let Some(posture) = &req.default_authorization {
+        if let Err(error) = policy.set_default_authorization(posture) {
+            return ServiceResult {
+                ok: false,
+                value: json!({"error": error}),
+            };
+        }
+    }
+    let mut log = match PolicyLog::create_for_run(
+        log_path,
+        policy.identity(),
+        package,
+        &req.input,
+        false,
+        false,
+    ) {
+        Ok(log) => log,
+        Err(error) => {
+            return ServiceResult {
+                ok: false,
+                value: json!({"error": error}),
+            }
+        }
+    };
+    vm.set_emit_events(false);
+    let mut guarded = PolicyHost::new(host, &policy, &mut log);
+    let result = vm.run(&mut guarded);
+    if guarded.recording_failed() {
+        return ServiceResult {
+            ok: false,
+            value: json!({"error": "policy recording failed; run cannot report success"}),
+        };
+    }
+    let result_value = match &result {
+        Ok(value) => json!({"ok": value}),
+        Err(error) => json!({"err": error.message}),
+    };
+    if let Err(error) = log.record(&json!({
+        "type": "policy_run_finished",
+        "success": result.is_ok(),
+        "paused": result_value
+            .pointer("/ok/is_checkpoint")
+            .and_then(Value::as_bool)
+            .unwrap_or(false),
+        "result_sha256": sha256_hex(
+            &serde_json::to_vec(&result_value).unwrap_or_else(|_| b"null".to_vec())
+        )
+    })) {
+        return ServiceResult {
+            ok: false,
+            value: json!({"error": error}),
+        };
+    }
+    match result {
+        Ok(mut value) => {
+            if let Some(object) = value.as_object_mut() {
+                object.insert(
+                    "policy_log".to_string(),
+                    json!(log_path.display().to_string()),
+                );
+            }
+            ServiceResult {
+                ok: true,
+                value,
+            }
+        }
+        Err(error) => runtime_error_result(&error.message),
+    }
+}
+
+fn runtime_error_result(message: &str) -> ServiceResult {
+    if let Ok(structured) = serde_json::from_str::<Value>(message) {
+        ServiceResult {
+            ok: false,
+            value: json!({"error": structured, "failed": true}),
+        }
+    } else {
+        ServiceResult {
+            ok: false,
+            value: json!({"error": format!("Runtime error: {message}")}),
+        }
     }
 }
 
@@ -232,6 +378,21 @@ impl ServiceHost {
     }
 }
 
+#[cfg(feature = "native")]
+impl ServiceHost {
+    #[cfg(feature = "native")]
+    fn google_validation_request(&self, method: &str, url: &str) -> ureq::Request {
+        // Disable redirects before attaching the host-owned, endpoint-scoped key.
+        let request = ureq::AgentBuilder::new().redirects(0).build().request(method, url);
+        if method == "POST" && url == "https://addressvalidation.googleapis.com/v1:validateAddress" {
+            if let Some(key) = self.resolve_cred("GOOGLE_ADDRESS_VALIDATION_API_KEY").filter(|key| !key.is_empty()) {
+                return request.set("X-Goog-Api-Key", &key);
+            }
+        }
+        request
+    }
+ }
+
 struct HostCreds<'a>(&'a ServiceHost);
 
 impl CredentialResolver for HostCreds<'_> {
@@ -252,10 +413,28 @@ impl HostEffects for ServiceHost {
             .get("content")
             .and_then(Value::as_str)
             .unwrap_or_default();
+        let mode = request
+            .get("mode")
+            .and_then(Value::as_str)
+            .unwrap_or("write");
         if let Some(parent) = Path::new(path).parent() {
-            std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+            fs::create_dir_all(parent).map_err(|e| e.to_string())?;
         }
-        std::fs::write(path, content).map_err(|e| e.to_string())
+        match mode {
+            "append" => {
+                let mut file = fs::OpenOptions::new()
+                    .create(true)
+                    .append(true)
+                    .open(path)
+                    .map_err(|e| format!("failed to open {path}: {e}"))?;
+                file.write_all(content.as_bytes())
+                    .map_err(|e| format!("failed to append {path}: {e}"))
+            }
+            "assertions" | "csv" | "export" | "overwrite" | "write" => {
+                fs::write(path, content).map_err(|e| format!("failed to write {path}: {e}"))
+            }
+            other => Err(format!("unsupported write_file mode: {other}")),
+        }
     }
 
     fn read_file(&mut self, request: &Value) -> Result<Value, String> {
@@ -359,7 +538,7 @@ impl HostEffects for ServiceHost {
         let upper = method.to_ascii_uppercase();
         let response = match upper.as_str() {
             "GET" => ureq::get(url).call(),
-            "POST" => ureq::post(url).send_json(body),
+            "POST" => self.google_validation_request(&upper, url).send_json(body),
             "PUT" => ureq::put(url).send_json(body),
             "DELETE" => ureq::delete(url).call(),
             other => return Err(format!("unsupported HTTP method: {other}")),
@@ -379,5 +558,20 @@ pub fn to_mcp_content(result: &ServiceResult) -> Value {
         json!([{"type": "text", "text": text}])
     } else {
         json!([{"type": "text", "text": text, "isError": true}])
+    }
+}
+
+#[cfg(all(test, feature = "native"))]
+mod credential_tests {
+    use super::*;
+
+    #[test]
+    fn google_key_is_scoped_to_exact_post_endpoint() {
+        let host = ServiceHost::new(&[("GOOGLE_ADDRESS_VALIDATION_API_KEY".into(), "synthetic-key".into())], None, None, None);
+        let url = "https://addressvalidation.googleapis.com/v1:validateAddress";
+        assert_eq!(host.google_validation_request("POST", url).header("X-Goog-Api-Key"), Some("synthetic-key"));
+        for (method, endpoint) in [("GET", url), ("POST", "https://addressvalidation.googleapis.com/v1:validateAddress?extra=true"), ("POST", "https://example.com/v1:validateAddress")] {
+            assert_eq!(host.google_validation_request(method, endpoint).header("X-Goog-Api-Key"), None);
+        }
     }
 }

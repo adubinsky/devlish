@@ -518,6 +518,12 @@ fn execute_config(
         }
         _ => None,
     };
+    if let (Some(log), Some(limit), Some(budget)) = (
+        policy_log.as_mut(), config.prompt_instruction_limit, config.prompt_budget.as_ref()
+    ) {
+        log.record(&json!({"type":"prompt_limits_captured", "instruction_limit":limit,
+            "effect_budget":budget.to_value()}))?;
+    }
     let vm = Vm::new(package, input);
     match vm {
         Err(error) => {
@@ -537,9 +543,15 @@ fn execute_config(
             if config.quiet {
                 vm.set_emit_events(false);
             }
+            if let Some(limit) = config.prompt_instruction_limit {
+                vm.set_instruction_limit(limit);
+            }
             let execution = match (&policy, policy_log.as_mut()) {
                 (Some(policy), Some(log)) => {
                     let guarded = PolicyHost::new(host, policy, log);
+                    let guarded = if let Some(budget) = config.prompt_budget.clone() {
+                        guarded.with_effect_budget(budget)
+                    } else { guarded };
                     let mut guarded = if config.policy_evidence { guarded.with_evidence() } else { guarded };
                     let result = vm.run(&mut guarded);
                     if guarded.recording_failed() {
@@ -1437,6 +1449,29 @@ fn parse_dotenv(content: &str, entries: &mut Vec<(String, String)>) {
             }
         }
     }
+}
+
+const GOOGLE_ADDRESS_VALIDATION_URL: &str = "https://addressvalidation.googleapis.com/v1:validateAddress";
+
+#[cfg(feature = "native")]
+fn authorize_http_request(
+    credentials: &CredentialStore,
+    method: &str,
+    url: &str,
+    mut request: ureq::Request,
+) -> ureq::Request {
+    // This credential is host-owned and only reaches its exact intended API.
+    if method == "POST" && url == GOOGLE_ADDRESS_VALIDATION_URL {
+        if let Some(key) = credentials.resolve("GOOGLE_ADDRESS_VALIDATION_API_KEY").filter(|key| !key.is_empty()) {
+            return request.set("X-Goog-Api-Key", &key);
+        }
+    }
+    if let Some(token) = credentials.resolve("BEARER_TOKEN").or_else(|| credentials.resolve("HTTP_AUTH_TOKEN")) {
+        request = request.set("Authorization", &format!("Bearer {token}"));
+    } else if let Some(key) = credentials.resolve("API_KEY") {
+        request = request.set("X-API-Key", &key);
+    }
+    request
 }
 
 struct NativeHost {
@@ -3095,17 +3130,11 @@ impl HostEffects for NativeHost {
             other => return Err(format!("Unsupported HTTP method: {other}")),
         };
 
-        // Inject auth from credentials: check BEARER_TOKEN, HTTP_AUTH_TOKEN,
-        // or API_KEY in the credential store
-        if let Some(token) = self
-            .credentials
-            .resolve("BEARER_TOKEN")
-            .or_else(|| self.credentials.resolve("HTTP_AUTH_TOKEN"))
-        {
-            request = request.set("Authorization", &format!("Bearer {token}"));
-        } else if let Some(api_key) = self.credentials.resolve("API_KEY") {
-            request = request.set("X-API-Key", &api_key);
+        // Google credentials cannot follow a redirect to another destination.
+        if url == GOOGLE_ADDRESS_VALIDATION_URL {
+            request = ureq::AgentBuilder::new().redirects(0).build().request(method, url);
         }
+        request = authorize_http_request(&self.credentials, method, url, request);
 
         // Apply custom headers from the headers parameter
         if let Some(obj) = headers.as_object() {
@@ -4449,6 +4478,9 @@ fn mcp_run(args: &Value) -> Value {
         provider,
         model,
         search_paths: devlish_search_paths_for(None),
+        policy_path: None,
+        policy_log: None,
+        default_authorization: None,
     });
     devlish_core::service::to_mcp_content(&result)
 }
@@ -4539,6 +4571,8 @@ struct RunConfig {
     governed: Option<PathBuf>,
     provider: Option<String>,
     model: Option<String>,
+    prompt_instruction_limit: Option<u64>,
+    prompt_budget: Option<devlish_vm::effect_budget::EffectBudget>,
 }
 
 impl RunConfig {
@@ -4707,6 +4741,8 @@ impl RunConfig {
             governed,
             provider,
             model,
+            prompt_instruction_limit: None,
+            prompt_budget: None,
         })
     }
 }
@@ -4739,6 +4775,18 @@ mod tests {
             rule.insert("effective_until".into(), json!(u));
         }
         json!({ "manifest": { "rule": Value::Object(rule) } })
+    }
+
+    #[cfg(feature = "native")]
+    #[test]
+    fn google_address_key_is_bound_to_the_exact_post_endpoint() {
+        let credentials = CredentialStore::new(&[("GOOGLE_ADDRESS_VALIDATION_API_KEY".into(), "synthetic-key".into())], None);
+        let request = authorize_http_request(&credentials,"POST",GOOGLE_ADDRESS_VALIDATION_URL,ureq::post(GOOGLE_ADDRESS_VALIDATION_URL));
+        assert_eq!(request.header("X-Goog-Api-Key"),Some("synthetic-key"));
+        for (method,url) in [("GET",GOOGLE_ADDRESS_VALIDATION_URL),("POST","https://addressvalidation.googleapis.com/v1:validateAddress?extra=true"),("POST","https://addressvalidation.googleapis.com.attacker.invalid/v1:validateAddress")] {
+            let request = authorize_http_request(&credentials,method,url,ureq::post(url));
+            assert_eq!(request.header("X-Goog-Api-Key"),None);
+        }
     }
 
     #[test]

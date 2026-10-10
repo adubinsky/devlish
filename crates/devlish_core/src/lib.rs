@@ -2930,7 +2930,7 @@ fn parse_manifest_permission(line: &str) -> Option<ManifestPermission> {
         });
     }
     // "HTTP requests" / "HTTP requests to <domain>"
-    if let Some(rest) = lower.strip_prefix("http requests to ") {
+    if let Some(rest) = strip_prefix_ci(line, "HTTP requests to ") {
         return Some(ManifestPermission {
             kind: "http_request".to_string(),
             scope: Some(rest.trim().trim_matches('"').to_string()),
@@ -7611,7 +7611,7 @@ fn parse_expression(raw: &str) -> Expression {
         for item in items {
             if let Some((val_text, key_text)) = split_once_ci_outside_quotes(item.trim(), " as ") {
                 fields.push((
-                    sanitize_name(key_text.trim()),
+                    record_field_name(key_text.trim()),
                     parse_expression(val_text.trim()),
                 ));
             }
@@ -7650,7 +7650,6 @@ fn parse_expression(raw: &str) -> Expression {
     // Quoted strings
     if let Some((value, rest)) = quoted_prefix(value) {
         if rest.trim().is_empty() {
-            let value = value.replace("\\n", "\n").replace("\\t", "\t");
             return Expression::Literal(Value::String(value));
         }
     }
@@ -7698,7 +7697,7 @@ fn parse_expression(raw: &str) -> Expression {
         if !field_trimmed.is_empty() && !record_trimmed.is_empty() && !field_trimmed.contains(' ') {
             return Expression::FieldAccess {
                 record: Box::new(parse_expression(record_trimmed)),
-                field: sanitize_name(field_trimmed),
+                field: record_field_name(field_trimmed),
             };
         }
     }
@@ -8286,6 +8285,10 @@ fn parse_builtin_call(value: &str) -> Option<Expression> {
         }
     }
 
+    // UTF-8 byte length of text (or item count of a list).
+    if let Some(rest) = strip_prefix_ci(value, "length of ") {
+        return Some(unary_builtin("length", rest));
+    }
     // count of X
     if let Some(rest) = strip_prefix_ci(value, "count of ") {
         return Some(Expression::BuiltinCall {
@@ -8578,8 +8581,8 @@ fn parse_builtin_call(value: &str) -> Option<Expression> {
     }
     // replace X in Y with Z
     if let Some(rest) = strip_prefix_ci(value, "replace ") {
-        if let Some((needle, after_in)) = split_once_ci(rest.trim(), " in ") {
-            if let Some((haystack, replacement)) = split_once_ci(after_in.trim(), " with ") {
+        if let Some((needle, after_in)) = split_once_ci_outside_quotes(rest.trim(), " in ") {
+            if let Some((haystack, replacement)) = split_once_ci_outside_quotes(after_in.trim(), " with ") {
                 return Some(Expression::BuiltinCall {
                     name: "replace".to_string(),
                     arguments: vec![
@@ -9213,6 +9216,11 @@ fn strip_name_stop_words(value: &str) -> String {
         return value.trim().to_string();
     }
     kept.join(" ")
+}
+
+// Quoted record keys are external data labels, not normalized Devlish names.
+fn record_field_name(value: &str) -> String {
+    serde_json::from_str::<String>(value).unwrap_or_else(|_| sanitize_name(value))
 }
 
 fn sanitize_name(value: &str) -> String {
@@ -10315,6 +10323,44 @@ mod tests {
                 .and_then(Value::as_str),
             Some("alpha\nbeta"),
         );
+    }
+
+    #[test]
+    fn literal_replace_ignores_delimiters_inside_quoted_text() {
+        let result = compile_and_run_ok(
+            "text equals \"begin in with end\"\nclean equals replace \" in with \" in text with \" - with - \"\nRespond with clean",
+            json!({}),
+        );
+        assert_eq!(result["response"], json!("begin - with - end"));
+    }
+
+    #[test]
+    fn length_of_supports_bounded_utf8_text_and_lists() {
+        let result = compile_and_run_ok(
+            "text equals \"é\"\nitems equals list of 1, 2\nRespond with record with length of text as bytes and length of items as items",
+            json!({}),
+        );
+        assert_eq!(result["response"], json!({"bytes":2,"items":2}));
+    }
+
+    #[test]
+    fn string_literals_decode_escaped_backslashes_only_once() {
+        let result = compile_and_run_ok(r#"Respond with "\\n\\t""#, json!({}));
+        assert_eq!(result["response"], json!("\\n\\t"));
+        let result = compile_and_run_ok(r#"Respond with "\n\t""#, json!({}));
+        assert_eq!(result["response"], json!("\n\t"));
+    }
+
+    #[test]
+    fn quoted_record_fields_preserve_external_json_key_case() {
+        let result = compile_and_run_ok(
+            "address equals record with \"US\" as \"regionCode\"\nshape equals record with \"text\" as \"regionCode\"\nRequire address matches shape shape\nRespond with record with address as address and \"regionCode\" of address as region",
+            json!({}),
+        );
+        assert_eq!(result["response"], json!({"address":{"regionCode":"US"},"region":"US"}));
+        let result = compile_and_run_ok(
+            "Ask \"API response\" as verdict\nRespond with \"addressComplete\" of verdict", json!({"verdict":{"addressComplete":true}}));
+        assert_eq!(result["response"], json!(true));
     }
 
     #[test]
@@ -11612,6 +11658,18 @@ greeting equals "hello""#;
             msg.contains("line 1"),
             "error should cite the Rule: header line, got: {msg}"
         );
+    }
+
+    #[test]
+    fn http_permission_preserves_case_sensitive_endpoint_paths() {
+        let source = "Permissions:\n  HTTP requests to \"https://addressvalidation.googleapis.com/v1:validateAddress\"\nPost to \"https://addressvalidation.googleapis.com/v1:validateAddress\" with \"{}\" as result";
+        let package = compile_ok(source);
+        assert_eq!(package["manifest"]["permissions"][0]["scope"],
+            "https://addressvalidation.googleapis.com/v1:validateAddress");
+        let error = run_package_err(package, json!({}));
+        assert!(!error.contains("Permission denied"), "{error}");
+        let changed = source.replace("Post to \"https://addressvalidation.googleapis.com/v1:validateAddress\"", "Post to \"https://addressvalidation.googleapis.com/v1:validateaddress\"");
+        assert!(run_package_err(compile_ok(&changed), json!({})).contains("Permission denied"));
     }
 
     #[test]

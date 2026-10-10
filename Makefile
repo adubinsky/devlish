@@ -5,7 +5,7 @@ DESTDIR ?=
 MANIFEST := crates/devlish_core/Cargo.toml
 BINARY := crates/devlish_core/target/release/devlish-core
 
-.PHONY: all build install test
+.PHONY: all build install test check-boundary install-hooks
 all: build
 
 build:
@@ -20,3 +20,11 @@ install: build
 
 test:
 	@$(CARGO) test --locked --manifest-path $(MANIFEST)
+
+check-boundary:
+	@python3 scripts/check_execution_boundary.py
+	@python3 -m unittest discover -s scripts/tests
+
+install-hooks:
+	@scripts/install_git_hooks.sh
+	@scripts/install-loop-hook.sh

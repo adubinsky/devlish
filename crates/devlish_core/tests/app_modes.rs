@@ -123,7 +123,7 @@ fn prompt_turns_use_real_devlish_model_effects_conversation_and_policy_logs() {
             request
                 .respond(
                     tiny_http::Response::from_string(
-                        json!({"choices":[{"message":{"content":format!("answer {index}")}}]})
+                        json!({"choices":[{"message":{"content":json!({"steps":[{"action":"respond","payload":format!("answer {index}")}]}).to_string()}}]})
                             .to_string(),
                     )
                     .with_header(
@@ -311,4 +311,115 @@ fn custom_prompt_program_uses_the_same_local_tools_and_operator_posture() {
         );
     }
     assert_eq!(fs::read_to_string(f.0.join("marker")).unwrap(), "x");
+}
+
+#[test]
+fn prompt_operator_limits_cap_custom_workflow_attempts() {
+    for (total, expected, success) in [(4, "xxx", true), (2, "xx", false)] {
+        let f = Fixture::new();
+        fs::write(f.0.join(".devlish/agent.dvl"), "Permissions:\n  Write files to \"marker\"\nAppend \"x\" to file \"marker\"\nAppend \"x\" to file \"marker\"\nAppend \"x\" to file \"marker\"\nRespond with \"Done.\"\n").unwrap();
+        fs::write(f.0.join(".devlish/policy.dvl"), "Rule:\n  id: test.prompt_limits\n  version: 1.0.0\nRespond with record with true as allow and \"Synthetic fixture permitted.\" as reason\n").unwrap();
+        fs::write(f.0.join(".devlish/limits.json"), json!({"instruction_limit":50000,"effect_budget":{"total":total,"per_effect":{"write_file":std::cmp::min(3,total),"respond":1}}}).to_string()).unwrap();
+        let out = f.prompt("Run\n/exit\n");
+        assert!(out.status.success());
+        assert_eq!(fs::read_to_string(f.0.join("marker")).unwrap(), expected);
+        assert_eq!(
+            String::from_utf8_lossy(&out.stdout).contains("Done."),
+            success
+        );
+        let log = fs::read_dir(f.0.join(".devlish/sessions"))
+            .unwrap()
+            .next()
+            .unwrap()
+            .unwrap()
+            .path();
+        let records: Vec<Value> = fs::read_to_string(log)
+            .unwrap()
+            .lines()
+            .map(|line| serde_json::from_str::<Value>(line).unwrap()["record"].clone())
+            .collect();
+        assert_eq!(records.last().unwrap()["success"], success);
+        assert_eq!(records[1]["type"], "prompt_limits_captured");
+        assert_eq!(records[1]["effect_budget"]["total"], total);
+    }
+}
+
+#[test]
+fn invalid_prompt_limits_stop_startup_before_any_effects() {
+    let f = Fixture::new();
+    fs::write(
+        f.0.join(".devlish/limits.json"),
+        "{\"instruction_limit\":50000,\"effect_budget\":{\"total\":0,\"per_effect\":{}}}",
+    )
+    .unwrap();
+    let out = f.prompt("Run\n/exit\n");
+    assert!(!out.status.success());
+    assert!(!String::from_utf8_lossy(&out.stdout).contains("devlish> "));
+    assert!(!f.0.join(".devlish/sessions").exists());
+}
+
+#[test]
+fn harness_run_enforces_policy_and_writes_policy_log() {
+    let f = Fixture::new();
+    fs::write(
+        f.0.join("workflow.dvl"),
+        r#"Rule:
+  id: test.harness.workflow
+  version: 1.0.0
+
+Permissions:
+  Write files to "out.txt"
+
+Export "secret" to "out.txt"
+Respond with "done"
+"#,
+    )
+    .unwrap();
+    fs::write(
+        f.0.join("policy.dvl"),
+        r#"Rule:
+  id: test.harness.policy
+  version: 1.0.0
+
+Ask "Which effect?" as effect
+Ask "Request?" as request
+If effect equals "respond":
+  Respond with record with true as allow and "Response allowed." as reason
+Respond with record with false as allow and "Denied by default." as reason
+"#,
+    )
+    .unwrap();
+    let log = f.0.join("policy.jsonl");
+    let out = f
+        .command()
+        .args([
+            "harness",
+            "run",
+            "workflow.dvl",
+            "--policy",
+            "policy.dvl",
+            "--policy-log",
+            log.to_str().unwrap(),
+            "--default-authorization",
+            "deny-unless-allowed",
+        ])
+        .output()
+        .unwrap();
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(
+        !out.status.success(),
+        "expected policy denial: {stdout}{stderr}"
+    );
+    assert!(log.exists(), "policy log missing: {stdout}{stderr}");
+    let records: Vec<Value> = fs::read_to_string(&log)
+        .unwrap()
+        .lines()
+        .map(|line| serde_json::from_str::<Value>(line).unwrap()["record"].clone())
+        .collect();
+    assert!(records.iter().any(|r| r["type"] == "policy_run_started"));
+    assert!(records.iter().any(|r| {
+        r["type"] == "effect_decision" && r["effect"] == "write_file" && r["allow"] == false
+    }));
+    assert!(!f.0.join("out.txt").exists());
 }

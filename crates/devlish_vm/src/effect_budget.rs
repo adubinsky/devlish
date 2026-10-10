@@ -4,7 +4,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 /// Trusted operator configuration. This is a call-count cap, not a monetary,
 /// token, wall-clock or cross-session budget. Denied and failed attempts count.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct EffectBudget {
     total: u64,
     per_effect: BTreeMap<String, u64>,
