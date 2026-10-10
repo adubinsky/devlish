@@ -31,7 +31,7 @@ fn compile(source: &str) -> Value {
 }
 fn batch() -> Value {
     let mut b: Value = serde_json::from_str(include_str!(
-        "../../devlish_llm/examples/fixtures/jev_batch.json"
+        "../../devlish_llm/tests/fixtures/jev_batch.json"
     ))
     .unwrap();
     b["model"] = json!("jev-1.13.0");
@@ -75,7 +75,7 @@ impl HostEffects for Host {
         let b: devlish_llm::jev::Batch = serde_json::from_value(request["batch"].clone()).unwrap();
         let result = devlish_llm::jev::decode(
             &b,
-            include_bytes!("../../devlish_llm/examples/fixtures/jev_response.json"),
+            include_bytes!("../../devlish_llm/tests/fixtures/jev_response.json"),
             None,
         )
         .unwrap();

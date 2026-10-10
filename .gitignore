@@ -25,3 +25,5 @@
 *.swo
 *~
 .gstack/
+# Python guard test caches
+__pycache__/

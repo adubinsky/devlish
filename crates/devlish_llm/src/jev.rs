@@ -512,10 +512,10 @@ mod tests {
     };
 
     fn batch() -> Batch {
-        serde_json::from_str(include_str!("../examples/fixtures/jev_batch.json")).unwrap()
+        serde_json::from_str(include_str!("../tests/fixtures/jev_batch.json")).unwrap()
     }
     fn response() -> Value {
-        serde_json::from_str(include_str!("../examples/fixtures/jev_response.json")).unwrap()
+        serde_json::from_str(include_str!("../tests/fixtures/jev_response.json")).unwrap()
     }
     struct Credentials;
     impl CredentialResolver for Credentials {

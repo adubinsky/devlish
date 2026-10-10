@@ -60,25 +60,18 @@ shape, not a prebuilt production release. Existing approval, signing, trust,
 revocation and admission-state requirements remain unchanged. Do not substitute
 a test-generated signing key for the operator's production trust.
 
-## Run the synthetic example
+## Recorded fixture verification
 
-From the repository root:
-
-```bash
-cargo run --manifest-path crates/devlish_llm/Cargo.toml --example jev_document_batch
-```
-
-The default run validates a recorded response fixture without contacting
-the provider. The response was captured from a live synthetic smoke test on
-October 9, 2026, using `jev-1.13.0` (577 input tokens, 116 output tokens). The
-batch includes document classification, a liability assertion, a yes/no
-question, and a rubric score. This Rust example is now an offline decoder test
-only. Its former `--live` path was removed because it bypassed the Devlish run
-security boundary. No real seller document is included.
+The standalone Rust example has been removed. Recorded synthetic responses live
+under `crates/devlish_llm/tests/fixtures/` and are exercised by adapter unit tests:
 
 ```bash
-cargo test --manifest-path crates/devlish_llm/Cargo.toml
+cargo test --locked --manifest-path crates/devlish_llm/Cargo.toml
 ```
+
+Live document checks must enter through the admitted, governed runtime described
+above. Provider libraries and test fixtures are infrastructure, not deployable
+user workflow entry points. See `AGENTS.md` for the mandatory execution boundary.
 
 ## Contract
 

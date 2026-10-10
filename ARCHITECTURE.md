@@ -31,8 +31,6 @@ crates/
     src/lib.rs         Implements HostEffects via JS host imports
     js/index.mjs       JavaScript host wrapper
 
-  devlish_toolrun/     LLM token compression (662 lines)
-    src/main.rs        Command output summarizer for agent workflows
 ```
 
 ## Compilation Pipeline

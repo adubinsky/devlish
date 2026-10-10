@@ -286,7 +286,7 @@ mod tests {
     }
     fn jev_request() -> Value {
         let mut batch: Value =
-            serde_json::from_str(include_str!("../examples/fixtures/jev_batch.json")).unwrap();
+            serde_json::from_str(include_str!("../tests/fixtures/jev_batch.json")).unwrap();
         batch["model"] = json!("jev-1.13.0");
         json!({"provider":"jev","expect_json":true,"batch":batch})
     }
@@ -366,6 +366,9 @@ mod tests {
                 );
                 thread::sleep(Duration::from_millis(5));
             };
+            // Accepted sockets inherit nonblocking mode on macOS. Use bounded
+            // blocking reads after the bounded listener accept loop.
+            stream.set_nonblocking(false).unwrap();
             stream
                 .set_read_timeout(Some(Duration::from_secs(2)))
                 .unwrap();

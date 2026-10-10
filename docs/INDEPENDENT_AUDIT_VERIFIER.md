@@ -6,32 +6,25 @@ signature over exact file bytes using explicitly supplied operator trust keys.
 It never executes the candidate artifact or discovers keys from its envelope.
 This is the first increment of DEVL-223, not the completed end-to-end audit chain.
 
-## Build and synthetic demonstration
-
-From the repository root:
+## Build and verification tests
 
 ```bash
 cargo build --locked --release --manifest-path crates/devlish_audit/Cargo.toml
-cargo run --locked --manifest-path crates/devlish_audit/Cargo.toml \
-  --example signing_demo -- /tmp/devlish-signature-demo
-crates/devlish_audit/target/release/devlish-audit verify \
-  /tmp/devlish-signature-demo/evidence.txt \
-  --signature /tmp/devlish-signature-demo/signature.json \
-  --trust /tmp/devlish-signature-demo/trust.json \
-  --purpose audit-evidence
+cargo test --locked --manifest-path crates/devlish_audit/Cargo.toml
 ```
 
-Use a new demo directory. The example generates an ephemeral private key in
-memory and writes only synthetic evidence, a signature and a public trust
-configuration. It is not a production signer or an authorized Devlish release.
-Never adopt a trust configuration simply because it accompanies an artifact.
+Synthetic signing and receipt fixtures are confined to tests. Standalone demo
+executables have been removed. Actual verification requires independently
+approved operator trust, an artifact and its detached signature:
 
-Changing even whitespace in the evidence makes verification fail. Setting the
-key's `revoked` field to true also makes verification fail. The command returns
-JSON and exit code 0 for a valid authorized signature; malformed input, an
-unknown/revoked key, unauthorized purpose or an invalid signature returns JSON
-with `signature_verified: false` and a nonzero exit code. No unsigned fallback
-exists. All three options are required and may appear in any order.
+```bash
+devlish-audit verify evidence.txt --signature signature.json \
+  --trust operator-trust.json --purpose audit-evidence
+```
+
+Invalid evidence, revoked keys and unauthorized purposes fail verification.
+Never adopt trust simply because it accompanies an artifact.
+The offline verifier cannot run user workflows.
 
 ## Plain-English findings
 
@@ -197,17 +190,8 @@ release identities. Therefore session/release association is explicitly a
 `policy_enforcement_verified` remain false. Native session binding and independent
 release verification are subsequent work, not inferred from the receipt.
 
-For a local synthetic demonstration against an existing policy log:
-
-```bash
-cargo run --locked --manifest-path crates/devlish_audit/Cargo.toml \
-  --example receipt_demo -- evidence.jsonl /tmp/devlish-receipt-demo
-```
-
-This writes `receipt.json`, `signature.json` and `trust.json`, and prints the
-values to use for the verification options. It generates an ephemeral demo key
-and uses a clearly synthetic session and all-zero release digest. It is a test
-fixture generator, not independent custody or production receipt issuance.
+Synthetic receipt generation is confined to audit tests. Production receipts
+require operator custody and authorized signing, never self-generated demo trust.
 
 ## Independently check saved issuance records
 

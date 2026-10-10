@@ -535,7 +535,7 @@ fn model_route() -> Value {
 
 fn jev_batch() -> Value {
     let mut batch: Value = serde_json::from_str(include_str!(
-        "../../devlish_llm/examples/fixtures/jev_batch.json"
+        "../../devlish_llm/tests/fixtures/jev_batch.json"
     ))
     .unwrap();
     batch["model"] = json!("jev-1.13.0");

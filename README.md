@@ -1,5 +1,9 @@
 # Devlish - Provable programs, written in English
 
+User workflows must stay inside the governed runtime. See
+[the mandatory execution boundary](docs/EXECUTION_BOUNDARY.md). Contributors run
+`make install-hooks` to install the pre-commit enforcement check.
+
 Last updated: 2026-07-23
 Status: Current entry point. Website: https://devlish.dev
 
@@ -109,7 +113,6 @@ crates/
   devlish_core/     Rust compiler + CLI (~10,400 lines, 103 tests)
   devlish_vm/       Platform-independent bytecode VM (2,987 lines)
   devlish_wasm_runner/  WASM shell for browser/Node (221 lines)
-  devlish_toolrun/  Command output compression for LLM agents (662 lines)
 packages/
   devlish-runtime/  npm package: TypeScript wrapper, Web Worker, base64 WASM
 ```
