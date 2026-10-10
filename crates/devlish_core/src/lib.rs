@@ -6,6 +6,7 @@ use std::collections::{HashMap, HashSet};
 pub mod local_tools;
 pub mod governed_run;
 pub mod integrity;
+pub mod artifact_validation;
 pub mod logutil;
 pub mod policy_log;
 
@@ -2868,7 +2869,7 @@ fn parse_manifest_permission(line: &str) -> Option<ManifestPermission> {
     let lower = line.to_ascii_lowercase();
 
     // "Read files from <path>"
-    if let Some(rest) = lower.strip_prefix("read files from ") {
+    if let Some(rest) = strip_prefix_ci(line, "read files from ") {
         return Some(ManifestPermission {
             kind: "read_file".to_string(),
             scope: Some(rest.trim().trim_matches('"').to_string()),
@@ -2882,7 +2883,7 @@ fn parse_manifest_permission(line: &str) -> Option<ManifestPermission> {
         });
     }
     // "Write files to <path>"
-    if let Some(rest) = lower.strip_prefix("write files to ") {
+    if let Some(rest) = strip_prefix_ci(line, "write files to ") {
         return Some(ManifestPermission {
             kind: "write_file".to_string(),
             scope: Some(rest.trim().trim_matches('"').to_string()),
@@ -2955,7 +2956,7 @@ fn parse_manifest_permission(line: &str) -> Option<ManifestPermission> {
         });
     }
     // "Filesystem operations" / "Filesystem operations on <path>"
-    if let Some(rest) = lower.strip_prefix("filesystem operations on ") {
+    if let Some(rest) = strip_prefix_ci(line, "filesystem operations on ") {
         return Some(ManifestPermission {
             kind: "filesystem".to_string(),
             scope: Some(rest.trim().trim_matches('"').to_string()),

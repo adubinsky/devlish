@@ -165,7 +165,8 @@ Flip the polarity: a `.dvl` program can call Anthropic, OpenAI, or Ollama.
 
 ```bash
 devlish harness init-config
-devlish harness run examples/outbound_classify/classify.dvl --provider anthropic
+devlish harness run examples/outbound_classify/classify.dvl --provider anthropic \
+  --policy examples/outbound_classify/policy.dvl
 devlish serve --bind 127.0.0.1:7420   # HTTP API daemon
 ```
 

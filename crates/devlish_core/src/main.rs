@@ -4481,6 +4481,8 @@ fn mcp_run(args: &Value) -> Value {
         policy_path: None,
         policy_log: None,
         default_authorization: None,
+        limits: None,
+        artifact_requirements: None,
     });
     devlish_core::service::to_mcp_content(&result)
 }

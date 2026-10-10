@@ -33,11 +33,11 @@ pub fn run_harness(args: Vec<String>) -> Result<(), String> {
 }
 
 fn harness_usage() -> String {
-    "Usage:\n  devlish harness generate <contract.txt> --output-dir DIR --policy-log FILE [--provider NAME] [--model NAME]\n  \
+    "Usage:\n  devlish harness generate <contract.txt> --output-dir DIR --policy-log FILE [--requirements FILE] [--provider NAME] [--model NAME]\n  \
      devlish harness run <file.dvl> [--provider NAME] [--model NAME] [--input JSON] [--env KEY=VALUE]\n             \
-     [--policy FILE --policy-log FILE] [--default-authorization deny-unless-allowed|allow-unless-forbidden]\n  \
+     [--policy FILE] [--policy-log FILE] [--limits FILE] [--default-authorization deny-unless-allowed|allow-unless-forbidden]\n  \
      devlish harness resume <session.json> [--input JSON]\n             \
-     [--policy FILE --policy-log FILE] [--default-authorization deny-unless-allowed|allow-unless-forbidden]\n  \
+     [--policy FILE] [--policy-log FILE] [--limits FILE] [--default-authorization deny-unless-allowed|allow-unless-forbidden]\n  \
      devlish harness init-config\n"
         .to_string()
 }
@@ -57,6 +57,7 @@ fn generation_sources(program: &str, policy: &str) -> (String, String) {
 }
 
 fn harness_generate(args: Vec<String>) -> Result<(), String> {
+    let mut requirements_path = None;
     let mut contract = None;
     let mut output = None;
     let mut log = None;
@@ -65,6 +66,13 @@ fn harness_generate(args: Vec<String>) -> Result<(), String> {
     let mut index = 2;
     while index < args.len() {
         match args[index].as_str() {
+            "--requirements" => {
+                requirements_path = Some(PathBuf::from(take_value(
+                    &args,
+                    &mut index,
+                    "--requirements",
+                )?));
+            }
             "--output-dir" => {
                 output = Some(PathBuf::from(take_value(
                     &args,
@@ -90,6 +98,13 @@ fn harness_generate(args: Vec<String>) -> Result<(), String> {
         }
         index += 1;
     }
+    let requirements = if let Some(path) = requirements_path {
+        serde_json::from_slice(&fs::read(path).map_err(|e| format!("artifact requirements: {e}"))?)
+            .map_err(|e| format!("artifact requirements JSON: {e}"))?
+    } else {
+        json!({"permissions":[],"write_contents":{}})
+    };
+    devlish_core::artifact_validation::validate_requirements(&requirements)?;
     let contract = contract.ok_or_else(harness_usage)?;
     let output = output.ok_or("--output-dir is required")?;
     let log = log.ok_or("--policy-log is required")?;
@@ -122,6 +137,7 @@ fn harness_generate(args: Vec<String>) -> Result<(), String> {
         include_str!("../../../docs/LANGUAGE_GRAMMAR.ebnf"),
         include_str!("../../../docs/EFFECT_POLICY.md"),
     );
+    let prompt = format!("{prompt}\n\nTRUSTED AUTHORING REQUIREMENTS:\n{requirements}\nOnly flat self-contained Devlish is allowed. No imports, modules, process execution, services, filesystem operations, downloads, or Print. Declare only approved permissions. File writes must use literal paths and exact operator-approved literal text from write_contents.");
     let (source, guard) = generation_sources(
         program.to_str().ok_or("output path must be UTF-8")?,
         policy.to_str().ok_or("output path must be UTF-8")?,
@@ -153,11 +169,12 @@ fn harness_generate(args: Vec<String>) -> Result<(), String> {
         policy_path: Some(guard_path),
         policy_log: Some(log),
         default_authorization: Some("deny-unless-allowed".into()),
+        artifact_requirements: Some(requirements.clone()),
         ..RunRequest::default()
     });
     let session_path = session_dir.join("session.json");
     let session = json!({"kind": "harness-generation", "source": source,
-        "program_path": program, "policy_path": policy, "ok": result.ok, "result": result.value});
+        "program_path": program, "policy_path": policy, "requirements": requirements, "ok": result.ok, "result": result.value});
     fs::write(
         &session_path,
         serde_json::to_vec_pretty(&session).map_err(|e| e.to_string())?,
@@ -178,6 +195,55 @@ struct PolicyArgs {
     policy_path: Option<PathBuf>,
     policy_log: Option<PathBuf>,
     default_authorization: Option<String>,
+    limits_path: Option<PathBuf>,
+}
+
+fn configure_governance(policy: &mut PolicyArgs, source: &Path) -> Result<Value, String> {
+    let parent = source
+        .parent()
+        .filter(|p| !p.as_os_str().is_empty())
+        .unwrap_or(Path::new("."));
+    if policy.policy_path.is_none() {
+        let local = parent.join(".devlish/policy.dvl");
+        policy.policy_path = Some(if local.exists() {
+            local
+        } else {
+            parent.join("policy.dvl")
+        });
+    }
+    if !policy.policy_path.as_ref().unwrap().is_file() {
+        return Err("harness requires an independent policy: use --policy FILE or provide .devlish/policy.dvl or policy.dvl".into());
+    }
+    if policy.policy_log.is_none() {
+        let directory = parent.join(".devlish/sessions");
+        fs::create_dir_all(&directory).map_err(|e| e.to_string())?;
+        let nonce = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map_err(|e| e.to_string())?
+            .as_nanos();
+        policy.policy_log =
+            Some(directory.join(format!("harness-{}-{nonce}.jsonl", std::process::id())));
+    }
+    if policy.default_authorization.is_none() {
+        policy.default_authorization = Some("deny-unless-allowed".into());
+    }
+    let path = policy
+        .limits_path
+        .clone()
+        .unwrap_or_else(|| parent.join(".devlish/limits.json"));
+    let limits = match fs::read(&path) {
+        Ok(bytes) => {
+            serde_json::from_slice(&bytes).map_err(|e| format!("invalid execution limits: {e}"))?
+        }
+        Err(error)
+            if error.kind() == std::io::ErrorKind::NotFound && policy.limits_path.is_none() =>
+        {
+            json!({"instruction_limit": 50000, "effect_budget": {"total": 100, "per_effect": {}}})
+        }
+        Err(error) => return Err(format!("execution limits {}: {error}", path.display())),
+    };
+    devlish_core::service::execution_limits(&limits)?;
+    Ok(limits)
 }
 
 fn take_value(args: &[String], index: &mut usize, flag: &str) -> Result<String, String> {
@@ -215,6 +281,10 @@ fn harness_run(args: Vec<String>) -> Result<(), String> {
                     .ok_or_else(|| format!("invalid --env {raw}"))?;
                 env.push((k.to_string(), v.to_string()));
             }
+            "--limits" => {
+                policy.limits_path =
+                    Some(PathBuf::from(take_value(&args, &mut index, "--limits")?));
+            }
             "--policy" => {
                 policy.policy_path =
                     Some(PathBuf::from(take_value(&args, &mut index, "--policy")?));
@@ -244,6 +314,7 @@ fn harness_run(args: Vec<String>) -> Result<(), String> {
     let source =
         fs::read_to_string(&file).map_err(|e| format!("failed to read {}: {e}", file.display()))?;
     let source_path = file.to_string_lossy().to_string();
+    let limits = configure_governance(&mut policy, Path::new(&source_path))?;
     let result = service_run(RunRequest {
         source,
         source_path: Some(source_path.clone()),
@@ -255,6 +326,8 @@ fn harness_run(args: Vec<String>) -> Result<(), String> {
         policy_path: policy.policy_path,
         policy_log: policy.policy_log,
         default_authorization: policy.default_authorization,
+        limits: Some(limits),
+        artifact_requirements: None,
     });
 
     let session_id = new_session_id();
@@ -297,6 +370,10 @@ fn harness_resume(args: Vec<String>) -> Result<(), String> {
                 let raw = take_value(&args, &mut index, "--input")?;
                 extra_input =
                     serde_json::from_str(&raw).map_err(|e| format!("invalid --input JSON: {e}"))?;
+            }
+            "--limits" => {
+                policy.limits_path =
+                    Some(PathBuf::from(take_value(&args, &mut index, "--limits")?));
             }
             "--policy" => {
                 policy.policy_path =
@@ -361,6 +438,7 @@ fn harness_resume(args: Vec<String>) -> Result<(), String> {
         }
     }
 
+    let limits = configure_governance(&mut policy, Path::new(source_path))?;
     let result = service_run(RunRequest {
         source,
         source_path: Some(source_path.to_string()),
@@ -372,6 +450,8 @@ fn harness_resume(args: Vec<String>) -> Result<(), String> {
         policy_path: policy.policy_path,
         policy_log: policy.policy_log,
         default_authorization: policy.default_authorization,
+        limits: Some(limits),
+        artifact_requirements: None,
     });
     println!(
         "{}",

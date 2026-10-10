@@ -211,5 +211,7 @@ fn run_from_json(args: &Value) -> devlish_core::service::ServiceResult {
         policy_path: None,
         policy_log: None,
         default_authorization: None,
+        limits: None,
+        artifact_requirements: None,
     })
 }

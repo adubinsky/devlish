@@ -155,3 +155,98 @@ devlish harness run /absolute/challenge/program.dvl \
 Compare both artifact files with the generation session's `result.response`
 fields before acceptance. Generation provenance alone does not prove that an
 acceptance contract passed.
+
+## Governed harness execution
+
+`harness run` and `harness resume` require an independent policy. Select it with
+`--policy FILE`, or place `.devlish/policy.dvl` or `policy.dvl` beside the source.
+The default posture is `deny-unless-allowed`; override it explicitly with
+`--default-authorization`. Absent permission declarations grant no external
+effects on governed service runs. A policy cannot expand declared permissions.
+
+Every invocation creates a fresh hash-chained log beside the source under
+`.devlish/sessions/`, unless `--policy-log FILE` names a new log. Existing logs
+are never overwritten. Recorder failures stop effects and prevent success.
+
+Execution controls come from `--limits FILE` or `.devlish/limits.json` beside
+the source. They contain exactly these fields:
+
+```json
+{"instruction_limit":50000,"effect_budget":{"total":16,"per_effect":{"read_file":1,"write_file":6,"llm_complete":1,"http_request":1,"respond":1}}}
+```
+
+Without a limits file, each run is capped at 50,000 instructions and 100 effect
+attempts. Limits are captured before dispatch in `execution_limits_captured`.
+Denied and failed attempts count; omitted per-effect caps still share the total.
+Malformed controls fail before effects. Limits never grant permissions, and
+resume uses fresh operator controls rather than permissions from saved output.
+Resume reruns the source with checkpoint input; it does not reconcile uncertain
+external effects or guarantee exactly-once execution.
+
+The shared file host honors append mode, preserving state markers. Google
+Address Validation credentials remain host-owned: only the exact POST endpoint
+receives `X-Goog-Api-Key`, with redirects disabled. Session result files can
+contain program output; effect audit evidence remains hashed by default.
+
+## Default model provider
+
+New configurations prefer OpenRouter (`openai/gpt-4o-mini`). If an implicit
+OpenRouter selection has no nonempty configured API key and OpenAI has one,
+Devlish selects OpenAI before making a request, using its configured model.
+An explicit `--provider` or program provider choice is respected. Failed
+requests never trigger a second provider call. Configure credentials using
+`OPENROUTER_API_KEY` and `OPENAI_API_KEY`, or provider `api_key_env` overrides.
+Existing configuration files retain their explicit settings.
+
+## Restricted harness authoring
+
+`harness generate` validates the entire returned artifact pair before either
+file is installed. Both artifacts must be nonempty flat Devlish of at most
+128 KiB each and compile successfully; the policy must have a valid Rule
+identity. Imports and modules are rejected before any filesystem resolution.
+The generated policy cannot perform external effects.
+
+Without `--requirements FILE`, generated programs receive no external authority.
+To approve a limited program, provide operator-owned JSON, for example:
+
+```json
+{
+  "permissions": [
+    {"kind":"read_file","scope":"document.txt"},
+    {"kind":"write_file","scope":"run-state.log"},
+    {"kind":"llm_complete"},
+    {"kind":"http_request","scope":"https://addressvalidation.googleapis.com/v1:validateAddress"}
+  ],
+  "write_contents": {
+    "run-state.log": ["started\n","document_loaded\n","extraction_requested\n","extraction_validated\n","validation_requested\n","completed\n","needs_review\n"]
+  }
+}
+```
+
+```bash
+devlish harness generate contract.txt --output-dir /absolute/new-artifacts \
+  --policy-log /absolute/new-generation.jsonl --requirements requirements.json
+```
+
+Model declarations must be a subset of these exact permission records. Reads
+and HTTP requests require literal approved paths/endpoints. Writes require a
+literal approved path and literal text from `write_contents`; dynamic model
+output cannot become file content. Python and shell output extensions are
+prohibited. Process execution, services, broad filesystem authority, copies,
+moves, downloads, routes, and direct Print are outside this authoring profile.
+Consequently shell and chmod requests are rejected even inside branches or
+recovery blocks. Other permitted effects still require declarations and policy
+approval at execution time.
+
+Requirements are validated before the model request and their hash is recorded
+before dispatch. Rejected model output produces a failed effect outcome and no
+artifact writes. Installation creates fresh files exclusively, refuses existing
+files and symlinks, syncs their content, and uses mode 0600 on Unix. A failure
+installing the second file can still leave the first file; inspect the audit.
+
+This restricts authoring capabilities, not arbitrary text by programming-language
+heuristics. Operator-approved literal content is trusted. It does not prove the
+model-generated policy implements the intended business contract: review both
+artifacts before separately running them. The profile deliberately forbids
+subprocesses; general OS containment for approved external tools remains a
+separate boundary. It does not sandbox Codex or user shell commands.

@@ -1,9 +1,7 @@
 //! Shared compile / run / lint service used by MCP, HTTP serve, and harness.
 //! Returns structured JSON Values (not MCP content wrappers).
 
-use crate::{
-    compile_source_to_json, lint_source, logutil, policy_log::PolicyLog, CompileOptions,
-};
+use crate::{compile_source_to_json, lint_source, logutil, policy_log::PolicyLog, CompileOptions};
 use devlish_llm::{complete, response_value, CredentialResolver, LlmConfig, LlmRequest};
 use devlish_vm::{
     policy::{EffectPolicy, PolicyHost, PolicyRecorder},
@@ -33,6 +31,10 @@ pub struct RunRequest {
     pub policy_log: Option<PathBuf>,
     /// Operator default when the policy abstains. Requires `policy_path`.
     pub default_authorization: Option<String>,
+    /// Trusted bounded execution controls; require policy recording.
+    pub limits: Option<Value>,
+    /// Trusted authoring contract; validates the complete model pair before writes.
+    pub artifact_requirements: Option<Value>,
 }
 
 #[derive(Debug, Clone)]
@@ -41,7 +43,11 @@ pub struct ServiceResult {
     pub value: Value,
 }
 
-pub fn service_compile(source: &str, source_path: Option<String>, search_paths: Vec<String>) -> ServiceResult {
+pub fn service_compile(
+    source: &str,
+    source_path: Option<String>,
+    search_paths: Vec<String>,
+) -> ServiceResult {
     match compile_source_to_json(
         source,
         CompileOptions {
@@ -133,6 +139,26 @@ pub fn service_lint(source: &str) -> ServiceResult {
     }
 }
 
+pub fn execution_limits(
+    value: &Value,
+) -> Result<(u64, devlish_vm::effect_budget::EffectBudget), String> {
+    let object = value.as_object().ok_or("limits must be an object")?;
+    if object.len() != 2
+        || !object.contains_key("instruction_limit")
+        || !object.contains_key("effect_budget")
+    {
+        return Err("limits require only instruction_limit and effect_budget".into());
+    }
+    let instructions = value["instruction_limit"]
+        .as_u64()
+        .filter(|n| *n > 0 && *n <= 10_000_000)
+        .ok_or("instruction_limit must be 1 through 10000000")?;
+    Ok((
+        instructions,
+        devlish_vm::effect_budget::EffectBudget::parse(&value["effect_budget"])?,
+    ))
+}
+
 pub fn service_run(req: RunRequest) -> ServiceResult {
     if req.policy_path.is_some() != req.policy_log.is_some() {
         return ServiceResult {
@@ -140,13 +166,27 @@ pub fn service_run(req: RunRequest) -> ServiceResult {
             value: json!({"error": "--policy and --policy-log must be supplied together"}),
         };
     }
-    if req.default_authorization.is_some() && req.policy_path.is_none() {
+    if (req.default_authorization.is_some() || req.limits.is_some()) && req.policy_path.is_none() {
         return ServiceResult {
             ok: false,
             value: json!({
                 "error": "--default-authorization requires --policy and --policy-log"
             }),
         };
+    }
+    if let Some(requirements) = &req.artifact_requirements {
+        if req.policy_path.is_none() {
+            return ServiceResult {
+                ok: false,
+                value: json!({"error": "artifact validation requires governed execution"}),
+            };
+        }
+        if let Err(error) = crate::artifact_validation::validate_requirements(requirements) {
+            return ServiceResult {
+                ok: false,
+                value: json!({"error": error}),
+            };
+        }
     }
     let compiled = service_compile(
         &req.source,
@@ -156,9 +196,33 @@ pub fn service_run(req: RunRequest) -> ServiceResult {
     if !compiled.ok {
         return compiled;
     }
-    let package = compiled.value;
+    let mut package = compiled.value;
+    // Governed runs treat absent declarations as no external authority.
+    if req.policy_path.is_some() {
+        let declared = package
+            .pointer("/manifest/permissions")
+            .and_then(Value::as_array)
+            .is_some_and(|permissions| !permissions.is_empty());
+        if !declared {
+            let object = package.as_object_mut().unwrap();
+            let manifest = object.entry("manifest").or_insert_with(|| json!({}));
+            if !manifest.is_object() {
+                *manifest = json!({});
+            }
+            manifest
+                .as_object_mut()
+                .unwrap()
+                .insert("permissions".into(), json!([{"kind": "respond"}]));
+        }
+    }
     let source_file = req.source_path.as_deref().map(Path::new);
-    let mut host = ServiceHost::new(&req.env, source_file, req.provider.clone(), req.model.clone());
+    let mut host = ServiceHost::new(
+        &req.env,
+        source_file,
+        req.provider.clone(),
+        req.model.clone(),
+    );
+    host.artifact_requirements = req.artifact_requirements.clone();
     let vm = match Vm::new(package.clone(), req.input.clone()) {
         Err(error) => {
             return ServiceResult {
@@ -243,8 +307,43 @@ fn run_with_policy(
             }
         }
     };
+    let controls = req.limits.clone().unwrap_or_else(|| {
+        json!({
+            "instruction_limit": 50000, "effect_budget": {"total": 100, "per_effect": {}}
+        })
+    });
+    let (instructions, budget) = match execution_limits(&controls) {
+        Ok(limits) => limits,
+        Err(error) => {
+            return ServiceResult {
+                ok: false,
+                value: json!({"error": error}),
+            }
+        }
+    };
+    if let Some(requirements) = &req.artifact_requirements {
+        if let Err(error) = log.record(&json!({"type": "artifact_requirements_captured",
+            "profile": "restricted-flat-devlish-v1",
+            "requirements_sha256": sha256_hex(&serde_json::to_vec(requirements).unwrap()),
+            "max_artifact_bytes": 131072}))
+        {
+            return ServiceResult {
+                ok: false,
+                value: json!({"error": error}),
+            };
+        }
+    }
+    vm.set_instruction_limit(instructions);
+    if let Err(error) = log.record(&json!({"type": "execution_limits_captured",
+        "instruction_limit": instructions, "effect_budget": budget.to_value()}))
+    {
+        return ServiceResult {
+            ok: false,
+            value: json!({"error": error}),
+        };
+    }
     vm.set_emit_events(false);
-    let mut guarded = PolicyHost::new(host, &policy, &mut log);
+    let mut guarded = PolicyHost::new(host, &policy, &mut log).with_effect_budget(budget);
     let result = vm.run(&mut guarded);
     if guarded.recording_failed() {
         return ServiceResult {
@@ -280,10 +379,7 @@ fn run_with_policy(
                     json!(log_path.display().to_string()),
                 );
             }
-            ServiceResult {
-                ok: true,
-                value,
-            }
+            ServiceResult { ok: true, value }
         }
         Err(error) => runtime_error_result(&error.message),
     }
@@ -306,6 +402,7 @@ fn runtime_error_result(message: &str) -> ServiceResult {
 /// Minimal host for service/MCP/HTTP runs with LLM + clock + random effects.
 pub struct ServiceHost {
     credentials: Map<String, Value>,
+    artifact_requirements: Option<Value>,
     source_dir: Option<PathBuf>,
     llm_config: LlmConfig,
     default_provider: Option<String>,
@@ -333,6 +430,7 @@ impl ServiceHost {
             .hash(&mut hasher);
         Self {
             credentials,
+            artifact_requirements: None,
             source_dir: source_file.and_then(|p| p.parent().map(|d| d.to_path_buf())),
             llm_config: LlmConfig::load(),
             default_provider: provider,
@@ -383,15 +481,22 @@ impl ServiceHost {
     #[cfg(feature = "native")]
     fn google_validation_request(&self, method: &str, url: &str) -> ureq::Request {
         // Disable redirects before attaching the host-owned, endpoint-scoped key.
-        let request = ureq::AgentBuilder::new().redirects(0).build().request(method, url);
-        if method == "POST" && url == "https://addressvalidation.googleapis.com/v1:validateAddress" {
-            if let Some(key) = self.resolve_cred("GOOGLE_ADDRESS_VALIDATION_API_KEY").filter(|key| !key.is_empty()) {
+        let request = ureq::AgentBuilder::new()
+            .redirects(0)
+            .build()
+            .request(method, url);
+        if method == "POST" && url == "https://addressvalidation.googleapis.com/v1:validateAddress"
+        {
+            if let Some(key) = self
+                .resolve_cred("GOOGLE_ADDRESS_VALIDATION_API_KEY")
+                .filter(|key| !key.is_empty())
+            {
                 return request.set("X-Goog-Api-Key", &key);
             }
         }
         request
     }
- }
+}
 
 struct HostCreds<'a>(&'a ServiceHost);
 
@@ -419,6 +524,24 @@ impl HostEffects for ServiceHost {
             .unwrap_or("write");
         if let Some(parent) = Path::new(path).parent() {
             fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+        }
+        if self.artifact_requirements.is_some() {
+            // Authoring never replaces existing artifacts, including symlinks.
+            let mut options = fs::OpenOptions::new();
+            options.write(true).create_new(true);
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::OpenOptionsExt;
+                options.mode(0o600);
+            }
+            let mut file = options
+                .open(path)
+                .map_err(|_| "cannot exclusively create generated artifact".to_string())?;
+            file.write_all(content.as_bytes())
+                .map_err(|_| "cannot write generated artifact".to_string())?;
+            return file
+                .sync_all()
+                .map_err(|_| "cannot sync generated artifact".to_string());
         }
         match mode {
             "append" => {
@@ -490,6 +613,13 @@ impl HostEffects for ServiceHost {
             prompt.len()
         ));
         let response = complete(&llm_req, &self.llm_config, &HostCreds(self))?;
+        if let Some(requirements) = &self.artifact_requirements {
+            let payload = response
+                .parsed
+                .as_ref()
+                .ok_or("authoring requires a parsed JSON artifact pair")?;
+            crate::artifact_validation::validate_draft(payload, requirements)?;
+        }
         logutil::info(&format!(
             "llm_complete ok provider={} model={} response_chars={}",
             response.provider,
@@ -567,11 +697,34 @@ mod credential_tests {
 
     #[test]
     fn google_key_is_scoped_to_exact_post_endpoint() {
-        let host = ServiceHost::new(&[("GOOGLE_ADDRESS_VALIDATION_API_KEY".into(), "synthetic-key".into())], None, None, None);
+        let host = ServiceHost::new(
+            &[(
+                "GOOGLE_ADDRESS_VALIDATION_API_KEY".into(),
+                "synthetic-key".into(),
+            )],
+            None,
+            None,
+            None,
+        );
         let url = "https://addressvalidation.googleapis.com/v1:validateAddress";
-        assert_eq!(host.google_validation_request("POST", url).header("X-Goog-Api-Key"), Some("synthetic-key"));
-        for (method, endpoint) in [("GET", url), ("POST", "https://addressvalidation.googleapis.com/v1:validateAddress?extra=true"), ("POST", "https://example.com/v1:validateAddress")] {
-            assert_eq!(host.google_validation_request(method, endpoint).header("X-Goog-Api-Key"), None);
+        assert_eq!(
+            host.google_validation_request("POST", url)
+                .header("X-Goog-Api-Key"),
+            Some("synthetic-key")
+        );
+        for (method, endpoint) in [
+            ("GET", url),
+            (
+                "POST",
+                "https://addressvalidation.googleapis.com/v1:validateAddress?extra=true",
+            ),
+            ("POST", "https://example.com/v1:validateAddress"),
+        ] {
+            assert_eq!(
+                host.google_validation_request(method, endpoint)
+                    .header("X-Goog-Api-Key"),
+                None
+            );
         }
     }
 }

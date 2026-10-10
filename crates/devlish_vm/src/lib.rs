@@ -1163,6 +1163,7 @@ impl Vm {
                 let source_val = self.register_value(&string_field(instruction, "source")?)?;
                 let dest_val = self.register_value(&string_field(instruction, "dest")?)?;
                 let dest_str = dest_val.as_str().unwrap_or_default().to_string();
+                self.check_manifest_permission("write_file", Some(&dest_str))?;
                 let request = json!({
                     "source": source_val,
                     "destination": dest_str,
@@ -1399,6 +1400,7 @@ impl Vm {
         if path.trim().is_empty() {
             return Err(self.error("File path cannot be empty".to_string()));
         }
+        self.check_manifest_permission("write_file", Some(&path))?;
 
         let mode = instruction
             .get("mode")
@@ -1468,6 +1470,7 @@ impl Vm {
         if path.trim().is_empty() {
             return Err(self.error("File path cannot be empty".to_string()));
         }
+        self.check_manifest_permission("read_file", Some(&path))?;
 
         let request = json!({ "path": path, "format": format });
         self.push_event(
@@ -1728,6 +1731,7 @@ impl Vm {
         if path.trim().is_empty() {
             return Err(self.error("File path cannot be empty".to_string()));
         }
+        self.check_manifest_permission("write_file", Some(&path))?;
 
         let assertions = self
             .results

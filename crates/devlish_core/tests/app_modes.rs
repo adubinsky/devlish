@@ -182,10 +182,9 @@ fn explicit_prompt_policy_denial_blocks_model_before_credentials_or_network() {
     assert!(!text.contains("missing API key"));
     let log = fs::read_dir(f.0.join(".devlish/sessions"))
         .unwrap()
-        .next()
-        .unwrap()
-        .unwrap()
-        .path();
+        .map(|entry| entry.unwrap().path())
+        .find(|path| path.extension().is_some_and(|ext| ext == "jsonl"))
+        .unwrap();
     let log = fs::read_to_string(log).unwrap();
     let records: Vec<Value> = log
         .lines()
@@ -428,26 +427,313 @@ Respond with record with false as allow and "Denied by default." as reason
 fn harness_generation_requires_logging_and_preserves_existing_artifacts() {
     let f = Fixture::new();
     fs::write(f.0.join("contract.txt"), "Read fixture and respond.").unwrap();
-    let missing_log = f.command().args([
-        "harness", "generate", "contract.txt", "--output-dir", ".",
-    ]).output().unwrap();
+    let missing_log = f
+        .command()
+        .args(["harness", "generate", "contract.txt", "--output-dir", "."])
+        .output()
+        .unwrap();
     assert!(!missing_log.status.success());
     assert!(String::from_utf8_lossy(&missing_log.stderr).contains("--policy-log is required"));
-    let overlapping_log = f.command().args([
-        "harness", "generate", "contract.txt", "--output-dir", ".",
-        "--policy-log", "program.dvl",
-    ]).output().unwrap();
+    let overlapping_log = f
+        .command()
+        .args([
+            "harness",
+            "generate",
+            "contract.txt",
+            "--output-dir",
+            ".",
+            "--policy-log",
+            "program.dvl",
+        ])
+        .output()
+        .unwrap();
     assert!(!overlapping_log.status.success());
-    assert!(String::from_utf8_lossy(&overlapping_log.stderr).contains("separate from generated artifacts"));
+    assert!(String::from_utf8_lossy(&overlapping_log.stderr)
+        .contains("separate from generated artifacts"));
     assert!(!f.0.join("program.dvl").exists());
     fs::write(f.0.join("program.dvl"), "existing artifact").unwrap();
-    let existing = f.command().args([
-        "harness", "generate", "contract.txt", "--output-dir", ".",
-        "--policy-log", "generation.jsonl",
-    ]).output().unwrap();
+    let existing = f
+        .command()
+        .args([
+            "harness",
+            "generate",
+            "contract.txt",
+            "--output-dir",
+            ".",
+            "--policy-log",
+            "generation.jsonl",
+        ])
+        .output()
+        .unwrap();
     assert!(!existing.status.success());
     assert!(String::from_utf8_lossy(&existing.stderr).contains("refusing to replace"));
-    assert_eq!(fs::read_to_string(f.0.join("program.dvl")).unwrap(), "existing artifact");
+    assert_eq!(
+        fs::read_to_string(f.0.join("program.dvl")).unwrap(),
+        "existing artifact"
+    );
     assert!(!f.0.join("generation.jsonl").exists());
     assert!(!f.0.join("policy.dvl").exists());
+}
+
+#[test]
+fn harness_requires_policy_and_enforces_recorded_budget_and_append() {
+    let f = Fixture::new();
+    fs::write(f.0.join("workflow.dvl"), "Permissions:\n  Write files to \"state.log\"\nExport \"started\\n\" to \"state.log\"\nAppend \"completed\\n\" to file \"state.log\"\nRespond with \"done\"\n").unwrap();
+    let missing = f
+        .command()
+        .args(["harness", "run", "workflow.dvl"])
+        .output()
+        .unwrap();
+    assert!(!missing.status.success());
+    assert!(!f.0.join("state.log").exists());
+    fs::create_dir_all(f.0.join(".devlish")).unwrap();
+    fs::write(f.0.join(".devlish/policy.dvl"), "Rule:\n  id: test.harness.limits\n  version: 1.0.0\n\nAsk \"Effect?\" as effect\nIf effect equals \"write_file\" or effect equals \"respond\":\n  Respond with record with true as allow and \"Allowed fixture.\" as reason\nRespond with record with false as allow and \"Denied.\" as reason\n").unwrap();
+    let limits = f.0.join(".devlish/limits.json");
+    fs::write(&limits, r#"{"instruction_limit":50000,"effect_budget":{"total":3,"per_effect":{"write_file":2,"respond":1}}}"#).unwrap();
+    let run = f
+        .command()
+        .args(["harness", "run", "workflow.dvl"])
+        .output()
+        .unwrap();
+    assert!(
+        run.status.success(),
+        "{}{}",
+        String::from_utf8_lossy(&run.stdout),
+        String::from_utf8_lossy(&run.stderr)
+    );
+    assert_eq!(
+        fs::read_to_string(f.0.join("state.log")).unwrap(),
+        "started\ncompleted\n"
+    );
+    let log = fs::read_dir(f.0.join(".devlish/sessions"))
+        .unwrap()
+        .map(|entry| entry.unwrap().path())
+        .find(|path| path.extension().is_some_and(|ext| ext == "jsonl"))
+        .unwrap();
+    let records = fs::read_to_string(log).unwrap();
+    assert!(records.contains("execution_limits_captured"));
+    fs::write(&limits, r#"{"instruction_limit":50000,"effect_budget":{"total":3,"per_effect":{"write_file":1,"respond":1}}}"#).unwrap();
+    let exhausted = f
+        .command()
+        .args(["harness", "run", "workflow.dvl"])
+        .output()
+        .unwrap();
+    assert!(!exhausted.status.success());
+    assert_eq!(
+        fs::read_to_string(f.0.join("state.log")).unwrap(),
+        "started\n"
+    );
+    fs::remove_file(f.0.join("state.log")).unwrap();
+    fs::write(
+        &limits,
+        r#"{"instruction_limit":1,"effect_budget":{"total":3,"per_effect":{}}}"#,
+    )
+    .unwrap();
+    assert!(!f
+        .command()
+        .args(["harness", "run", "workflow.dvl"])
+        .output()
+        .unwrap()
+        .status
+        .success());
+    assert!(!f.0.join("state.log").exists());
+    fs::write(
+        &limits,
+        r#"{"instruction_limit":0,"effect_budget":{"total":3,"per_effect":{}}}"#,
+    )
+    .unwrap();
+    assert!(!f
+        .command()
+        .args(["harness", "run", "workflow.dvl"])
+        .output()
+        .unwrap()
+        .status
+        .success());
+    assert!(!f.0.join("state.log").exists());
+}
+
+#[test]
+fn harness_recorder_failure_prevents_effects() {
+    let f = Fixture::new();
+    fs::write(
+        f.0.join("workflow.dvl"),
+        "Permissions:\n  Write files to \"marker\"\nExport \"x\" to \"marker\"\n",
+    )
+    .unwrap();
+    fs::write(f.0.join("policy.dvl"), "Rule:\n  id: test.harness.recorder\n  version: 1.0.0\n\nRespond with record with true as allow and \"Allowed.\" as reason\n").unwrap();
+    let out = f
+        .command()
+        .args([
+            "harness",
+            "run",
+            "workflow.dvl",
+            "--policy-log",
+            "missing/record.jsonl",
+        ])
+        .output()
+        .unwrap();
+    assert!(!out.status.success());
+    assert!(!f.0.join("marker").exists());
+}
+
+#[test]
+fn harness_policy_cannot_grant_undeclared_file_permissions() {
+    let f = Fixture::new();
+    fs::write(f.0.join("workflow.dvl"), "Export \"x\" to \"marker\"\n").unwrap();
+    fs::write(f.0.join("policy.dvl"), "Rule:\n  id: test.allow\n  version: 1.0.0\nRespond with record with true as allow and \"Allowed.\" as reason\n").unwrap();
+    let run = f
+        .command()
+        .args(["harness", "run", "workflow.dvl"])
+        .output()
+        .unwrap();
+    assert!(!run.status.success());
+    assert!(!f.0.join("marker").exists());
+}
+
+#[test]
+fn harness_resume_requires_fresh_operator_policy_and_limits() {
+    let f = Fixture::new();
+    fs::write(
+        f.0.join("workflow.dvl"),
+        "Permissions:\n  Write files to \"marker\"\nExport \"x\" to \"marker\"\n",
+    )
+    .unwrap();
+    fs::write(f.0.join("session.json"), r#"{"source_path":"workflow.dvl","input":{},"result":{"is_checkpoint":true,"policy_path":"allow.dvl","effect_budget":{"total":10000,"per_effect":{}}}}"#).unwrap();
+    assert!(!f
+        .command()
+        .args(["harness", "resume", "session.json"])
+        .output()
+        .unwrap()
+        .status
+        .success());
+    fs::write(f.0.join("policy.dvl"), "Rule:\n  id: test.resume\n  version: 1.0.0\nRespond with record with false as allow and \"Denied.\" as reason\n").unwrap();
+    let denied = f
+        .command()
+        .args(["harness", "resume", "session.json"])
+        .output()
+        .unwrap();
+    assert!(!denied.status.success());
+    assert!(!f.0.join("marker").exists());
+}
+
+#[test]
+fn harness_generation_rejects_entire_unsafe_pair_before_installation() {
+    for program in [
+        "import os\nos.chmod('x', 511)",
+        "Permissions:\n  Run catalog tool \"chmod\"\nRespond with \"ok\"",
+        "Respond with \"ok\"",
+    ] {
+        let f = Fixture::new();
+        let server = tiny_http::Server::http("127.0.0.1:0").unwrap();
+        fs::write(f.0.join("config.toml"), format!("default_provider = \"ollama\"\ndefault_model = \"test-model\"\n[ollama]\nbase_url = \"http://{}\"\n", server.server_addr())).unwrap();
+        fs::write(f.0.join("contract.txt"), "Return a safe Devlish program.").unwrap();
+        let payload = json!({"program":program,"policy":"print('not a Devlish policy')"});
+        let worker = std::thread::spawn(move || {
+            let request = server
+                .recv_timeout(Duration::from_secs(10))
+                .unwrap()
+                .unwrap();
+            request
+                .respond(
+                    tiny_http::Response::from_string(
+                        json!({"choices":[{"message":{"content":payload.to_string()}}]})
+                            .to_string(),
+                    )
+                    .with_header(
+                        tiny_http::Header::from_bytes("Content-Type", "application/json").unwrap(),
+                    ),
+                )
+                .unwrap();
+        });
+        let out = f
+            .command()
+            .args([
+                "harness",
+                "generate",
+                "contract.txt",
+                "--output-dir",
+                ".",
+                "--policy-log",
+                "generation.jsonl",
+            ])
+            .output()
+            .unwrap();
+        worker.join().unwrap();
+        assert!(!out.status.success());
+        assert!(!f.0.join("program.dvl").exists());
+        assert!(!f.0.join("policy.dvl").exists());
+        let records: Vec<Value> = fs::read_to_string(f.0.join("generation.jsonl"))
+            .unwrap()
+            .lines()
+            .map(|line| serde_json::from_str::<Value>(line).unwrap()["record"].clone())
+            .collect();
+        assert!(records.iter().any(|r| r["type"] == "effect_outcome"
+            && r["effect"] == "llm_complete"
+            && r["outcome"]["status"] == "failed"));
+        assert!(!records.iter().any(|r| r["effect"] == "write_file"));
+    }
+}
+
+#[test]
+fn harness_generation_installs_valid_pair_without_executable_permissions() {
+    let f = Fixture::new();
+    let server = tiny_http::Server::http("127.0.0.1:0").unwrap();
+    fs::write(f.0.join("config.toml"), format!("default_provider = \"ollama\"\ndefault_model = \"test-model\"\n[ollama]\nbase_url = \"http://{}\"\n", server.server_addr())).unwrap();
+    fs::write(f.0.join("contract.txt"), "Return a greeting.").unwrap();
+    let program = "Respond with \"hello\"\n";
+    let policy = "Rule:\n  id: test.generated\n  version: 1.0.0\nRespond with record with true as allow and \"Greeting response.\" as reason\n";
+    let payload = json!({"program":program,"policy":policy});
+    let worker = std::thread::spawn(move || {
+        let request = server
+            .recv_timeout(Duration::from_secs(10))
+            .unwrap()
+            .unwrap();
+        request
+            .respond(
+                tiny_http::Response::from_string(
+                    json!({"choices":[{"message":{"content":payload.to_string()}}]}).to_string(),
+                )
+                .with_header(
+                    tiny_http::Header::from_bytes("Content-Type", "application/json").unwrap(),
+                ),
+            )
+            .unwrap();
+    });
+    let out = f
+        .command()
+        .args([
+            "harness",
+            "generate",
+            "contract.txt",
+            "--output-dir",
+            ".",
+            "--policy-log",
+            "generation.jsonl",
+        ])
+        .output()
+        .unwrap();
+    worker.join().unwrap();
+    assert!(
+        out.status.success(),
+        "{}{}",
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert_eq!(
+        fs::read_to_string(f.0.join("program.dvl")).unwrap(),
+        program
+    );
+    assert_eq!(fs::read_to_string(f.0.join("policy.dvl")).unwrap(), policy);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        assert_eq!(
+            fs::metadata(f.0.join("program.dvl"))
+                .unwrap()
+                .permissions()
+                .mode()
+                & 0o777,
+            0o600
+        );
+    }
 }
