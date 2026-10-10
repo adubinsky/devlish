@@ -1,0 +1,13 @@
+# The batch comes from the trusted caller, not a provider-selected file or URL.
+Rule:
+  id: dealstar.jev_document_check
+  version: 1.0.0
+
+Permissions:
+  Call language models
+
+Ask "Which document batch should be checked?" as batch
+Ask JEV with batch as evaluation
+
+# Results stay inside the governed run unless the response policy approves them.
+Respond with record with "Document checks evaluated. Review results before changing checklist state." as message and evaluation as evaluation

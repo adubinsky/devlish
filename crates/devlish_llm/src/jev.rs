@@ -319,24 +319,25 @@ fn distribution(p: &BTreeMap<String, f64>) -> bool {
         && (p.values().sum::<f64>() - 1.0).abs() <= 0.001
 }
 
-/// Calls only TypeSafe. Retries only explicit 429/529 responses, twice at most.
-/// Idempotency is retained locally and in the header; TypeSafe does not document
-/// deduplication guarantees. Timeout/transport failures are never retried here.
-pub fn evaluate(
+/// Only an authenticated model route supplies these transport bounds.
+pub(crate) struct Limits {
+    pub timeout: Duration,
+    pub max_request_bytes: usize,
+    pub max_response_bytes: usize,
+}
+
+/// One authorized effect is exactly one provider attempt. Any retry needs a new
+/// policy decision and consumes the existing model-effect budget.
+pub(crate) fn evaluate_approved(
     batch: &Batch,
     credentials: &dyn CredentialResolver,
     trace: &mut dyn FnMut(Value),
+    limits: Limits,
 ) -> Result<ResultBatch, Error> {
-    send(
-        batch,
-        credentials,
-        trace,
-        ENDPOINT,
-        true,
-        Duration::from_secs(1),
-    )
+    send_config(batch, credentials, trace, ENDPOINT, true, limits)
 }
 
+#[cfg(test)]
 fn send(
     batch: &Batch,
     credentials: &dyn CredentialResolver,
@@ -356,19 +357,45 @@ fn send(
     )
 }
 
+#[cfg(test)]
 fn send_with_timeout(
     batch: &Batch,
     credentials: &dyn CredentialResolver,
     trace: &mut dyn FnMut(Value),
     endpoint: &str,
     https_only: bool,
-    backoff: Duration,
+    _backoff: Duration,
     timeout: Duration,
+) -> Result<ResultBatch, Error> {
+    send_config(
+        batch,
+        credentials,
+        trace,
+        endpoint,
+        https_only,
+        Limits {
+            timeout,
+            max_request_bytes: MAX_BYTES,
+            max_response_bytes: MAX_BYTES,
+        },
+    )
+}
+
+fn send_config(
+    batch: &Batch,
+    credentials: &dyn CredentialResolver,
+    trace: &mut dyn FnMut(Value),
+    endpoint: &str,
+    https_only: bool,
+    limits: Limits,
 ) -> Result<ResultBatch, Error> {
     let start = Instant::now();
     let mut last_attempt = 0;
     let result = (|| {
         let body = batch.body()?;
+        if body.len() > limits.max_request_bytes {
+            return Err(error(ErrorCategory::InvalidRequest));
+        }
         trace(batch.trace("accepted", 0, start));
         let key = credentials
             .resolve("JEV_API_KEY")
@@ -378,10 +405,11 @@ fn send_with_timeout(
             .redirects(0)
             .try_proxy_from_env(false)
             .https_only(https_only)
-            .timeout(timeout)
-            .timeout_connect(timeout)
+            .timeout(limits.timeout)
+            .timeout_connect(limits.timeout)
             .build();
-        for attempt in 1..=3 {
+        {
+            let attempt = 1;
             last_attempt = attempt;
             trace(batch.trace("started", attempt, start));
             let response = agent
@@ -400,9 +428,12 @@ fn send_with_timeout(
                     let mut bytes = Vec::new();
                     response
                         .into_reader()
-                        .take(MAX_BYTES as u64 + 1)
+                        .take(limits.max_response_bytes as u64 + 1)
                         .read_to_end(&mut bytes)
                         .map_err(|e| uncertain_transport(is_timeout(&e)))?;
+                    if bytes.len() > limits.max_response_bytes {
+                        return Err(error(ErrorCategory::InvalidResponse));
+                    }
                     let result = decode(batch, &bytes, request_id).inspect_err(|_| {
                         trace(batch.trace("validation_failed", attempt, start));
                     })?;
@@ -412,28 +443,19 @@ fn send_with_timeout(
                     event["request_id"] = json!(result.request_id);
                     event["usage"] = json!(result.usage);
                     trace(event);
-                    return Ok(result);
+                    Ok(result)
                 }
-                Err(ureq::Error::Status(status, _))
-                    if (status == 429 || status == 529) && attempt < 3 =>
-                {
-                    let mut event = batch.trace("retry", attempt, start);
-                    event["http_status"] = json!(status);
-                    trace(event);
-                    std::thread::sleep(backoff * (1 << (attempt - 1)));
-                }
-                Err(ureq::Error::Status(status, _)) => return Err(http_error(status)),
+                Err(ureq::Error::Status(status, _)) => Err(http_error(status)),
                 Err(ureq::Error::Transport(t)) => {
                     use std::error::Error as _;
                     let timeout = t
                         .source()
                         .and_then(|e| e.downcast_ref::<std::io::Error>())
                         .is_some_and(is_timeout);
-                    return Err(uncertain_transport(timeout));
+                    Err(uncertain_transport(timeout))
                 }
             }
         }
-        unreachable!()
     })();
     if let Err(e) = &result {
         // Invalid input is not echoed, even through its metadata fields.
@@ -658,8 +680,8 @@ mod tests {
     }
 
     #[test]
-    fn retries_only_explicit_overload_and_preserves_correlation() {
-        let (endpoint, server) = server(vec![429, 529, 200], response().to_string());
+    fn one_attempt_preserves_correlation_and_safe_logs() {
+        let (endpoint, server) = server(vec![200], response().to_string());
         let mut events = Vec::new();
         let r = send(
             &batch(),
@@ -671,9 +693,7 @@ mod tests {
         )
         .unwrap();
         let requests = server.join().unwrap();
-        assert_eq!(requests.len(), 3);
-        assert_eq!(requests[0], requests[1]);
-        assert_eq!(requests[1], requests[2]);
+        assert_eq!(requests.len(), 1);
         assert!(requests[0]
             .to_lowercase()
             .contains("x-correlation-id: synthetic-check-001"));
@@ -683,7 +703,7 @@ mod tests {
         assert_eq!(r.request_id.as_deref(), Some("req-test"));
         assert_eq!(
             events.iter().filter(|v| v["event"] == "jev.retry").count(),
-            2
+            0
         );
         assert_eq!(events.last().unwrap()["event"], "jev.completed");
         let logs = serde_json::to_string(&events).unwrap();
@@ -788,22 +808,31 @@ mod tests {
     }
 
     #[test]
-    fn retries_stop_after_three_attempts() {
-        let (endpoint, server) = server(vec![429, 529, 429], "private error body".into());
-        let mut events = Vec::new();
-        let e = send(
-            &batch(),
-            &Credentials,
-            &mut |v| events.push(v),
-            &endpoint,
-            false,
-            Duration::ZERO,
-        )
-        .unwrap_err();
-        assert_eq!(e.category, ErrorCategory::RateLimit);
-        assert!(e.retryable);
-        assert!(!e.outcome_uncertain);
-        assert_eq!(server.join().unwrap().len(), 3);
+    fn overload_does_not_retry_outside_the_effect_budget() {
+        for status in [429, 529] {
+            let (endpoint, server) = server(vec![status], "private error body".into());
+            let mut events = Vec::new();
+            let e = send(
+                &batch(),
+                &Credentials,
+                &mut |v| events.push(v),
+                &endpoint,
+                false,
+                Duration::ZERO,
+            )
+            .unwrap_err();
+            assert_eq!(
+                e.category,
+                if status == 429 {
+                    ErrorCategory::RateLimit
+                } else {
+                    ErrorCategory::Unavailable
+                }
+            );
+            assert!(e.retryable);
+            assert!(!e.outcome_uncertain);
+            assert_eq!(server.join().unwrap().len(), 1);
+        }
     }
 
     #[test]

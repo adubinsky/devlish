@@ -1,0 +1,7 @@
+{
+  "format": "devlish-runtime-permissions",
+  "format_version": 1,
+  "allowed_effects": ["llm_complete", "respond"],
+  "instruction_limit": 50000,
+  "effect_budget": {"total": 2, "per_effect": {"llm_complete": 1, "respond": 1}}
+}

@@ -1,9 +1,64 @@
 # Typed JEV document batches (DEVL-216)
 
 The `devlish_llm::jev` adapter evaluates readable document text against named,
-versioned questions using TypeSafe's fixed HTTPS endpoint. It is separate from
-the existing chat completion providers. A failed JEV request never falls back
-to OpenAI or another model.
+versioned questions using TypeSafe's fixed HTTPS endpoint. `Ask JEV with batch
+as evaluation` compiles to the existing `LLM_COMPLETE` operation and
+`llm_complete` host effect. It uses the same manifest permission, executable
+policy, release permissions, attempt budget, dispatch deadline and audit
+recorder as other governed model calls. It never falls back to another provider.
+
+Live calls are available only through an authenticated model route in a
+verified session. Plain `run`, legacy `harness run`, and the legacy HTTP/MCP
+service cannot dispatch JEV. The verified CLI and verified service share the
+same admitted session and native host. A parser statement alone is not admission.
+
+## The DVL workflow
+
+See [check.dvl](../examples/jev_checklist/check.dvl),
+[policy.dvl](../examples/jev_checklist/policy.dvl), and their catalog and
+permission controls. The essential call is:
+
+```text
+Permissions:
+  Call language models
+
+Ask "Which document batch should be checked?" as batch
+Ask JEV with batch as evaluation
+Respond with evaluation
+```
+
+This last statement requests a disclosure effect too. The separate policy must
+authorize the result and destination before the native response sink receives it.
+The complete example permits only a fixed synthetic document and exact versioned
+questions. It does not permit checklist writes or human approval.
+
+The approved catalog route pins `provider: jev`, an explicit model version,
+`credential: JEV_API_KEY`, timeout and byte limits. JEV routes reject model
+aliases, arbitrary endpoints, alternate credentials and chat-only token controls.
+The authenticated release binds this catalog and permissions along with the
+program, policy and runtime. Changing a catalog file invalidates its release pin.
+
+Run the full example with real security checks and recorded provider data offline:
+
+```bash
+CARGO_PROFILE_DEV_DEBUG=0 CARGO_PROFILE_TEST_DEBUG=0 \
+  cargo test --locked --manifest-path crates/devlish_core/Cargo.toml --test jev_checklist
+```
+
+For an actual deployed invocation, the operator must build and approve the new
+runtime and compiled DVL/policy, include the catalog/permissions in the signed
+release, and provide the protected profile and credentials:
+
+```bash
+DEVLISH_VERIFIED_PROFILE=/operator/jev/profile.json \
+  devlish-core run-verified --policy-log /protected/logs/new-session.jsonl \
+  --session-id document-check-001 --input '{"batch": <document-batch-object>}'
+```
+
+The input placeholder must be replaced with valid JSON. This is an invocation
+shape, not a prebuilt production release. Existing approval, signing, trust,
+revocation and admission-state requirements remain unchanged. Do not substitute
+a test-generated signing key for the operator's production trust.
 
 ## Run the synthetic example
 
@@ -17,16 +72,9 @@ The default run validates a recorded response fixture without contacting
 the provider. The response was captured from a live synthetic smoke test on
 October 9, 2026, using `jev-1.13.0` (577 input tokens, 116 output tokens). The
 batch includes document classification, a liability assertion, a yes/no
-question, and a rubric score. To evaluate the same synthetic document live,
-provide `JEV_API_KEY` through your existing credential environment and run:
-
-```bash
-cargo run --manifest-path crates/devlish_llm/Cargo.toml --example jev_document_batch -- --live
-```
-
-The example prints the typed result to stdout and safe execution events to
-stderr. Results are application data and should go into protected persistence,
-not general logs. No real seller document is included in this example.
+question, and a rubric score. This Rust example is now an offline decoder test
+only. Its former `--live` path was removed because it bypassed the Devlish run
+security boundary. No real seller document is included.
 
 ```bash
 cargo test --manifest-path crates/devlish_llm/Cargo.toml
@@ -45,7 +93,7 @@ cargo test --manifest-path crates/devlish_llm/Cargo.toml
 - Responses must contain exactly the requested question IDs and matching
   answer types. Probabilities, confidence, choice keys, score bounds, weighted
   scores and rubric legends are validated. A pinned requested model must
-  match the actual returned model. Alias requests preserve the actual model.
+  match the actual returned model. Verified JEV routes require pinned versions.
 - Results preserve question versions, token usage, optional provider request
   ID, local identifiers and SHA-256 of the exact UTF-8 text sent. That digest
   is not the source PDF checksum. DealStar must retain its source checksum
@@ -59,34 +107,37 @@ The API boundary is documented in the [official API reference](https://docs.type
 
 ## Execution and logs
 
-`evaluate` accepts a `CredentialResolver` and an event callback. Callers can
-route events to the existing harness logger and error monitoring provider.
-Credentials are resolved only under `JEV_API_KEY`. Requests have a 30-second
-timeout and a 1 MiB encoded request/response limit. Redirects and environment
-HTTP proxies are disabled.
+Live transport is crate-private and dispatched by `ApprovedModel` after native
+verified admission and effect authorization. Credentials resolve from the
+operator-owned credential environment/directory, not program-local dotenv files
+or caller-selected keys. Safe provider events go through the native logger.
+The signed route supplies timeout and byte limits (each JEV payload is capped
+at 1 MiB). Redirects and environment HTTP proxies are disabled.
 
-Explicit 429 and 529 responses receive at most two retries, with 1- and
-2-second backoff. Headers and payload remain identical across retries. The
-idempotency header is a correlation aid: TypeSafe does not document a server
-deduplication guarantee. Transport failures are marked outcome-uncertain and
-are not retried automatically. Callers should investigate before replaying.
+Every authorized model effect makes exactly one provider attempt. There are no
+hidden transport retries, including 429/529 responses. Any retry must be a new
+governed effect, receive another policy decision, and consume an attempt budget.
+The idempotency header is a correlation aid, not a documented server deduplication
+guarantee. Transport failures are outcome-uncertain. Investigate before retrying.
 
-Events include accepted, started, retry, decoded, validation_failed, failed
+Events include accepted, started, decoded, validation_failed, failed
 and completed. The allowlist includes correlation ID, document ID/text digest,
 question IDs/versions, model, attempt, elapsed time, request ID and token usage.
 It excludes document text, instructions, answers, credentials, raw HTTP bodies
 and signed URLs. Use opaque identifiers, not customer names, for metadata.
 Errors expose categories and HTTP status without private provider messages.
-The callback should be fast and should not panic.
+Ordinary verified policy logs retain request/result/error hashes and policy
+decisions without raw text or answers. Full typed exchanges for offline replay
+require the existing operator-authorized evidence opt-in and protected storage.
+Verified completion does not return the VM's private context/results. This
+sample permits disclosure only through a policy-authorized `Respond` effect.
 
 ## DealStar integration still to build
 
-This slice supplies a Rust API and runnable example. It does not yet expose a
-Devlish language statement, connect Rails jobs, change checklist state, write
-human activity history or forward events to Sentry automatically. The generic
-`Ask the model` statement remains unchanged. Before adding a document batch
-statement, give its journal a redacted input/output policy so raw document text
-and typed answers are not accidentally saved in generic execution logs.
+This slice now supplies a DVL statement, approved JEV route, governed execution
+tests, and synthetic program/policy/catalog examples. It does not yet connect
+Rails jobs, change checklist state, write human activity history or forward
+events to Sentry automatically. Those application connections remain to build.
 
 DealStar should keep deterministic folder presence checks local, use this
 provider for semantic checks in shadow mode, persist immutable results, and
