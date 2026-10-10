@@ -1,0 +1,33 @@
+{
+  "correlation_id": "synthetic-check-001",
+  "idempotency_key": "synthetic-check-001:v1",
+  "document_id": "synthetic-document-001",
+  "model": "jev-latest",
+  "document_text": "SYNTHETIC TEST DOCUMENT. Certificate of Insurance. Insured: Example Solar LLC. Policy period: January 1, 2026 to December 31, 2026. General liability limit: USD 1,000,000. This certificate is unsigned. No real customer information.",
+  "questions": {
+    "document_type": {
+      "version": "v1",
+      "question": {
+        "type": "choice",
+        "instructions": "Classify the document using only the supplied text.",
+        "criteria": {"insurance": "Certificate of insurance", "other": "Another document type", "uncertain": "Insufficient information to classify"}
+      }
+    },
+    "liability_requirement": {
+      "version": "v1",
+      "question": {
+        "type": "choice",
+        "instructions": "Does the text state a general liability limit of at least USD 1,000,000? Do not infer missing information.",
+        "criteria": {"matches": "The stated limit meets the requirement", "differs": "The stated limit is below the requirement", "not_in_document": "The limit cannot be established from the text"}
+      }
+    },
+    "signed": {
+      "version": "v1",
+      "question": {"type": "noul", "instructions": "Does the supplied text say this certificate is signed?"}
+    },
+    "readability": {
+      "version": "v1",
+      "question": {"type": "score", "instructions": "Rate whether the supplied text identifies the document and its coverage.", "criteria": ["No readable coverage information", "Some coverage information", "Clear document identity and coverage information"]}
+    }
+  }
+}
