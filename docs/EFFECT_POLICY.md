@@ -111,7 +111,10 @@ reconstruct inputs or replay effects.
 
 This increment provides the shared `devlish_vm::policy::PolicyHost` boundary
 and CLI `run` integration. Unflagged runs retain their existing behavior.
-`harness`, HTTP, MCP, and browser entry points do not yet install this boundary.
+`harness run` and `harness resume` also accept `--policy`, `--policy-log`, and
+`--default-authorization`. `harness generate` uses a fixed authoring policy
+and requires a fresh `--policy-log`. HTTP, MCP, and browser entry points do not
+yet install this boundary.
 A future governed service must install it from operator-owned configuration,
 never from a request's proposed policy.
 

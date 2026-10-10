@@ -117,3 +117,41 @@ The HTTP service currently uses its existing shared service host, with a smaller
 set of effects than the prompt/file host. Session persistence, governed local
 HTTP tool dispatch, and signed production service setup are separate capabilities.
 See [the endpoint guide](SERVE_QUICKSTART.md).
+
+## Harness artifact generation
+
+The harness can ask the configured live model to author a program and its
+acceptance policy from an operator-written text contract:
+
+```bash
+devlish harness generate contract.txt --output-dir /absolute/challenge \
+  --policy-log /absolute/generation-policy.jsonl
+```
+
+The output directory must exist. The harness refuses existing `program.dvl`
+or `policy.dvl` paths. The model receives the current language reference,
+grammar, effect-policy reference, and contract; it returns JSON string fields
+`program` and `policy`. A fixed authoring workflow calls the model and writes
+those strings unchanged through the shared policy-governed runtime. The
+fixed authoring policy permits model completion, response, and writes to only
+these two operator-selected paths. The generated policy never governs its own
+generation. Generation does not execute the generated program.
+
+The command prints a session path under `~/.devlish/sessions/`. That session
+captures the authoring workflow and returned artifact text, including failed
+runs. Sessions may contain sensitive model output; keep them local. A failed
+write can leave a partial artifact pair: inspect the log before retrying, and
+use a new output directory for another generation.
+
+Acceptance is a separate invocation with the generated policy and a fresh log:
+
+```bash
+devlish harness run /absolute/challenge/program.dvl \
+  --policy /absolute/challenge/policy.dvl \
+  --policy-log /absolute/acceptance-policy.jsonl \
+  --default-authorization deny-unless-allowed
+```
+
+Compare both artifact files with the generation session's `result.response`
+fields before acceptance. Generation provenance alone does not prove that an
+acceptance contract passed.

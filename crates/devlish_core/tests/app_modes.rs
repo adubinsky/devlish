@@ -423,3 +423,31 @@ Respond with record with false as allow and "Denied by default." as reason
     }));
     assert!(!f.0.join("out.txt").exists());
 }
+
+#[test]
+fn harness_generation_requires_logging_and_preserves_existing_artifacts() {
+    let f = Fixture::new();
+    fs::write(f.0.join("contract.txt"), "Read fixture and respond.").unwrap();
+    let missing_log = f.command().args([
+        "harness", "generate", "contract.txt", "--output-dir", ".",
+    ]).output().unwrap();
+    assert!(!missing_log.status.success());
+    assert!(String::from_utf8_lossy(&missing_log.stderr).contains("--policy-log is required"));
+    let overlapping_log = f.command().args([
+        "harness", "generate", "contract.txt", "--output-dir", ".",
+        "--policy-log", "program.dvl",
+    ]).output().unwrap();
+    assert!(!overlapping_log.status.success());
+    assert!(String::from_utf8_lossy(&overlapping_log.stderr).contains("separate from generated artifacts"));
+    assert!(!f.0.join("program.dvl").exists());
+    fs::write(f.0.join("program.dvl"), "existing artifact").unwrap();
+    let existing = f.command().args([
+        "harness", "generate", "contract.txt", "--output-dir", ".",
+        "--policy-log", "generation.jsonl",
+    ]).output().unwrap();
+    assert!(!existing.status.success());
+    assert!(String::from_utf8_lossy(&existing.stderr).contains("refusing to replace"));
+    assert_eq!(fs::read_to_string(f.0.join("program.dvl")).unwrap(), "existing artifact");
+    assert!(!f.0.join("generation.jsonl").exists());
+    assert!(!f.0.join("policy.dvl").exists());
+}
