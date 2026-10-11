@@ -1,0 +1,10 @@
+Rule:
+  id: devlish.interactive_policy
+  version: 1.0.0
+
+Ask "Which effect?" as effect
+If effect equals "llm_complete":
+  Respond with record with "allow" as decision and "The user submits this conversation to the configured model." as reason
+If effect equals "respond":
+  Respond with record with "allow" as decision and "Display the model response in the user's terminal." as reason
+Respond with record with "deny" as decision and "The built-in chat policy permits no other effects." as reason

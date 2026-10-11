@@ -1,0 +1,32 @@
+Rule:
+  id: harness.company_ip_publication
+  version: 1.0.0
+
+Ask "Which effect is requested?" as effect
+Ask "What arguments are requested?" as request
+approved_prompt equals "Order two approved public excerpts. Return JSON with only steps, a list of two records containing only action and excerpt_id. Use action publish_excerpt with public_overview and public_integration exactly once each. Do not supply text, destinations, code, or additional fields."
+If effect equals "llm_complete":
+  model_shape equals record with "text" as prompt and "boolean" as expect_json
+  If request matches shape model_shape:
+    If count of keys of request equals 2:
+      If expect_json of request equals true and prompt of request equals approved_prompt:
+        Respond with record with true as allow and "Only the approved public-excerpt planning prompt may reach the model." as reason
+
+If effect equals "call_service":
+  If count of keys of request equals 3:
+    If service of request equals "publicnotes" and action of request equals "create":
+      details equals arguments of request
+      tool_shape equals record with "text" as channel and "text" as excerpt_id and "text" as text
+      If details matches shape tool_shape:
+        If count of keys of details equals 3:
+          If channel of details equals "public-release-notes":
+            If excerpt_id of details equals "public_overview" and text of details equals "The product supports governed workflow automation.":
+              Respond with record with true as allow and "The publication text exactly matches an operator-approved public excerpt." as reason
+            If excerpt_id of details equals "public_integration" and text of details equals "The product offers CLI and HTTP integration.":
+              Respond with record with true as allow and "The publication text exactly matches an operator-approved public excerpt." as reason
+
+If effect equals "respond":
+  If count of keys of request equals 1:
+    If value of request equals "Approved public excerpts recorded." or value of request equals "Publication was not requested.":
+      Respond with record with true as allow and "Only a fixed acknowledgement may leave the harness." as reason
+Respond with record with false as allow and "Private drafts, arbitrary text, destinations and uncatalogued effects must remain local." as reason

@@ -1,4 +1,6 @@
+use devlish_core::policy_log::PolicyLog;
 use devlish_core::{compile_source_to_json, parse_iso_date, sha256_hex, CompileOptions};
+use devlish_vm::policy::{EffectPolicy, PolicyHost, PolicyRecorder};
 use devlish_vm::{HostEffects, Vm};
 use serde_json::{json, Value};
 use std::env;
@@ -8,7 +10,15 @@ use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
 mod harness;
+mod prompt;
+mod reports;
 mod serve;
+#[cfg(feature = "native")]
+mod verified_run;
+#[cfg(feature = "native")]
+mod verified_serve;
+#[cfg(feature = "native")]
+mod verified_credentials;
 
 use devlish_core::logutil;
 
@@ -72,10 +82,26 @@ fn main() -> ExitCode {
 }
 
 fn run(args: Vec<String>) -> Result<(), String> {
+    if env::var_os("DEVLISH_VERIFIED_PROFILE").is_some()
+        && !args.first().is_some_and(|a| {
+            [
+                "run-verified",
+                "serve-verified",
+                "help",
+                "--help",
+                "-h",
+                "version",
+                "--version",
+                "-v",
+            ]
+            .contains(&a.as_str())
+        })
+    {
+        return Err("verified profile requires run-verified or serve-verified; other execution routes are disabled".into());
+    }
     logutil::init_from_env_and_args(&args)?;
     if args.is_empty() {
-        print_help();
-        return Ok(());
+        return harness::run_harness(vec!["harness".into()]);
     }
 
     match args[0].as_str() {
@@ -87,8 +113,32 @@ fn run(args: Vec<String>) -> Result<(), String> {
             println!("Devlish {VERSION}");
             Ok(())
         }
+        "report" => reports::run(args),
+        "artifact" => run_artifact(args),
         "compile" => run_compile(args),
-        "run" => run_execute(args),
+        "--run" | "-r" if args.len() == 2 && ["--help", "-h"].contains(&args[1].as_str()) => {
+            print_help();
+            Ok(())
+        }
+        "--run" | "-r" | "run" => run_execute(args),
+        #[cfg(feature = "native")]
+        "run-verified" => verified_run::run(args).map_err(|error| {
+            format!(
+                "verified execution rejected; diagnostic sha256: {}",
+                sha256_hex(error.as_bytes())
+            )
+        }),
+        #[cfg(not(feature = "native"))]
+        "run-verified" => Err("verified execution requires the native feature".into()),
+        #[cfg(feature = "native")]
+        "serve-verified" => verified_serve::run(args).map_err(|error| {
+            format!(
+                "verified service rejected; diagnostic sha256: {}",
+                sha256_hex(error.as_bytes())
+            )
+        }),
+        #[cfg(not(feature = "native"))]
+        "serve-verified" => Err("verified service requires the native feature".into()),
         "disassemble" => run_disassemble(args),
         "validate" => run_validate(args),
         "lint" => run_lint(args),
@@ -99,7 +149,7 @@ fn run(args: Vec<String>) -> Result<(), String> {
         "new" => run_new(args),
         "mcp" => run_mcp(args),
         "harness" => harness::run_harness(args),
-        "serve" => serve::run_serve(args),
+        "--server" | "-s" | "serve" => serve::run_serve(args),
         "course" => run_course(args),
         "fmt" | "format" => run_format(args),
         "repl" => run_repl(args),
@@ -119,56 +169,34 @@ fn looks_like_file(arg: &str) -> bool {
 
 fn print_help() {
     println!(
-        "Devlish {VERSION} - AI-first programming language
+        "Devlish {VERSION}
 
-Usage: devlish-core <command> [options]
+Usage:
+  devlish                      Open the interactive model prompt
+  devlish --run FILE            Execute a Devlish workflow (-r)
+  devlish --server              Start the long-lived HTTP service (-s)
 
-Commands:
-  compile <file.dvl>          Compile a Devlish source file to bytecode
-  run <file>                  Run a compiled bytecode file or source file
-  disassemble <file.dvlc.json>  Disassemble a bytecode package
-  validate <file.dvl>         Validate a source file (alias: lint)
-  lint <file.dvl>             Validate a source file (alias: validate)
-  evidence <rule.dvl>         Run golden cases and emit a signed evidence report
-  audit-verify <log.jsonl>    Verify the hash chain of an audit log
-  replay <log.jsonl>          Re-run a journaled governed run offline and verify its output
-  release <verb>              Release lifecycle: propose, approve, publish, retire, list, verify
-  new <project_name>          Create a new Devlish project
-  mcp                         Start MCP server (JSON-RPC over stdio)
-  harness <verb>              Outbound LLM harness: run, resume, init-config
-  serve                       Start HTTP API daemon (compile/run/lint/harness)
-  course                      Walk through the interactive beginner course
-  fmt <file.dvl>              Format a Devlish source file
-  repl                        Interactive read-eval-print loop
-  version                     Show version
-  help                        Show this help
+File mode compiles source automatically. No separate compile step is needed.
+Server mode stays in the foreground until stopped; default: 127.0.0.1:7420.
 
-Options:
-  -h, --help                  Show this help
-  -v, --version               Show version
+Optional file settings:
+  --input JSON                 Workflow input
+  --provider NAME --model ID   Override configured model settings
+  --policy FILE --policy-log FILE
+                               Enforce policy and record its decisions
+  --default-authorization allow-unless-forbidden|deny-unless-allowed
+                               Choose the default for policy abstentions
+  --quiet                     Suppress execution events
 
-Compile options:
-  --target bytecode           Compilation target (only bytecode supported)
-  --output, -o <path>         Write output to file instead of stdout
+Optional server setting:
+  --bind HOST:PORT              Listening address
 
-Run options:
-  --input <json>              Input data as JSON string
-  --method <name>             Method to invoke (for class-based programs)
-  --env KEY=VALUE             Set a credential/environment variable (repeatable)
-  --audit-log <path>          Append governed-run audit records to a JSONL log
-                              (falls back to DEVLISH_AUDIT_LOG)
-  --journal <dir>             Archive input, bytecode, and every effect exchange
-                              as content-addressed attachments (enables replay;
-                              requires --audit-log)
-  --governed <registry.json>  Refuse to run any artifact that is not a published
-                              release in the registry
-  --quiet                     Shorthand for --log-level error (suppress VM events)
-  --log-level LEVEL           error | info | debug (default info; or DEVLISH_LOG)
-  --provider NAME             Outbound LLM provider: openai, openrouter, anthropic, ollama
-  --model NAME                Outbound LLM model id
+  -h, --help                   Show help
+  -v, --version                Show version
 
-Implicit run:
-  devlish-core <file.dvl>     Equivalent to: devlish-core run <file.dvl>"
+Model settings: ~/.devlish/config.toml (or DEVLISH_CONFIG).
+Prompt customization: .devlish/agent.dvl and .devlish/policy.dvl.
+Developer and audit interfaces remain available for existing integrations."
     );
 }
 
@@ -192,6 +220,21 @@ fn run_compile(args: Vec<String>) -> Result<(), String> {
     } else {
         println!("{json}");
     }
+    Ok(())
+}
+
+fn run_artifact(args: Vec<String>) -> Result<(), String> {
+    let usage = "Usage: devlish artifact hash <file> | artifact verify <file> --sha256 <trusted-digest>";
+    let verb = args.get(1).map(String::as_str).ok_or(usage)?;
+    let path = Path::new(args.get(2).ok_or(usage)?);
+    let (bytes, verified) = match verb {
+        "hash" if args.len() == 3 => (devlish_core::integrity::read_regular_file(path)?, false),
+        "verify" if args.len() == 5 && args[3] == "--sha256" =>
+            (devlish_core::integrity::read_verified(path, &args[4])?, true),
+        _ => return Err(usage.into()),
+    };
+    println!("{}", json!({"path":path, "sha256":sha256_hex(&bytes),
+        "bytes":bytes.len(), "digest_matches":verified, "signature_verified":false}));
     Ok(())
 }
 
@@ -299,7 +342,53 @@ fn select_effective_version(
 }
 
 fn run_execute(args: Vec<String>) -> Result<(), String> {
-    let config = RunConfig::parse(args)?;
+    execute_config(RunConfig::parse(args)?, None, None).map(|_| ())
+}
+
+fn execute_config(
+    config: RunConfig,
+    program_override: Option<Value>,
+    policy_override: Option<Value>,
+) -> Result<Value, String> {
+    if config.policy.is_some() != config.policy_log.is_some() {
+        return Err("--policy and --policy-log must be supplied together".into());
+    }
+    if config.policy.is_some() && config.journal.is_some() {
+        return Err("--policy cannot be combined with legacy --journal replay; use --policy-evidence and report process".into());
+    }
+    if config.policy_evidence && config.policy.is_none() {
+        return Err("--policy-evidence requires --policy and --policy-log".into());
+    }
+    if config.default_authorization.is_some() && config.policy.is_none() {
+        return Err("--default-authorization requires --policy and --policy-log".into());
+    }
+    if config.policy_sha256.is_some() && config.policy.is_none() {
+        return Err("--policy-sha256 requires --policy".into());
+    }
+    let policy = config.policy.as_ref().map(|path| {
+        let mut policy = if let Some(expected) = &config.policy_sha256 {
+            if path.extension().is_some_and(|ext| ext == "dvl") {
+                return Err("--policy-sha256 requires compiled bytecode; compile the policy first".into());
+            }
+            let bytes = devlish_core::integrity::read_verified(path, expected)?;
+            // Execute the exact verified buffer, never reopen the pathname.
+            let package = serde_json::from_slice(&bytes)
+                .map_err(|e| format!("invalid verified policy bytecode: {e}"))?;
+            EffectPolicy::new(package)?
+        } else {
+            EffectPolicy::new(match &policy_override {
+                Some(package) => package.clone(),
+                None => load_package(path)?,
+            })?
+        };
+        if let Some(expected) = &config.policy_sha256 {
+            policy.set_file_digest(expected.to_ascii_lowercase());
+        }
+        if let Some(posture) = &config.default_authorization {
+            policy.set_default_authorization(posture)?;
+        }
+        Ok::<_, String>(policy)
+    }).transpose()?;
     if config.journal.is_some()
         && config.audit_log.is_none()
         && env::var("DEVLISH_AUDIT_LOG")
@@ -312,7 +401,9 @@ fn run_execute(args: Vec<String>) -> Result<(), String> {
         );
     }
 
-    let package: Value = if let Some(as_of) = &config.as_of {
+    let package: Value = if let Some(package) = program_override {
+        package
+    } else if let Some(as_of) = &config.as_of {
         // Gather every candidate version, then pick the one in force on the date.
         let mut versions: Vec<(PathBuf, Value)> = Vec::new();
         for path in std::iter::once(&config.input).chain(config.extra_inputs.iter()) {
@@ -397,6 +488,10 @@ fn run_execute(args: Vec<String>) -> Result<(), String> {
         CredentialStore::new(&config.env_overrides, Some(&config.input)),
         audit_path.map(AuditLogWriter::new),
     );
+    native.local_tools = Some(devlish_core::local_tools::LocalTools::new(
+        &env::current_dir().map_err(|_| "local working directory unavailable")?,
+        &env::var_os("PATH").unwrap_or_default(),
+    )?);
     native.llm_provider = config.provider.clone();
     native.llm_model = config.model.clone();
     let mut journaling_host;
@@ -417,6 +512,18 @@ fn run_execute(args: Vec<String>) -> Result<(), String> {
             &mut plain_host
         }
     };
+    let mut policy_log = match (&policy, &config.policy_log) {
+        (Some(policy), Some(path)) => {
+            Some(PolicyLog::create_for_run(path, policy.identity(), &package, &input, !config.quiet, config.policy_evidence)?)
+        }
+        _ => None,
+    };
+    if let (Some(log), Some(limit), Some(budget)) = (
+        policy_log.as_mut(), config.prompt_instruction_limit, config.prompt_budget.as_ref()
+    ) {
+        log.record(&json!({"type":"prompt_limits_captured", "instruction_limit":limit,
+            "effect_budget":budget.to_value()}))?;
+    }
     let vm = Vm::new(package, input);
     match vm {
         Err(error) => {
@@ -436,7 +543,32 @@ fn run_execute(args: Vec<String>) -> Result<(), String> {
             if config.quiet {
                 vm.set_emit_events(false);
             }
-            match vm.run(host) {
+            if let Some(limit) = config.prompt_instruction_limit {
+                vm.set_instruction_limit(limit);
+            }
+            let execution = match (&policy, policy_log.as_mut()) {
+                (Some(policy), Some(log)) => {
+                    let guarded = PolicyHost::new(host, policy, log);
+                    let guarded = if let Some(budget) = config.prompt_budget.clone() {
+                        guarded.with_effect_budget(budget)
+                    } else { guarded };
+                    let mut guarded = if config.policy_evidence { guarded.with_evidence() } else { guarded };
+                    let result = vm.run(&mut guarded);
+                    if guarded.recording_failed() {
+                        return Err("policy recording failed; run cannot report success".into());
+                    }
+                    let result_value = match &result {
+                        Ok(value) => json!({"ok":value}),
+                        Err(error) => json!({"err":error.message}),
+                    };
+                    log.record(&json!({"type":"policy_run_finished", "success": result.is_ok(),
+                        "paused": result_value.pointer("/ok/is_checkpoint").and_then(Value::as_bool).unwrap_or(false),
+                        "result_sha256":sha256_hex(&serde_json::to_vec(&result_value).map_err(|e| e.to_string())?)}))?;
+                    result
+                }
+                _ => vm.run(host),
+            };
+            match execution {
                 Ok(result) => {
                     // If the program used "Respond with", the output was already
                     // written to stdout by host.respond(). Don't dump the full
@@ -469,7 +601,7 @@ fn run_execute(args: Vec<String>) -> Result<(), String> {
                             }
                         }
                     }
-                    Ok(())
+                    Ok(result)
                 }
                 Err(error) => {
                     // If the error message is valid JSON (from Fail with record),
@@ -1234,6 +1366,8 @@ fn capitalize(s: &str) -> String {
 /// Credentials flow only to host methods, never to program variables.
 struct CredentialStore {
     entries: Vec<(String, String)>,
+    #[cfg(feature = "native")]
+    verified_source: Option<verified_credentials::VerifiedCredentials>,
 }
 
 impl CredentialStore {
@@ -1261,10 +1395,29 @@ impl CredentialStore {
             entries.push((key.clone(), value.clone()));
         }
 
-        Self { entries }
+        Self {
+            entries,
+            #[cfg(feature = "native")]
+            verified_source: None,
+        }
+    }
+
+    #[cfg(feature = "native")]
+    fn verified() -> Result<Self, String> {
+        let directory = env::var_os("DEVLISH_CREDENTIALS_DIR").map(PathBuf::from);
+        Ok(Self {
+            entries: Vec::new(),
+            verified_source: Some(verified_credentials::VerifiedCredentials::new(
+                directory.as_deref(),
+            )?),
+        })
     }
 
     fn resolve(&self, key: &str) -> Option<String> {
+        #[cfg(feature = "native")]
+        if let Some(source) = &self.verified_source {
+            return source.resolve(key);
+        }
         // Walk entries in reverse so later (higher priority) entries win
         for (k, v) in self.entries.iter().rev() {
             if k == key {
@@ -1298,7 +1451,31 @@ fn parse_dotenv(content: &str, entries: &mut Vec<(String, String)>) {
     }
 }
 
+const GOOGLE_ADDRESS_VALIDATION_URL: &str = "https://addressvalidation.googleapis.com/v1:validateAddress";
+
+#[cfg(feature = "native")]
+fn authorize_http_request(
+    credentials: &CredentialStore,
+    method: &str,
+    url: &str,
+    mut request: ureq::Request,
+) -> ureq::Request {
+    // This credential is host-owned and only reaches its exact intended API.
+    if method == "POST" && url == GOOGLE_ADDRESS_VALIDATION_URL {
+        if let Some(key) = credentials.resolve("GOOGLE_ADDRESS_VALIDATION_API_KEY").filter(|key| !key.is_empty()) {
+            return request.set("X-Goog-Api-Key", &key);
+        }
+    }
+    if let Some(token) = credentials.resolve("BEARER_TOKEN").or_else(|| credentials.resolve("HTTP_AUTH_TOKEN")) {
+        request = request.set("Authorization", &format!("Bearer {token}"));
+    } else if let Some(key) = credentials.resolve("API_KEY") {
+        request = request.set("X-API-Key", &key);
+    }
+    request
+}
+
 struct NativeHost {
+    local_tools: Option<devlish_core::local_tools::LocalTools>,
     credentials: CredentialStore,
     /// Present when `--audit-log` / `DEVLISH_AUDIT_LOG` is set: governed
     /// runs append hash-chained provenance records to this log.
@@ -1306,6 +1483,11 @@ struct NativeHost {
     /// Outbound LLM defaults (from CLI harness / serve).
     llm_provider: Option<String>,
     llm_model: Option<String>,
+    // Outer Some means verified mode; inner None must never fall back to user config.
+    #[cfg(feature = "native")]
+    verified_model_route: Option<Option<devlish_llm::governed::ApprovedModel>>,
+    #[cfg(feature = "native")]
+    response_buffer: Option<verified_serve::ResponseBuffer>,
     rng_state: u64,
 }
 
@@ -1321,10 +1503,15 @@ impl NativeHost {
             .unwrap_or(0)
             .hash(&mut hasher);
         Self {
+            local_tools: None,
             credentials,
             audit_log,
             llm_provider: None,
             llm_model: None,
+            #[cfg(feature = "native")]
+            verified_model_route: None,
+            #[cfg(feature = "native")]
+            response_buffer: None,
             rng_state: hasher.finish() | 1,
         }
     }
@@ -1552,6 +1739,12 @@ impl<H: HostEffects> HostEffects for JournalingHost<H> {
     fn call_service(&mut self, request: &Value) -> Result<Value, String> {
         let result = self.inner.call_service(request);
         self.journal_value("call_service", request.clone(), &result);
+        result
+    }
+
+    fn run_tool(&mut self, request: &Value) -> Result<Value, String> {
+        let result = self.inner.run_tool(request);
+        self.journal_value("run_tool", request.clone(), &result);
         result
     }
 
@@ -1806,6 +1999,10 @@ impl HostEffects for ReplayHost {
 
     fn call_service(&mut self, request: &Value) -> Result<Value, String> {
         self.next("call_service", request)
+    }
+
+    fn run_tool(&mut self, request: &Value) -> Result<Value, String> {
+        self.next("run_tool", request)
     }
 
     fn http_request(
@@ -2658,6 +2855,10 @@ fn native_effect_disabled(effect: &str) -> String {
 }
 
 impl HostEffects for NativeHost {
+    fn run_tool(&mut self, request: &Value) -> Result<Value, String> {
+        self.local_tools.as_ref().ok_or("local tool execution is not configured for this host")?.run(request)
+    }
+
     fn audit_record(&mut self, record: &Value) -> Result<(), String> {
         match &mut self.audit_log {
             Some(writer) => writer.append(record),
@@ -2902,6 +3103,10 @@ impl HostEffects for NativeHost {
     }
 
     fn respond(&mut self, value: &Value) -> Result<(), String> {
+        #[cfg(feature = "native")]
+        if let Some(buffer) = &mut self.response_buffer {
+            return buffer.push(value);
+        }
         let json = serde_json::to_string_pretty(value)
             .map_err(|e| format!("Failed to serialize response: {e}"))?;
         println!("{json}");
@@ -2925,17 +3130,11 @@ impl HostEffects for NativeHost {
             other => return Err(format!("Unsupported HTTP method: {other}")),
         };
 
-        // Inject auth from credentials: check BEARER_TOKEN, HTTP_AUTH_TOKEN,
-        // or API_KEY in the credential store
-        if let Some(token) = self
-            .credentials
-            .resolve("BEARER_TOKEN")
-            .or_else(|| self.credentials.resolve("HTTP_AUTH_TOKEN"))
-        {
-            request = request.set("Authorization", &format!("Bearer {token}"));
-        } else if let Some(api_key) = self.credentials.resolve("API_KEY") {
-            request = request.set("X-API-Key", &api_key);
+        // Google credentials cannot follow a redirect to another destination.
+        if url == GOOGLE_ADDRESS_VALIDATION_URL {
+            request = ureq::AgentBuilder::new().redirects(0).build().request(method, url);
         }
+        request = authorize_http_request(&self.credentials, method, url, request);
 
         // Apply custom headers from the headers parameter
         if let Some(obj) = headers.as_object() {
@@ -3009,6 +3208,12 @@ impl HostEffects for NativeHost {
             fn resolve(&self, key: &str) -> Option<String> {
                 self.0.resolve(key)
             }
+        }
+        if let Some(route) = &self.verified_model_route {
+            let route = route.as_ref().ok_or("verified model route unavailable")?;
+            return route
+                .complete(request, &Creds(&self.credentials))
+                .map(|r| response_value(&r));
         }
         let prompt = request
             .get("prompt")
@@ -3609,6 +3814,8 @@ impl HostEffects for ReplHost {
         let mut native = NativeHost::new(
             CredentialStore {
                 entries: Vec::new(),
+                #[cfg(feature = "native")]
+                verified_source: None,
             },
             None,
         );
@@ -3618,6 +3825,8 @@ impl HostEffects for ReplHost {
         let mut native = NativeHost::new(
             CredentialStore {
                 entries: Vec::new(),
+                #[cfg(feature = "native")]
+                verified_source: None,
             },
             None,
         );
@@ -4269,6 +4478,11 @@ fn mcp_run(args: &Value) -> Value {
         provider,
         model,
         search_paths: devlish_search_paths_for(None),
+        policy_path: None,
+        policy_log: None,
+        default_authorization: None,
+        limits: None,
+        artifact_requirements: None,
     });
     devlish_core::service::to_mcp_content(&result)
 }
@@ -4349,11 +4563,18 @@ struct RunConfig {
     /// Archive the input, bytecode, and every effect exchange for governed
     /// runs into this directory, enabling `devlish replay`.
     journal: Option<PathBuf>,
+    policy: Option<PathBuf>,
+    policy_log: Option<PathBuf>,
+    policy_sha256: Option<String>,
+    policy_evidence: bool,
+    default_authorization: Option<String>,
     /// Refuse to execute any artifact whose hash is not a published release
     /// in this registry (`--governed`).
     governed: Option<PathBuf>,
     provider: Option<String>,
     model: Option<String>,
+    prompt_instruction_limit: Option<u64>,
+    prompt_budget: Option<devlish_vm::effect_budget::EffectBudget>,
 }
 
 impl RunConfig {
@@ -4367,6 +4588,11 @@ impl RunConfig {
         let mut env_overrides = Vec::new();
         let mut audit_log = None;
         let mut journal = None;
+        let mut policy = None;
+        let mut policy_log = None;
+        let mut policy_sha256 = None;
+        let mut policy_evidence = false;
+        let mut default_authorization = None;
         let mut governed = None;
         let mut provider = None;
         let mut model = None;
@@ -4413,6 +4639,31 @@ impl RunConfig {
                         Some(PathBuf::from(args.get(index).ok_or_else(|| {
                             "--audit-log requires a file path".to_string()
                         })?));
+                }
+                "--default-authorization" => {
+                    index += 1;
+                    let posture = args.get(index).ok_or("--default-authorization requires a posture")?;
+                    if !["allow-unless-forbidden", "deny-unless-allowed"].contains(&posture.as_str()) {
+                        return Err("invalid default authorization posture".into());
+                    }
+                    default_authorization = Some(posture.clone());
+                }
+                "--policy-evidence" => policy_evidence = true,
+                "--policy-sha256" => {
+                    index += 1;
+                    policy_sha256 = Some(args.get(index).ok_or("--policy-sha256 requires a digest")?.clone());
+                }
+                "--policy" | "--policy-log" => {
+                    let option = args[index].clone();
+                    index += 1;
+                    let path = PathBuf::from(
+                        args.get(index).ok_or_else(|| format!("{option} requires a path"))?,
+                    );
+                    if option == "--policy" {
+                        policy = Some(path);
+                    } else {
+                        policy_log = Some(path);
+                    }
                 }
                 "--journal" => {
                     index += 1;
@@ -4484,15 +4735,22 @@ impl RunConfig {
             env_overrides,
             audit_log,
             journal,
+            policy,
+            policy_log,
+            policy_sha256,
+            policy_evidence,
+            default_authorization,
             governed,
             provider,
             model,
+            prompt_instruction_limit: None,
+            prompt_budget: None,
         })
     }
 }
 
 fn usage() -> String {
-    "Usage: devlish-core <command> [options]\n\nRun 'devlish-core help' for available commands."
+    "Usage: devlish | devlish --run FILE | devlish --server\n\nRun 'devlish --help' for details."
         .to_string()
 }
 
@@ -4501,8 +4759,7 @@ fn compile_usage() -> String {
 }
 
 fn run_usage() -> String {
-    "Usage: devlish-core run <file> [<file>...] [--input '{\"key\":\"value\"}'] [--method <name>] [--as-of YYYY-MM-DD] [--audit-log <path>] [--provider NAME] [--model NAME] [--log-level LEVEL|--quiet]"
-        .to_string()
+    "Usage: devlish --run FILE [--input JSON] [--policy FILE --policy-log FILE]\n\nRun 'devlish --help' for details.".to_string()
 }
 
 #[cfg(test)]
@@ -4520,6 +4777,18 @@ mod tests {
             rule.insert("effective_until".into(), json!(u));
         }
         json!({ "manifest": { "rule": Value::Object(rule) } })
+    }
+
+    #[cfg(feature = "native")]
+    #[test]
+    fn google_address_key_is_bound_to_the_exact_post_endpoint() {
+        let credentials = CredentialStore::new(&[("GOOGLE_ADDRESS_VALIDATION_API_KEY".into(), "synthetic-key".into())], None);
+        let request = authorize_http_request(&credentials,"POST",GOOGLE_ADDRESS_VALIDATION_URL,ureq::post(GOOGLE_ADDRESS_VALIDATION_URL));
+        assert_eq!(request.header("X-Goog-Api-Key"),Some("synthetic-key"));
+        for (method,url) in [("GET",GOOGLE_ADDRESS_VALIDATION_URL),("POST","https://addressvalidation.googleapis.com/v1:validateAddress?extra=true"),("POST","https://addressvalidation.googleapis.com.attacker.invalid/v1:validateAddress")] {
+            let request = authorize_http_request(&credentials,method,url,ureq::post(url));
+            assert_eq!(request.header("X-Goog-Api-Key"),None);
+        }
     }
 
     #[test]

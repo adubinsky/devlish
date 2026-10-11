@@ -1,38 +1,25 @@
 # Devlish Reserved Words (Current)
 
-Last updated: 2026-07-10
-Status: Current implementation reference.
+Last reviewed: 2026-10-09
+Status: Historical Ruby vocabulary with current Rust syntax guidance.
 
-This document is the canonical reference for Devlish reserved words as they
-exist in the codebase today.
+The tables below preserve the legacy Ruby semantic and keyword-ignore
+vocabularies. They are not a canonical reserved-word list for the Rust parser.
+The current parser recognizes contextual English phrases rather than imposing
+these tables as a global ban on variable names. See
+`crates/devlish_core/src/lib.rs` (`parse_statement`, `parse_expression`,
+`parse_manifest_permission`, and `find_reserved_word_variable`) for enforcement.
 
-Source of truth:
-- `crates/devlish_core/src/lib.rs` (Rust parser)
+Current syntax also includes `Use`, exact numbers, pattern helpers,
+`Ask the model`, `Run catalog tool`, scoped tool permissions, and rule metadata.
+See `LANGUAGE_REFERENCE.md` and `STANDARD_LIBRARY_CURRENT.md` for the current
+inventory. Policy `allow`, `deny`, and `abstain` are returned record values,
+not new statement keywords. Prompt/file/server modes are CLI settings.
 
-Important design note:
-- this file is about reserved words, not the whole language model
-- reserved words are not the same thing as commands
-- English control-flow words such as `if` and `otherwise` should not be treated
-  as standard-library operations
-- author-facing Devlish should remain an English-like surface language
+## Historical vocabulary
 
-For the current language-layer split, see `docs/STANDARD_LIBRARY_CURRENT.md`.
-
-Devlish currently has two separate reserved-word systems:
-
-1. Semantic reserved vocabulary
-These are the normalized built-in terms returned by
-`Devlish::Parser::ReservedWords.all_terms`. They drive type inference,
-pattern inference, comparison semantics, quantifier semantics, and other
-language behavior.
-
-2. Parser keyword-ignore vocabulary
-These are the words and phrases hard-coded in
-`EnglishParser#reserved_keyword?`. They are used to suppress false
-"undefined term" errors during term extraction. Some of them are syntax
-keywords, and some are common domain nouns.
-
-These two lists overlap, but they are not identical.
+These tables describe `Devlish::Parser::ReservedWords.all_terms` and
+`EnglishParser#reserved_keyword?` in the Ruby implementation only.
 
 ## Semantic Reserved Vocabulary
 
@@ -334,7 +321,7 @@ whether a capitalized word or phrase should be reported as an undefined term.
 
 ## Important Distinctions
 
-- `ReservedWords.all_terms` is the canonical semantic vocabulary.
+- `ReservedWords.all_terms` is the historical Ruby semantic vocabulary.
 - `EnglishParser#reserved_keyword?` is a practical parser guardrail list.
 - Synonyms listed in `reserved_words.rb` are not automatically primary reserved
   terms unless they also appear in `all_terms` or the parser keyword list.
@@ -351,6 +338,6 @@ Examples:
 
 - `docs/STANDARD_LIBRARY_CURRENT.md` - current language-layer and standard-library split
 - `docs/LANGUAGE_REFERENCE.md` - current authoring guide
-- `docs/LANGUAGE_GRAMMAR.ebnf` - parser-faithful grammar
+- `docs/LANGUAGE_GRAMMAR.ebnf` - statement grammar outline
 - `docs/RESERVED_WORDS.md` - current pointer document
 - `docs/RESERVED_WORDS.old.md` - archived old reserved-words document

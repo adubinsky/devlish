@@ -1,0 +1,14 @@
+Rule:
+  id: harness.clock_only
+  version: 1.0.0
+
+Ask "Which effect is requested?" as effect
+Ask "What are the effect arguments?" as request
+
+If effect equals "clock_now":
+  Respond with record with true as allow and "Reading the clock is permitted." as reason
+
+If effect equals "respond":
+  Respond with record with true as allow and "Returning the result is permitted." as reason
+
+Respond with record with false as allow and "This policy permits only clock reads and responses." as reason

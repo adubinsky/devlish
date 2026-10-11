@@ -1,4 +1,6 @@
 [package]
+autoexamples = false
+autobins = false
 name = "devlish-llm"
 version = "0.1.0"
 edition = "2021"

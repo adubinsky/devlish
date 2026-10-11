@@ -1,0 +1,945 @@
+[
+  {
+    "name": "first prepared synthetic execution",
+    "input": {
+      "effect": "continue_initial_tool_exec",
+      "request": {
+        "session_id": "synthetic-session",
+        "tool_id": "public-grep",
+        "release_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+        "catalog_sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+        "tool_sha256": "3333333333333333333333333333333333333333333333333333333333333333",
+        "arguments_sha256": "4444444444444444444444444444444444444444444444444444444444444444",
+        "containment_sha256": "5555555555555555555555555555555555555555555555555555555555555555"
+      },
+      "authority": {
+        "session_id": "synthetic-session",
+        "tool_id": "public-grep",
+        "release_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+        "catalog_sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+        "tool_sha256": "3333333333333333333333333333333333333333333333333333333333333333",
+        "arguments_sha256": "4444444444444444444444444444444444444444444444444444444444444444",
+        "containment_sha256": "5555555555555555555555555555555555555555555555555555555555555555",
+        "phase": "trusted-initial-setup",
+        "reservation_state": "reserved",
+        "evidence_source": "protected-launcher",
+        "admission_active": true,
+        "policy_allowed": true,
+        "controls_ready": true,
+        "notification_matched": true
+      }
+    },
+    "expected": {
+      "allow": true,
+      "reason": "The first prepared execution matches protected launch state; the broker must consume its grant before continuing."
+    }
+  },
+  {
+    "name": "unrecognized operation",
+    "input": {
+      "effect": "run_shell",
+      "request": {
+        "session_id": "synthetic-session",
+        "tool_id": "public-grep",
+        "release_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+        "catalog_sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+        "tool_sha256": "3333333333333333333333333333333333333333333333333333333333333333",
+        "arguments_sha256": "4444444444444444444444444444444444444444444444444444444444444444",
+        "containment_sha256": "5555555555555555555555555555555555555555555555555555555555555555"
+      },
+      "authority": {
+        "session_id": "synthetic-session",
+        "tool_id": "public-grep",
+        "release_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+        "catalog_sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+        "tool_sha256": "3333333333333333333333333333333333333333333333333333333333333333",
+        "arguments_sha256": "4444444444444444444444444444444444444444444444444444444444444444",
+        "containment_sha256": "5555555555555555555555555555555555555555555555555555555555555555",
+        "phase": "trusted-initial-setup",
+        "reservation_state": "reserved",
+        "evidence_source": "protected-launcher",
+        "admission_active": true,
+        "policy_allowed": true,
+        "controls_ready": true,
+        "notification_matched": true
+      }
+    },
+    "expected": {
+      "allow": false,
+      "reason": "Only the first prepared tool execution may be considered."
+    }
+  },
+  {
+    "name": "malformed request",
+    "input": {
+      "effect": "continue_initial_tool_exec",
+      "request": null,
+      "authority": {
+        "session_id": "synthetic-session",
+        "tool_id": "public-grep",
+        "release_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+        "catalog_sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+        "tool_sha256": "3333333333333333333333333333333333333333333333333333333333333333",
+        "arguments_sha256": "4444444444444444444444444444444444444444444444444444444444444444",
+        "containment_sha256": "5555555555555555555555555555555555555555555555555555555555555555",
+        "phase": "trusted-initial-setup",
+        "reservation_state": "reserved",
+        "evidence_source": "protected-launcher",
+        "admission_active": true,
+        "policy_allowed": true,
+        "controls_ready": true,
+        "notification_matched": true
+      }
+    },
+    "expected": {
+      "allow": false,
+      "reason": "The prepared execution request is malformed."
+    }
+  },
+  {
+    "name": "missing protected authority",
+    "input": {
+      "effect": "continue_initial_tool_exec",
+      "request": {
+        "session_id": "synthetic-session",
+        "tool_id": "public-grep",
+        "release_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+        "catalog_sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+        "tool_sha256": "3333333333333333333333333333333333333333333333333333333333333333",
+        "arguments_sha256": "4444444444444444444444444444444444444444444444444444444444444444",
+        "containment_sha256": "5555555555555555555555555555555555555555555555555555555555555555"
+      },
+      "authority": null
+    },
+    "expected": {
+      "allow": false,
+      "reason": "Independent protected launch state is required."
+    }
+  },
+  {
+    "name": "string cannot assert controls ready",
+    "input": {
+      "effect": "continue_initial_tool_exec",
+      "request": {
+        "session_id": "synthetic-session",
+        "tool_id": "public-grep",
+        "release_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+        "catalog_sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+        "tool_sha256": "3333333333333333333333333333333333333333333333333333333333333333",
+        "arguments_sha256": "4444444444444444444444444444444444444444444444444444444444444444",
+        "containment_sha256": "5555555555555555555555555555555555555555555555555555555555555555"
+      },
+      "authority": {
+        "session_id": "synthetic-session",
+        "tool_id": "public-grep",
+        "release_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+        "catalog_sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+        "tool_sha256": "3333333333333333333333333333333333333333333333333333333333333333",
+        "arguments_sha256": "4444444444444444444444444444444444444444444444444444444444444444",
+        "containment_sha256": "5555555555555555555555555555555555555555555555555555555555555555",
+        "phase": "trusted-initial-setup",
+        "reservation_state": "reserved",
+        "evidence_source": "protected-launcher",
+        "admission_active": true,
+        "policy_allowed": true,
+        "controls_ready": "true",
+        "notification_matched": true
+      }
+    },
+    "expected": {
+      "allow": false,
+      "reason": "Independent protected launch state is required."
+    }
+  },
+  {
+    "name": "extra authority field",
+    "input": {
+      "effect": "continue_initial_tool_exec",
+      "request": {
+        "session_id": "synthetic-session",
+        "tool_id": "public-grep",
+        "release_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+        "catalog_sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+        "tool_sha256": "3333333333333333333333333333333333333333333333333333333333333333",
+        "arguments_sha256": "4444444444444444444444444444444444444444444444444444444444444444",
+        "containment_sha256": "5555555555555555555555555555555555555555555555555555555555555555"
+      },
+      "authority": {
+        "session_id": "synthetic-session",
+        "tool_id": "public-grep",
+        "release_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+        "catalog_sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+        "tool_sha256": "3333333333333333333333333333333333333333333333333333333333333333",
+        "arguments_sha256": "4444444444444444444444444444444444444444444444444444444444444444",
+        "containment_sha256": "5555555555555555555555555555555555555555555555555555555555555555",
+        "phase": "trusted-initial-setup",
+        "reservation_state": "reserved",
+        "evidence_source": "protected-launcher",
+        "admission_active": true,
+        "policy_allowed": true,
+        "controls_ready": true,
+        "notification_matched": true,
+        "override": true
+      }
+    },
+    "expected": {
+      "allow": false,
+      "reason": "The protected launch state has an unsupported format."
+    }
+  },
+  {
+    "name": "caller path override",
+    "input": {
+      "effect": "continue_initial_tool_exec",
+      "request": {
+        "session_id": "synthetic-session",
+        "tool_id": "public-grep",
+        "release_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+        "catalog_sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+        "tool_sha256": "3333333333333333333333333333333333333333333333333333333333333333",
+        "arguments_sha256": "4444444444444444444444444444444444444444444444444444444444444444",
+        "containment_sha256": "5555555555555555555555555555555555555555555555555555555555555555",
+        "path": "/work/customer_nppi.csv"
+      },
+      "authority": {
+        "session_id": "synthetic-session",
+        "tool_id": "public-grep",
+        "release_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+        "catalog_sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+        "tool_sha256": "3333333333333333333333333333333333333333333333333333333333333333",
+        "arguments_sha256": "4444444444444444444444444444444444444444444444444444444444444444",
+        "containment_sha256": "5555555555555555555555555555555555555555555555555555555555555555",
+        "phase": "trusted-initial-setup",
+        "reservation_state": "reserved",
+        "evidence_source": "protected-launcher",
+        "admission_active": true,
+        "policy_allowed": true,
+        "controls_ready": true,
+        "notification_matched": true
+      }
+    },
+    "expected": {
+      "allow": false,
+      "reason": "The execution request contains unauthorized fields."
+    }
+  },
+  {
+    "name": "caller environment override",
+    "input": {
+      "effect": "continue_initial_tool_exec",
+      "request": {
+        "session_id": "synthetic-session",
+        "tool_id": "public-grep",
+        "release_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+        "catalog_sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+        "tool_sha256": "3333333333333333333333333333333333333333333333333333333333333333",
+        "arguments_sha256": "4444444444444444444444444444444444444444444444444444444444444444",
+        "containment_sha256": "5555555555555555555555555555555555555555555555555555555555555555",
+        "environment": {
+          "LD_PRELOAD": "synthetic"
+        }
+      },
+      "authority": {
+        "session_id": "synthetic-session",
+        "tool_id": "public-grep",
+        "release_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+        "catalog_sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+        "tool_sha256": "3333333333333333333333333333333333333333333333333333333333333333",
+        "arguments_sha256": "4444444444444444444444444444444444444444444444444444444444444444",
+        "containment_sha256": "5555555555555555555555555555555555555555555555555555555555555555",
+        "phase": "trusted-initial-setup",
+        "reservation_state": "reserved",
+        "evidence_source": "protected-launcher",
+        "admission_active": true,
+        "policy_allowed": true,
+        "controls_ready": true,
+        "notification_matched": true
+      }
+    },
+    "expected": {
+      "allow": false,
+      "reason": "The execution request contains unauthorized fields."
+    }
+  },
+  {
+    "name": "caller authority override",
+    "input": {
+      "effect": "continue_initial_tool_exec",
+      "request": {
+        "session_id": "synthetic-session",
+        "tool_id": "public-grep",
+        "release_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+        "catalog_sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+        "tool_sha256": "3333333333333333333333333333333333333333333333333333333333333333",
+        "arguments_sha256": "4444444444444444444444444444444444444444444444444444444444444444",
+        "containment_sha256": "5555555555555555555555555555555555555555555555555555555555555555",
+        "authority": {
+          "session_id": "synthetic-session",
+          "tool_id": "public-grep",
+          "release_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+          "catalog_sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+          "tool_sha256": "3333333333333333333333333333333333333333333333333333333333333333",
+          "arguments_sha256": "4444444444444444444444444444444444444444444444444444444444444444",
+          "containment_sha256": "5555555555555555555555555555555555555555555555555555555555555555",
+          "phase": "trusted-initial-setup",
+          "reservation_state": "reserved",
+          "evidence_source": "protected-launcher",
+          "admission_active": true,
+          "policy_allowed": true,
+          "controls_ready": true,
+          "notification_matched": true
+        }
+      },
+      "authority": {
+        "session_id": "synthetic-session",
+        "tool_id": "public-grep",
+        "release_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+        "catalog_sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+        "tool_sha256": "3333333333333333333333333333333333333333333333333333333333333333",
+        "arguments_sha256": "4444444444444444444444444444444444444444444444444444444444444444",
+        "containment_sha256": "5555555555555555555555555555555555555555555555555555555555555555",
+        "phase": "trusted-initial-setup",
+        "reservation_state": "reserved",
+        "evidence_source": "protected-launcher",
+        "admission_active": true,
+        "policy_allowed": true,
+        "controls_ready": true,
+        "notification_matched": true
+      }
+    },
+    "expected": {
+      "allow": false,
+      "reason": "The execution request contains unauthorized fields."
+    }
+  },
+  {
+    "name": "invalid evidence_source",
+    "input": {
+      "effect": "continue_initial_tool_exec",
+      "request": {
+        "session_id": "synthetic-session",
+        "tool_id": "public-grep",
+        "release_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+        "catalog_sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+        "tool_sha256": "3333333333333333333333333333333333333333333333333333333333333333",
+        "arguments_sha256": "4444444444444444444444444444444444444444444444444444444444444444",
+        "containment_sha256": "5555555555555555555555555555555555555555555555555555555555555555"
+      },
+      "authority": {
+        "session_id": "synthetic-session",
+        "tool_id": "public-grep",
+        "release_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+        "catalog_sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+        "tool_sha256": "3333333333333333333333333333333333333333333333333333333333333333",
+        "arguments_sha256": "4444444444444444444444444444444444444444444444444444444444444444",
+        "containment_sha256": "5555555555555555555555555555555555555555555555555555555555555555",
+        "phase": "trusted-initial-setup",
+        "reservation_state": "reserved",
+        "evidence_source": "uploaded-log",
+        "admission_active": true,
+        "policy_allowed": true,
+        "controls_ready": true,
+        "notification_matched": true
+      }
+    },
+    "expected": {
+      "allow": false,
+      "reason": "Caller-provided launch claims are not authority."
+    }
+  },
+  {
+    "name": "invalid phase",
+    "input": {
+      "effect": "continue_initial_tool_exec",
+      "request": {
+        "session_id": "synthetic-session",
+        "tool_id": "public-grep",
+        "release_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+        "catalog_sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+        "tool_sha256": "3333333333333333333333333333333333333333333333333333333333333333",
+        "arguments_sha256": "4444444444444444444444444444444444444444444444444444444444444444",
+        "containment_sha256": "5555555555555555555555555555555555555555555555555555555555555555"
+      },
+      "authority": {
+        "session_id": "synthetic-session",
+        "tool_id": "public-grep",
+        "release_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+        "catalog_sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+        "tool_sha256": "3333333333333333333333333333333333333333333333333333333333333333",
+        "arguments_sha256": "4444444444444444444444444444444444444444444444444444444444444444",
+        "containment_sha256": "5555555555555555555555555555555555555555555555555555555555555555",
+        "phase": "candidate-running",
+        "reservation_state": "reserved",
+        "evidence_source": "protected-launcher",
+        "admission_active": true,
+        "policy_allowed": true,
+        "controls_ready": true,
+        "notification_matched": true
+      }
+    },
+    "expected": {
+      "allow": false,
+      "reason": "Candidate code cannot request another execution."
+    }
+  },
+  {
+    "name": "invalid admission_active",
+    "input": {
+      "effect": "continue_initial_tool_exec",
+      "request": {
+        "session_id": "synthetic-session",
+        "tool_id": "public-grep",
+        "release_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+        "catalog_sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+        "tool_sha256": "3333333333333333333333333333333333333333333333333333333333333333",
+        "arguments_sha256": "4444444444444444444444444444444444444444444444444444444444444444",
+        "containment_sha256": "5555555555555555555555555555555555555555555555555555555555555555"
+      },
+      "authority": {
+        "session_id": "synthetic-session",
+        "tool_id": "public-grep",
+        "release_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+        "catalog_sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+        "tool_sha256": "3333333333333333333333333333333333333333333333333333333333333333",
+        "arguments_sha256": "4444444444444444444444444444444444444444444444444444444444444444",
+        "containment_sha256": "5555555555555555555555555555555555555555555555555555555555555555",
+        "phase": "trusted-initial-setup",
+        "reservation_state": "reserved",
+        "evidence_source": "protected-launcher",
+        "admission_active": false,
+        "policy_allowed": true,
+        "controls_ready": true,
+        "notification_matched": true
+      }
+    },
+    "expected": {
+      "allow": false,
+      "reason": "The release admission is not currently active."
+    }
+  },
+  {
+    "name": "invalid policy_allowed",
+    "input": {
+      "effect": "continue_initial_tool_exec",
+      "request": {
+        "session_id": "synthetic-session",
+        "tool_id": "public-grep",
+        "release_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+        "catalog_sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+        "tool_sha256": "3333333333333333333333333333333333333333333333333333333333333333",
+        "arguments_sha256": "4444444444444444444444444444444444444444444444444444444444444444",
+        "containment_sha256": "5555555555555555555555555555555555555555555555555555555555555555"
+      },
+      "authority": {
+        "session_id": "synthetic-session",
+        "tool_id": "public-grep",
+        "release_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+        "catalog_sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+        "tool_sha256": "3333333333333333333333333333333333333333333333333333333333333333",
+        "arguments_sha256": "4444444444444444444444444444444444444444444444444444444444444444",
+        "containment_sha256": "5555555555555555555555555555555555555555555555555555555555555555",
+        "phase": "trusted-initial-setup",
+        "reservation_state": "reserved",
+        "evidence_source": "protected-launcher",
+        "admission_active": true,
+        "policy_allowed": false,
+        "controls_ready": true,
+        "notification_matched": true
+      }
+    },
+    "expected": {
+      "allow": false,
+      "reason": "The governing tool policy has not authorized this effect."
+    }
+  },
+  {
+    "name": "invalid controls_ready",
+    "input": {
+      "effect": "continue_initial_tool_exec",
+      "request": {
+        "session_id": "synthetic-session",
+        "tool_id": "public-grep",
+        "release_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+        "catalog_sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+        "tool_sha256": "3333333333333333333333333333333333333333333333333333333333333333",
+        "arguments_sha256": "4444444444444444444444444444444444444444444444444444444444444444",
+        "containment_sha256": "5555555555555555555555555555555555555555555555555555555555555555"
+      },
+      "authority": {
+        "session_id": "synthetic-session",
+        "tool_id": "public-grep",
+        "release_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+        "catalog_sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+        "tool_sha256": "3333333333333333333333333333333333333333333333333333333333333333",
+        "arguments_sha256": "4444444444444444444444444444444444444444444444444444444444444444",
+        "containment_sha256": "5555555555555555555555555555555555555555555555555555555555555555",
+        "phase": "trusted-initial-setup",
+        "reservation_state": "reserved",
+        "evidence_source": "protected-launcher",
+        "admission_active": true,
+        "policy_allowed": true,
+        "controls_ready": false,
+        "notification_matched": true
+      }
+    },
+    "expected": {
+      "allow": false,
+      "reason": "All required launch controls must be ready."
+    }
+  },
+  {
+    "name": "invalid notification_matched",
+    "input": {
+      "effect": "continue_initial_tool_exec",
+      "request": {
+        "session_id": "synthetic-session",
+        "tool_id": "public-grep",
+        "release_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+        "catalog_sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+        "tool_sha256": "3333333333333333333333333333333333333333333333333333333333333333",
+        "arguments_sha256": "4444444444444444444444444444444444444444444444444444444444444444",
+        "containment_sha256": "5555555555555555555555555555555555555555555555555555555555555555"
+      },
+      "authority": {
+        "session_id": "synthetic-session",
+        "tool_id": "public-grep",
+        "release_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+        "catalog_sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+        "tool_sha256": "3333333333333333333333333333333333333333333333333333333333333333",
+        "arguments_sha256": "4444444444444444444444444444444444444444444444444444444444444444",
+        "containment_sha256": "5555555555555555555555555555555555555555555555555555555555555555",
+        "phase": "trusted-initial-setup",
+        "reservation_state": "reserved",
+        "evidence_source": "protected-launcher",
+        "admission_active": true,
+        "policy_allowed": true,
+        "controls_ready": true,
+        "notification_matched": false
+      }
+    },
+    "expected": {
+      "allow": false,
+      "reason": "The notification does not match trusted initial setup."
+    }
+  },
+  {
+    "name": "launch grant 'consumed'",
+    "input": {
+      "effect": "continue_initial_tool_exec",
+      "request": {
+        "session_id": "synthetic-session",
+        "tool_id": "public-grep",
+        "release_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+        "catalog_sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+        "tool_sha256": "3333333333333333333333333333333333333333333333333333333333333333",
+        "arguments_sha256": "4444444444444444444444444444444444444444444444444444444444444444",
+        "containment_sha256": "5555555555555555555555555555555555555555555555555555555555555555"
+      },
+      "authority": {
+        "session_id": "synthetic-session",
+        "tool_id": "public-grep",
+        "release_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+        "catalog_sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+        "tool_sha256": "3333333333333333333333333333333333333333333333333333333333333333",
+        "arguments_sha256": "4444444444444444444444444444444444444444444444444444444444444444",
+        "containment_sha256": "5555555555555555555555555555555555555555555555555555555555555555",
+        "phase": "trusted-initial-setup",
+        "reservation_state": "consumed",
+        "evidence_source": "protected-launcher",
+        "admission_active": true,
+        "policy_allowed": true,
+        "controls_ready": true,
+        "notification_matched": true
+      }
+    },
+    "expected": {
+      "allow": false,
+      "reason": "Consumed, uncertain or absent launch grants cannot execute."
+    }
+  },
+  {
+    "name": "launch grant 'uncertain'",
+    "input": {
+      "effect": "continue_initial_tool_exec",
+      "request": {
+        "session_id": "synthetic-session",
+        "tool_id": "public-grep",
+        "release_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+        "catalog_sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+        "tool_sha256": "3333333333333333333333333333333333333333333333333333333333333333",
+        "arguments_sha256": "4444444444444444444444444444444444444444444444444444444444444444",
+        "containment_sha256": "5555555555555555555555555555555555555555555555555555555555555555"
+      },
+      "authority": {
+        "session_id": "synthetic-session",
+        "tool_id": "public-grep",
+        "release_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+        "catalog_sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+        "tool_sha256": "3333333333333333333333333333333333333333333333333333333333333333",
+        "arguments_sha256": "4444444444444444444444444444444444444444444444444444444444444444",
+        "containment_sha256": "5555555555555555555555555555555555555555555555555555555555555555",
+        "phase": "trusted-initial-setup",
+        "reservation_state": "uncertain",
+        "evidence_source": "protected-launcher",
+        "admission_active": true,
+        "policy_allowed": true,
+        "controls_ready": true,
+        "notification_matched": true
+      }
+    },
+    "expected": {
+      "allow": false,
+      "reason": "Consumed, uncertain or absent launch grants cannot execute."
+    }
+  },
+  {
+    "name": "launch grant 'available'",
+    "input": {
+      "effect": "continue_initial_tool_exec",
+      "request": {
+        "session_id": "synthetic-session",
+        "tool_id": "public-grep",
+        "release_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+        "catalog_sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+        "tool_sha256": "3333333333333333333333333333333333333333333333333333333333333333",
+        "arguments_sha256": "4444444444444444444444444444444444444444444444444444444444444444",
+        "containment_sha256": "5555555555555555555555555555555555555555555555555555555555555555"
+      },
+      "authority": {
+        "session_id": "synthetic-session",
+        "tool_id": "public-grep",
+        "release_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+        "catalog_sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+        "tool_sha256": "3333333333333333333333333333333333333333333333333333333333333333",
+        "arguments_sha256": "4444444444444444444444444444444444444444444444444444444444444444",
+        "containment_sha256": "5555555555555555555555555555555555555555555555555555555555555555",
+        "phase": "trusted-initial-setup",
+        "reservation_state": "available",
+        "evidence_source": "protected-launcher",
+        "admission_active": true,
+        "policy_allowed": true,
+        "controls_ready": true,
+        "notification_matched": true
+      }
+    },
+    "expected": {
+      "allow": false,
+      "reason": "Consumed, uncertain or absent launch grants cannot execute."
+    }
+  },
+  {
+    "name": "launch grant ''",
+    "input": {
+      "effect": "continue_initial_tool_exec",
+      "request": {
+        "session_id": "synthetic-session",
+        "tool_id": "public-grep",
+        "release_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+        "catalog_sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+        "tool_sha256": "3333333333333333333333333333333333333333333333333333333333333333",
+        "arguments_sha256": "4444444444444444444444444444444444444444444444444444444444444444",
+        "containment_sha256": "5555555555555555555555555555555555555555555555555555555555555555"
+      },
+      "authority": {
+        "session_id": "synthetic-session",
+        "tool_id": "public-grep",
+        "release_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+        "catalog_sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+        "tool_sha256": "3333333333333333333333333333333333333333333333333333333333333333",
+        "arguments_sha256": "4444444444444444444444444444444444444444444444444444444444444444",
+        "containment_sha256": "5555555555555555555555555555555555555555555555555555555555555555",
+        "phase": "trusted-initial-setup",
+        "reservation_state": "",
+        "evidence_source": "protected-launcher",
+        "admission_active": true,
+        "policy_allowed": true,
+        "controls_ready": true,
+        "notification_matched": true
+      }
+    },
+    "expected": {
+      "allow": false,
+      "reason": "Consumed, uncertain or absent launch grants cannot execute."
+    }
+  },
+  {
+    "name": "substituted session_id",
+    "input": {
+      "effect": "continue_initial_tool_exec",
+      "request": {
+        "session_id": "synthetic-other",
+        "tool_id": "public-grep",
+        "release_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+        "catalog_sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+        "tool_sha256": "3333333333333333333333333333333333333333333333333333333333333333",
+        "arguments_sha256": "4444444444444444444444444444444444444444444444444444444444444444",
+        "containment_sha256": "5555555555555555555555555555555555555555555555555555555555555555"
+      },
+      "authority": {
+        "session_id": "synthetic-session",
+        "tool_id": "public-grep",
+        "release_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+        "catalog_sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+        "tool_sha256": "3333333333333333333333333333333333333333333333333333333333333333",
+        "arguments_sha256": "4444444444444444444444444444444444444444444444444444444444444444",
+        "containment_sha256": "5555555555555555555555555555555555555555555555555555555555555555",
+        "phase": "trusted-initial-setup",
+        "reservation_state": "reserved",
+        "evidence_source": "protected-launcher",
+        "admission_active": true,
+        "policy_allowed": true,
+        "controls_ready": true,
+        "notification_matched": true
+      }
+    },
+    "expected": {
+      "allow": false,
+      "reason": "The request belongs to another session."
+    }
+  },
+  {
+    "name": "substituted tool_id",
+    "input": {
+      "effect": "continue_initial_tool_exec",
+      "request": {
+        "session_id": "synthetic-session",
+        "tool_id": "synthetic-other",
+        "release_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+        "catalog_sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+        "tool_sha256": "3333333333333333333333333333333333333333333333333333333333333333",
+        "arguments_sha256": "4444444444444444444444444444444444444444444444444444444444444444",
+        "containment_sha256": "5555555555555555555555555555555555555555555555555555555555555555"
+      },
+      "authority": {
+        "session_id": "synthetic-session",
+        "tool_id": "public-grep",
+        "release_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+        "catalog_sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+        "tool_sha256": "3333333333333333333333333333333333333333333333333333333333333333",
+        "arguments_sha256": "4444444444444444444444444444444444444444444444444444444444444444",
+        "containment_sha256": "5555555555555555555555555555555555555555555555555555555555555555",
+        "phase": "trusted-initial-setup",
+        "reservation_state": "reserved",
+        "evidence_source": "protected-launcher",
+        "admission_active": true,
+        "policy_allowed": true,
+        "controls_ready": true,
+        "notification_matched": true
+      }
+    },
+    "expected": {
+      "allow": false,
+      "reason": "The request names another tool."
+    }
+  },
+  {
+    "name": "substituted release_sha256",
+    "input": {
+      "effect": "continue_initial_tool_exec",
+      "request": {
+        "session_id": "synthetic-session",
+        "tool_id": "public-grep",
+        "release_sha256": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+        "catalog_sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+        "tool_sha256": "3333333333333333333333333333333333333333333333333333333333333333",
+        "arguments_sha256": "4444444444444444444444444444444444444444444444444444444444444444",
+        "containment_sha256": "5555555555555555555555555555555555555555555555555555555555555555"
+      },
+      "authority": {
+        "session_id": "synthetic-session",
+        "tool_id": "public-grep",
+        "release_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+        "catalog_sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+        "tool_sha256": "3333333333333333333333333333333333333333333333333333333333333333",
+        "arguments_sha256": "4444444444444444444444444444444444444444444444444444444444444444",
+        "containment_sha256": "5555555555555555555555555555555555555555555555555555555555555555",
+        "phase": "trusted-initial-setup",
+        "reservation_state": "reserved",
+        "evidence_source": "protected-launcher",
+        "admission_active": true,
+        "policy_allowed": true,
+        "controls_ready": true,
+        "notification_matched": true
+      }
+    },
+    "expected": {
+      "allow": false,
+      "reason": "The request names another release."
+    }
+  },
+  {
+    "name": "substituted catalog_sha256",
+    "input": {
+      "effect": "continue_initial_tool_exec",
+      "request": {
+        "session_id": "synthetic-session",
+        "tool_id": "public-grep",
+        "release_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+        "catalog_sha256": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+        "tool_sha256": "3333333333333333333333333333333333333333333333333333333333333333",
+        "arguments_sha256": "4444444444444444444444444444444444444444444444444444444444444444",
+        "containment_sha256": "5555555555555555555555555555555555555555555555555555555555555555"
+      },
+      "authority": {
+        "session_id": "synthetic-session",
+        "tool_id": "public-grep",
+        "release_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+        "catalog_sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+        "tool_sha256": "3333333333333333333333333333333333333333333333333333333333333333",
+        "arguments_sha256": "4444444444444444444444444444444444444444444444444444444444444444",
+        "containment_sha256": "5555555555555555555555555555555555555555555555555555555555555555",
+        "phase": "trusted-initial-setup",
+        "reservation_state": "reserved",
+        "evidence_source": "protected-launcher",
+        "admission_active": true,
+        "policy_allowed": true,
+        "controls_ready": true,
+        "notification_matched": true
+      }
+    },
+    "expected": {
+      "allow": false,
+      "reason": "The request names another tool catalog."
+    }
+  },
+  {
+    "name": "substituted tool_sha256",
+    "input": {
+      "effect": "continue_initial_tool_exec",
+      "request": {
+        "session_id": "synthetic-session",
+        "tool_id": "public-grep",
+        "release_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+        "catalog_sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+        "tool_sha256": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+        "arguments_sha256": "4444444444444444444444444444444444444444444444444444444444444444",
+        "containment_sha256": "5555555555555555555555555555555555555555555555555555555555555555"
+      },
+      "authority": {
+        "session_id": "synthetic-session",
+        "tool_id": "public-grep",
+        "release_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+        "catalog_sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+        "tool_sha256": "3333333333333333333333333333333333333333333333333333333333333333",
+        "arguments_sha256": "4444444444444444444444444444444444444444444444444444444444444444",
+        "containment_sha256": "5555555555555555555555555555555555555555555555555555555555555555",
+        "phase": "trusted-initial-setup",
+        "reservation_state": "reserved",
+        "evidence_source": "protected-launcher",
+        "admission_active": true,
+        "policy_allowed": true,
+        "controls_ready": true,
+        "notification_matched": true
+      }
+    },
+    "expected": {
+      "allow": false,
+      "reason": "The executable bytes do not match the prepared tool."
+    }
+  },
+  {
+    "name": "substituted arguments_sha256",
+    "input": {
+      "effect": "continue_initial_tool_exec",
+      "request": {
+        "session_id": "synthetic-session",
+        "tool_id": "public-grep",
+        "release_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+        "catalog_sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+        "tool_sha256": "3333333333333333333333333333333333333333333333333333333333333333",
+        "arguments_sha256": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+        "containment_sha256": "5555555555555555555555555555555555555555555555555555555555555555"
+      },
+      "authority": {
+        "session_id": "synthetic-session",
+        "tool_id": "public-grep",
+        "release_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+        "catalog_sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+        "tool_sha256": "3333333333333333333333333333333333333333333333333333333333333333",
+        "arguments_sha256": "4444444444444444444444444444444444444444444444444444444444444444",
+        "containment_sha256": "5555555555555555555555555555555555555555555555555555555555555555",
+        "phase": "trusted-initial-setup",
+        "reservation_state": "reserved",
+        "evidence_source": "protected-launcher",
+        "admission_active": true,
+        "policy_allowed": true,
+        "controls_ready": true,
+        "notification_matched": true
+      }
+    },
+    "expected": {
+      "allow": false,
+      "reason": "The arguments do not match the prepared request."
+    }
+  },
+  {
+    "name": "substituted containment_sha256",
+    "input": {
+      "effect": "continue_initial_tool_exec",
+      "request": {
+        "session_id": "synthetic-session",
+        "tool_id": "public-grep",
+        "release_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+        "catalog_sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+        "tool_sha256": "3333333333333333333333333333333333333333333333333333333333333333",
+        "arguments_sha256": "4444444444444444444444444444444444444444444444444444444444444444",
+        "containment_sha256": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+      },
+      "authority": {
+        "session_id": "synthetic-session",
+        "tool_id": "public-grep",
+        "release_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+        "catalog_sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+        "tool_sha256": "3333333333333333333333333333333333333333333333333333333333333333",
+        "arguments_sha256": "4444444444444444444444444444444444444444444444444444444444444444",
+        "containment_sha256": "5555555555555555555555555555555555555555555555555555555555555555",
+        "phase": "trusted-initial-setup",
+        "reservation_state": "reserved",
+        "evidence_source": "protected-launcher",
+        "admission_active": true,
+        "policy_allowed": true,
+        "controls_ready": true,
+        "notification_matched": true
+      }
+    },
+    "expected": {
+      "allow": false,
+      "reason": "The containment policy does not match the prepared launch."
+    }
+  },
+  {
+    "name": "company IP extractor cannot replace public tool",
+    "input": {
+      "effect": "continue_initial_tool_exec",
+      "request": {
+        "session_id": "synthetic-session",
+        "tool_id": "company-ip-extractor",
+        "release_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+        "catalog_sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+        "tool_sha256": "3333333333333333333333333333333333333333333333333333333333333333",
+        "arguments_sha256": "4444444444444444444444444444444444444444444444444444444444444444",
+        "containment_sha256": "5555555555555555555555555555555555555555555555555555555555555555"
+      },
+      "authority": {
+        "session_id": "synthetic-session",
+        "tool_id": "public-grep",
+        "release_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+        "catalog_sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+        "tool_sha256": "3333333333333333333333333333333333333333333333333333333333333333",
+        "arguments_sha256": "4444444444444444444444444444444444444444444444444444444444444444",
+        "containment_sha256": "5555555555555555555555555555555555555555555555555555555555555555",
+        "phase": "trusted-initial-setup",
+        "reservation_state": "reserved",
+        "evidence_source": "protected-launcher",
+        "admission_active": true,
+        "policy_allowed": true,
+        "controls_ready": true,
+        "notification_matched": true
+      }
+    },
+    "expected": {
+      "allow": false,
+      "reason": "The request names another tool."
+    }
+  }
+]

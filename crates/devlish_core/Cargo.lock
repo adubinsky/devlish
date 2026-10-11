@@ -216,16 +216,29 @@ dependencies = [
 ]
 
 [[package]]
+name = "devlish-audit"
+version = "0.1.0"
+dependencies = [
+ "libc",
+ "ring",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "devlish-core"
 version = "0.1.0"
 dependencies = [
  "calamine",
+ "devlish-audit",
  "devlish-llm",
  "devlish-vm",
  "glob",
  "libc",
+ "ring",
  "serde",
  "serde_json",
+ "subtle",
  "tiny_http",
  "ureq",
 ]

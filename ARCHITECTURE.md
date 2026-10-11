@@ -94,3 +94,38 @@ is present. Programs without a manifest are unrestricted.
 
 `bin/devlish` is a bash shim that execs the `devlish-core` Rust binary.
 No Ruby, Python, or Node runtime is needed.
+
+
+## Policy interception and repeatable reports
+
+Policy-enabled CLI runs wrap the host with `devlish_vm::policy::PolicyHost`.
+Each tool effect is evaluated by a separately loaded Devlish policy in an
+isolated VM; the wrapper persists the decision before dispatch and its outcome
+afterward. Recording failures block subsequent effects. Existing VM permission
+checks remain in force. Diagnostic events and other CLI/server entry points
+are outside this initial enforcement boundary.
+
+`--policy-evidence` explicitly retains sensitive effect exchanges in the policy
+log. `report process` uses them as an offline host while rerunning the program
+and policy, comparing decisions and the terminal result without live effects.
+Application and policy reports bind the file baseline and golden cases to that
+process report. These are tamper-evidence checks, not signature verification
+or independent runtime attestation.
+
+See [Effect policies](docs/EFFECT_POLICY.md),
+[Compliance reports](docs/COMPLIANCE_REPORTS.md), and
+[Policy provenance](docs/POLICY_PROVENANCE.md).
+
+
+## Independent audit verifier
+
+`crates/devlish_audit` builds a separate offline verifier without dependencies on
+Devlish's compiler, VM, model providers or service host. It authenticates exact
+bytes under operator-supplied Ed25519 trust keys, and checks signed receipts
+against format-3 policy logs and independently supplied receipt digests.
+It also checks signed release manifests and binds approved artifact identities
+to reports and receipts. The native `run-verified` command consumes verified
+program and policy buffers with a durable local rollback floor. The browser
+compiler excludes this native crypto dependency. Neither component proves
+runtime memory integrity. Protected signing, independent receipt custody and
+protected execution remain separate work. See [Independent audit verifier](docs/INDEPENDENT_AUDIT_VERIFIER.md).

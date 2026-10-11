@@ -1,12 +1,12 @@
 # Devlish Language Reference (Authoring Guide)
 
-Last updated: 2026-07-10
+Last updated: 2026-10-09
 Status: Current authoring guide.
 
 Devlish is documented as a controlled subset of English.
 Internal grammar notation is descriptive only.
 
-For a parser-faithful grammar derived from the current implementation, see
+For a statement grammar outline and links to the current implementation, see
 `docs/LANGUAGE_GRAMMAR.ebnf`.
 
 For the current reserved-word lists and definitions, see
@@ -25,7 +25,11 @@ For the current language gaps that affect teaching and beginner coverage, see
 
 This is the practical grammar for writing `.dvl` files today. The current
 implementation is the Rust compiler and shared bytecode VM; `.dvl` files run
-directly through `devlish run` or compile explicitly to `.dvlc.json`.
+directly through `devlish --run` or compile explicitly to `.dvlc.json`.
+
+The current application also offers `devlish` for an interactive prompt and
+`devlish --server` for the HTTP service. See `docs/APPLICATION.md` for
+configuration, project overrides, and the differences between host profiles.
 
 ## 1) File Basics
 
@@ -408,7 +412,7 @@ Use the math module.
 Use pi and tau from the math module.
 
 circumference equals math's tau times radius
-Set m to statistics' mean of scores
+Set c to math's pi times diameter
 ```
 
 `Use` brings in a named, namespaced module (DEVL-131). Unlike `Import`, which
@@ -427,7 +431,7 @@ symbols behind the module name:
   usual search paths (`devlish.toml` project dirs, `DEVLISH_PATH`,
   `~/.devlish/lib/`).
 - Modules ending in `s` use the trailing-apostrophe possessive:
-  `statistics' mean`.
+  `statistics' mean` (for a user-supplied statistics module, not a bundled one).
 - Repeating `Use` for the same module is legal; the module body is inlined
   once per compilation unit.
 - Bundled module sources join the artifact's `source_hash` closure (listed as
@@ -610,6 +614,57 @@ devlish harness run workflow.dvl --provider anthropic --model claude-sonnet-4-20
 devlish serve --bind 127.0.0.1:7420
 ```
 
+### Local tools and policy
+
+The tool request is a record containing a program or catalog ID and an argument list. Devlish passes arguments directly; it does not insert a shell.
+
+```text
+Run catalog tool tool_request as tool_result
+```
+
+Declare the capability separately in the manifest:
+
+```text
+Permissions:
+  Run catalog tool "ls"
+```
+
+`Run catalog tools` declares the unscoped capability. A scoped permission allows only the named tool.
+
+A complete local workflow can construct the request inline:
+
+```text
+Permissions:
+  Run catalog tool "ls"
+
+Run catalog tool record with "ls" as tool_id and list of "-1" as arguments as tool_result
+Respond with "Local tool completed."
+```
+
+In ordinary file mode, tool IDs resolve through the startup working directory and operator PATH. IDs are simple program names, never paths. The startup directories are captured outside model input. This local profile is a location guardrail: allowed programs run with the current user's access, rather than inside a filesystem or network sandbox. Signed catalog execution and verified admission are separate profiles.
+
+## Policy decisions
+
+A policy is another Devlish program. It receives the effect and request, then returns a decision and a nonempty reason:
+
+```text
+Respond with record with "deny" as decision and "This effect is forbidden." as reason
+```
+
+Decisions are `allow`, `deny`, or `abstain`; legacy boolean `allow` decisions remain supported. Explicit denials always block. Invalid, conflicting, missing, or failed decisions block as well.
+
+`--default-authorization allow-unless-forbidden` permits an explicit abstention; `deny-unless-allowed` blocks it. This flag requires both `--policy` and a fresh `--policy-log` path. It never removes program capability checks. In interactive mode, `DEVLISH_DEFAULT_AUTHORIZATION` selects the posture; the default is `allow-unless-forbidden`. File mode defaults to denying abstentions.
+
+## Captured output and evidence
+
+Local execution bounds each stream to 64 KiB and execution/capture to five seconds. Capture failure, abnormal termination, invalid UTF-8, or exceeded limits withhold output. A normal nonzero exit code is preserved for the program to interpret.
+
+Authorization to execute a tool does not authorize disclosure of its output. Policies can govern subsequent model calls and responses independently; the local example returns a fixed acknowledgement instead of captured filenames.
+
+Default policy logs record commitments and decisions. `--policy-evidence` opts into sensitive request/result capture for protected replay evidence. Terminal capture evidence and independent verification, signed launch reservations, and one-attempt broker continuation are separate audit mechanisms; ordinary local execution does not establish verified containment.
+
+For runnable examples and exact profile limits, see the [local tool guide](https://github.com/adubinsky/devlish/blob/main/examples/local_tools/README.md) and [application guide](https://github.com/adubinsky/devlish/blob/main/docs/APPLICATION.md).
+
 ### Clock and randomness (journaled)
 
 ```text
@@ -618,7 +673,7 @@ Permissions:
   Randomness
 
 Get the current time as now
-Draw a random number as unit
+Draw a random number between 0 and 1 as unit
 Draw a random number between 1 and 6 as roll
 ```
 
@@ -656,6 +711,7 @@ Available permission types:
 | Clock | `Clock` or `Current time` |
 | Randomness | `Randomness` or `Random` |
 | Filesystem operations | `Filesystem operations` or `Filesystem operations on "<path>"` |
+| External tools | `Run catalog tools` or `Run catalog tool "<id>"` |
 | Service calls | `Call <ServiceName> service` |
 
 Scoped permissions (with `from`, `to`, or `on`) restrict the effect to paths

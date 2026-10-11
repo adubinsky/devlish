@@ -1,0 +1,19 @@
+Rule:
+  id: harness.catalog_tool
+  version: 1.0.0
+
+Ask "Which effect?" as effect
+Ask "What arguments?" as request
+If effect equals "run_tool":
+  shape equals record with "text" as tool_id and "list" as arguments
+  If request matches shape shape:
+    If count of keys of request equals 2:
+      If tool_id of request equals "public-grep":
+        approved_arguments equals list of "--fixed-strings", "--", "published", "/work/public.txt"
+        If arguments of request equals approved_arguments:
+          Respond with record with true as allow and "Only the exact public search is permitted." as reason
+If effect equals "respond":
+  If count of keys of request equals 1:
+    If value of request equals "Approved public search completed.":
+      Respond with record with true as allow and "Only the fixed acknowledgement may leave the harness." as reason
+Respond with record with false as allow and "Private data, alternate programs, arguments and output are not approved." as reason

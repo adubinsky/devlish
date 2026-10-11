@@ -2,17 +2,18 @@
 
 Last updated: 2026-09-20
 
-`devlish serve` is a long-lived HTTP daemon around the same compile/run/lint
+`devlish --server` is a long-lived HTTP daemon around the same compile/run/lint
 service used by the CLI and MCP. Callers build applications by talking JSON
 over HTTP — no Devlish embedding required.
 
 ## What a caller sees
 
-1. Start one daemon process (`devlish serve`).
+1. Start one daemon process (`devlish --server`).
 2. `GET /v1/health` to confirm it is up.
 3. `POST /v1/compile`, `/v1/run`, `/v1/lint` (or `/v1/validate`) with JSON bodies.
-4. Optional: `POST /v1/harness/sessions` for an outbound-LLM run that persists a
-   session transcript under `~/.devlish/sessions/`.
+4. Optional: `POST /v1/harness/sessions` for an outbound-LLM run. This route
+   currently returns an execution result; durable HTTP session management is
+   separate work.
 5. Stop the process (SIGINT / kill). There is no separate shutdown protocol.
 
 Auth is optional. If `DEVLISH_SERVE_TOKEN` is set, every route except
@@ -28,12 +29,11 @@ Anthropic is unavailable.
 ### 1. Build
 
 ```bash
-cd crates/devlish_core
-cargo build
-# or: cargo build --release
+make install
 ```
 
-The `bin/devlish` shim finds the debug/release binary.
+This installs the native `devlish` application in `~/.local/bin`; put that
+directory on PATH if needed.
 
 ### 2. Start the daemon
 
@@ -42,7 +42,7 @@ The `bin/devlish` shim finds the debug/release binary.
 export OPENAI_API_KEY=sk-...          # or OPENROUTER_API_KEY
 # optional: export DEVLISH_SERVE_TOKEN=secret
 
-bin/devlish serve --bind 127.0.0.1:7420 --log-level info
+devlish --server
 ```
 
 Flags / env:

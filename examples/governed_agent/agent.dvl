@@ -1,0 +1,64 @@
+# A finite planning harness: one model call, two catalogued tool steps.
+# Borrower data stays local. The model chooses order, not policy or review status.
+Permissions:
+  Call language models
+  Call LoanReview service
+
+Ask "Private case A?" as private_case_a
+Ask "Private case B?" as private_case_b
+case_shape equals record with "boolean" as needs_review
+If not private_case_a matches shape case_shape:
+  Fail with "Case A requires a local review flag."
+If not private_case_b matches shape case_shape:
+  Fail with "Case B requires a local review flag."
+
+# This exact, approved prompt contains synthetic opaque tokens only.
+prompt equals "Choose the order for recording two review statuses. Return JSON with only steps, a list of two records containing only action and loan_token. Use action record_review for each token exactly once: loan_AB12CD34 and loan_CD56EF78. Do not supply status, destinations, code, or additional fields."
+Ask the model with prompt expecting json as plan
+
+# Validate the ENTIRE plan before the first business tool effect.
+plan_shape equals record with "list" as steps
+If not plan matches shape plan_shape:
+  Fail with "The model plan must contain a steps list."
+plan_fields equals keys of plan
+If count of plan_fields is not 1:
+  Fail with "The model plan contains unsupported fields."
+steps equals steps of plan
+If count of steps is not 2:
+  Fail with "The model plan must contain exactly two steps."
+seen_a equals false
+seen_b equals false
+step_shape equals record with "text" as action and "text" as loan_token
+For each step in steps:
+  If not step matches shape step_shape:
+    Fail with "A model step has an invalid shape."
+  step_fields equals keys of step
+  If count of step_fields is not 2:
+    Fail with "A model step contains unsupported fields."
+  If action of step is not "record_review":
+    Fail with "The model requested an uncatalogued tool."
+  token equals loan_token of step
+  If token is not "loan_AB12CD34" and token is not "loan_CD56EF78":
+    Fail with "The model requested an unauthorized case."
+  If token equals "loan_AB12CD34":
+    If seen_a equals true:
+      Fail with "The model repeated a case."
+    seen_a equals true
+  If token equals "loan_CD56EF78":
+    If seen_b equals true:
+      Fail with "The model repeated a case."
+    seen_b equals true
+
+# Resolve catalogued tool names in Devlish. Never execute model-supplied code.
+For each step in steps:
+  token equals loan_token of step
+  requires_review equals needs_review of private_case_a
+  If token equals "loan_CD56EF78":
+    requires_review equals needs_review of private_case_b
+  disposition equals "complete"
+  If requires_review equals true:
+    disposition equals "needs_review"
+  Create LoanReview entry with token as loan_token and disposition as status
+
+# Neither model prose nor service results are a public response.
+Respond with "Review statuses recorded."

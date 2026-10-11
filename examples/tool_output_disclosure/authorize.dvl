@@ -1,0 +1,50 @@
+Rule:
+  id: harness.authorize_tool_output
+  version: 1.0.0
+
+Ask "Which operation is requested?" as effect
+Ask "Which captured output should be released?" as request
+Ask "What output state did the protected host independently supply?" as authority
+
+# Labels are not authentication. The host must independently supply and bind this state.
+If effect is not "disclose_tool_output":
+  Respond with record with false as allow and "Only captured tool output may be considered." as reason
+
+request_shape equals record with "text" as session_id and "text" as operation_id and "text" as destination and "text" as stdout and "text" as stderr
+If not request matches shape request_shape:
+  Respond with record with false as allow and "The request is malformed." as reason
+If count of keys of request is not 5:
+  Respond with record with false as allow and "The request contains unauthorized fields." as reason
+
+authority_shape equals record with "text" as session_id and "text" as operation_id and "text" as destination and "text" as stdout and "text" as stderr and "text" as evidence_source and "boolean" as capture_complete and "boolean" as outcome_recorded and "boolean" as admission_active and "text" as stdout_classification and "text" as stderr_classification
+If not authority matches shape authority_shape:
+  Respond with record with false as allow and "The authority is malformed." as reason
+If count of keys of authority is not 11:
+  Respond with record with false as allow and "The authority contains unauthorized fields." as reason
+
+If evidence_source of authority is not "protected-launcher":
+  Respond with record with false as allow and "Independent protected output state is required." as reason
+If capture_complete of authority is not true:
+  Respond with record with false as allow and "Partial or uncertain output must remain withheld." as reason
+If outcome_recorded of authority is not true:
+  Respond with record with false as allow and "The terminal outcome must be durably recorded before disclosure." as reason
+If admission_active of authority is not true:
+  Respond with record with false as allow and "Release admission must remain active at disclosure." as reason
+If stdout_classification of authority is not "public":
+  Respond with record with false as allow and "Standard output is not approved public data." as reason
+If stderr_classification of authority is not "public":
+  Respond with record with false as allow and "Standard error is not approved public data." as reason
+If session_id of request is not session_id of authority:
+  Respond with record with false as allow and "The requested session_id does not match protected captured output." as reason
+If operation_id of request is not operation_id of authority:
+  Respond with record with false as allow and "The requested operation_id does not match protected captured output." as reason
+If destination of request is not destination of authority:
+  Respond with record with false as allow and "The requested destination does not match protected captured output." as reason
+If stdout of request is not stdout of authority:
+  Respond with record with false as allow and "The requested stdout does not match protected captured output." as reason
+If stderr of request is not stderr of authority:
+  Respond with record with false as allow and "The requested stderr does not match protected captured output." as reason
+If destination of request is not "model" and destination of request is not "client":
+  Respond with record with false as allow and "This destination is not approved for output disclosure." as reason
+
+Respond with record with true as allow and "Only the complete recorded public capture may reach the bound destination." as reason

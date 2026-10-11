@@ -1,0 +1,224 @@
+[
+  {
+    "name": "Approved planning",
+    "input": {
+      "effect": "llm_complete",
+      "request": {
+        "prompt": "Choose the order for recording two review statuses. Return JSON with only steps, a list of two records containing only action and loan_token. Use action record_review for each token exactly once: loan_AB12CD34 and loan_CD56EF78. Do not supply status, destinations, code, or additional fields.",
+        "expect_json": true
+      }
+    },
+    "expected": {
+      "allow": true,
+      "reason": "Only the approved token-only planning prompt may reach the model."
+    }
+  },
+  {
+    "name": "Private model prompt",
+    "input": {
+      "effect": "llm_complete",
+      "request": {
+        "prompt": "SYNTHETIC_PRIVATE_CASE",
+        "expect_json": true
+      }
+    },
+    "expected": {
+      "allow": false,
+      "reason": "This harness permits only its minimal planning request, review tool, and fixed acknowledgement."
+    }
+  },
+  {
+    "name": "Non-JSON response mode",
+    "input": {
+      "effect": "llm_complete",
+      "request": {
+        "prompt": "Choose the order for recording two review statuses. Return JSON with only steps, a list of two records containing only action and loan_token. Use action record_review for each token exactly once: loan_AB12CD34 and loan_CD56EF78. Do not supply status, destinations, code, or additional fields.",
+        "expect_json": false
+      }
+    },
+    "expected": {
+      "allow": false,
+      "reason": "This harness permits only its minimal planning request, review tool, and fixed acknowledgement."
+    }
+  },
+  {
+    "name": "Caller overrides provider",
+    "input": {
+      "effect": "llm_complete",
+      "request": {
+        "prompt": "Choose the order for recording two review statuses. Return JSON with only steps, a list of two records containing only action and loan_token. Use action record_review for each token exactly once: loan_AB12CD34 and loan_CD56EF78. Do not supply status, destinations, code, or additional fields.",
+        "expect_json": true,
+        "provider": "unapproved"
+      }
+    },
+    "expected": {
+      "allow": false,
+      "reason": "This harness permits only its minimal planning request, review tool, and fixed acknowledgement."
+    }
+  },
+  {
+    "name": "Caller overrides model",
+    "input": {
+      "effect": "llm_complete",
+      "request": {
+        "prompt": "Choose the order for recording two review statuses. Return JSON with only steps, a list of two records containing only action and loan_token. Use action record_review for each token exactly once: loan_AB12CD34 and loan_CD56EF78. Do not supply status, destinations, code, or additional fields.",
+        "expect_json": true,
+        "model": "unapproved"
+      }
+    },
+    "expected": {
+      "allow": false,
+      "reason": "This harness permits only its minimal planning request, review tool, and fixed acknowledgement."
+    }
+  },
+  {
+    "name": "Minimal case A tool",
+    "input": {
+      "effect": "call_service",
+      "request": {
+        "service": "loanreview",
+        "action": "create",
+        "arguments": {
+          "loan_token": "loan_AB12CD34",
+          "status": "needs_review"
+        }
+      }
+    },
+    "expected": {
+      "allow": true,
+      "reason": "Only the approved token and local review status may reach LoanReview."
+    }
+  },
+  {
+    "name": "Minimal case B tool",
+    "input": {
+      "effect": "call_service",
+      "request": {
+        "service": "loanreview",
+        "action": "create",
+        "arguments": {
+          "loan_token": "loan_CD56EF78",
+          "status": "complete"
+        }
+      }
+    },
+    "expected": {
+      "allow": true,
+      "reason": "Only the approved token and local review status may reach LoanReview."
+    }
+  },
+  {
+    "name": "Unauthorized tool loan_token",
+    "input": {
+      "effect": "call_service",
+      "request": {
+        "service": "loanreview",
+        "action": "create",
+        "arguments": {
+          "loan_token": "unknown",
+          "status": "needs_review"
+        }
+      }
+    },
+    "expected": {
+      "allow": false,
+      "reason": "This harness permits only its minimal planning request, review tool, and fixed acknowledgement."
+    }
+  },
+  {
+    "name": "Unauthorized tool status",
+    "input": {
+      "effect": "call_service",
+      "request": {
+        "service": "loanreview",
+        "action": "create",
+        "arguments": {
+          "loan_token": "loan_AB12CD34",
+          "status": "approve"
+        }
+      }
+    },
+    "expected": {
+      "allow": false,
+      "reason": "This harness permits only its minimal planning request, review tool, and fixed acknowledgement."
+    }
+  },
+  {
+    "name": "Unauthorized tool borrower",
+    "input": {
+      "effect": "call_service",
+      "request": {
+        "service": "loanreview",
+        "action": "create",
+        "arguments": {
+          "loan_token": "loan_AB12CD34",
+          "status": "needs_review",
+          "borrower": "SYNTHETIC_PRIVATE_CASE"
+        }
+      }
+    },
+    "expected": {
+      "allow": false,
+      "reason": "This harness permits only its minimal planning request, review tool, and fixed acknowledgement."
+    }
+  },
+  {
+    "name": "Extra service routing",
+    "input": {
+      "effect": "call_service",
+      "request": {
+        "service": "loanreview",
+        "action": "create",
+        "arguments": {
+          "loan_token": "loan_AB12CD34",
+          "status": "needs_review"
+        },
+        "routing": "unapproved"
+      }
+    },
+    "expected": {
+      "allow": false,
+      "reason": "Service calls may contain only service, action and arguments."
+    }
+  },
+  {
+    "name": "Fixed response",
+    "input": {
+      "effect": "respond",
+      "request": {
+        "value": "Review statuses recorded."
+      }
+    },
+    "expected": {
+      "allow": true,
+      "reason": "The fixed completion acknowledgement contains no private case data."
+    }
+  },
+  {
+    "name": "Private response",
+    "input": {
+      "effect": "respond",
+      "request": {
+        "value": "SYNTHETIC_PRIVATE_CASE"
+      }
+    },
+    "expected": {
+      "allow": false,
+      "reason": "This harness permits only its minimal planning request, review tool, and fixed acknowledgement."
+    }
+  },
+  {
+    "name": "Uncatalogued file write",
+    "input": {
+      "effect": "write_file",
+      "request": {
+        "path": "unapproved",
+        "content": "SYNTHETIC_PRIVATE_CASE"
+      }
+    },
+    "expected": {
+      "allow": false,
+      "reason": "This harness permits only its minimal planning request, review tool, and fixed acknowledgement."
+    }
+  }
+]

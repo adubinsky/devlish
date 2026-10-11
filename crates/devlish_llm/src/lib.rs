@@ -4,6 +4,8 @@
 //! resolves the user's configured provider (Anthropic, OpenAI, or Ollama) and
 //! performs the HTTP completion. Secrets never leave the credential chain.
 
+pub mod governed;
+
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::env;
@@ -32,7 +34,7 @@ pub struct LlmResponse {
     pub parsed: Option<Value>,
 }
 
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LlmConfig {
     #[serde(default = "default_provider")]
     pub default_provider: String,
@@ -59,11 +61,24 @@ pub struct ProviderConfig {
 }
 
 fn default_provider() -> String {
-    "openai".to_string()
+    "openrouter".to_string()
 }
 
 fn default_model() -> String {
-    "gpt-4o-mini".to_string()
+    "openai/gpt-4o-mini".to_string()
+}
+
+impl Default for LlmConfig {
+    fn default() -> Self {
+        Self {
+            default_provider: default_provider(),
+            default_model: default_model(),
+            anthropic: ProviderConfig::default(),
+            openai: ProviderConfig::default(),
+            openrouter: ProviderConfig::default(),
+            ollama: ProviderConfig::default(),
+        }
+    }
 }
 
 impl LlmConfig {
@@ -87,8 +102,8 @@ impl LlmConfig {
         }
         if !path.is_file() {
             let sample = r#"# Devlish outbound LLM harness config
-default_provider = "openai"
-default_model = "gpt-4o-mini"
+default_provider = "openrouter"
+default_model = "openai/gpt-4o-mini"
 
 [openai]
 api_key_env = "OPENAI_API_KEY"
@@ -129,17 +144,40 @@ pub trait CredentialResolver {
     fn resolve(&self, key: &str) -> Option<String>;
 }
 
+// Resolve a missing default credential before any outbound request. Explicit
+// provider choices never fall back, and failed requests are never retried.
+fn select_provider(
+    request: &LlmRequest,
+    config: &LlmConfig,
+    credentials: &dyn CredentialResolver,
+) -> String {
+    let provider = request
+        .provider
+        .as_deref()
+        .unwrap_or(&config.default_provider)
+        .to_ascii_lowercase();
+    let has_key = |settings: &ProviderConfig, fallback: &str| {
+        credentials
+            .resolve(settings.api_key_env.as_deref().unwrap_or(fallback))
+            .is_some_and(|key| !key.is_empty())
+    };
+    if request.provider.is_none()
+        && provider == "openrouter"
+        && !has_key(&config.openrouter, "OPENROUTER_API_KEY")
+        && has_key(&config.openai, "OPENAI_API_KEY")
+    {
+        return "openai".into();
+    }
+    provider
+}
+
 /// Complete a prompt using the configured provider.
 pub fn complete(
     request: &LlmRequest,
     config: &LlmConfig,
     credentials: &dyn CredentialResolver,
 ) -> Result<LlmResponse, String> {
-    let provider_name = request
-        .provider
-        .as_deref()
-        .unwrap_or(&config.default_provider)
-        .to_ascii_lowercase();
+    let provider_name = select_provider(request, config, credentials);
     let model = request
         .model
         .clone()
@@ -150,7 +188,17 @@ pub fn complete(
             "ollama" => config.ollama.default_model.clone(),
             _ => None,
         })
-        .unwrap_or_else(|| config.default_model.clone());
+        .unwrap_or_else(|| {
+            if provider_name == "openai" {
+                config
+                    .default_model
+                    .strip_prefix("openai/")
+                    .unwrap_or(&config.default_model)
+                    .to_string()
+            } else {
+                config.default_model.clone()
+            }
+        });
 
     let mut response = match provider_name.as_str() {
         "anthropic" => complete_anthropic(request, &model, &config.anthropic, credentials)?,
@@ -185,18 +233,35 @@ pub fn complete(
     };
 
     if request.expect_json {
-        let trimmed = response.text.trim();
-        let json_text = extract_json_blob(trimmed).unwrap_or(trimmed);
-        response.parsed = Some(
-            serde_json::from_str(json_text)
-                .map_err(|e| format!("model did not return valid JSON: {e}"))?,
-        );
+        response.parsed = Some(parse_json_response(&response.text)?);
     }
 
     Ok(response)
 }
 
+fn parse_json_response(text: &str) -> Result<Value, String> {
+    let trimmed = text.trim();
+    let json_text = extract_json_blob(trimmed).unwrap_or(trimmed);
+    let value: Value = serde_json::from_str(json_text)
+        .map_err(|e| format!("model did not return valid JSON: {e}"))?;
+    // Some providers encode the structured object as a JSON string. Unwrap
+    // exactly once; never repair invalid JSON or invent executable plan fields.
+    if let Value::String(encoded) = &value {
+        if let Ok(structured @ (Value::Object(_) | Value::Array(_))) =
+            serde_json::from_str::<Value>(encoded)
+        {
+            return Ok(structured);
+        }
+    }
+    Ok(value)
+}
+
 fn extract_json_blob(text: &str) -> Option<&str> {
+    // Generated artifacts can contain Markdown fences inside JSON strings.
+    // Prefer a complete JSON response before inspecting prose wrappers.
+    if serde_json::from_str::<Value>(text).is_ok() {
+        return Some(text);
+    }
     if let Some(start) = text.find("```") {
         let after = &text[start + 3..];
         let after = after
@@ -264,7 +329,10 @@ fn complete_anthropic(
         .and_then(|blocks| {
             blocks.iter().find_map(|block| {
                 if block.get("type").and_then(Value::as_str) == Some("text") {
-                    block.get("text").and_then(Value::as_str).map(str::to_string)
+                    block
+                        .get("text")
+                        .and_then(Value::as_str)
+                        .map(str::to_string)
                 } else {
                     None
                 }
@@ -302,16 +370,16 @@ fn complete_openai_compatible(
     }
     messages.push(json!({"role": "user", "content": request.prompt}));
 
-    let body = json!({
+    let mut body = json!({
         "model": model,
         "messages": messages
     });
+    if request.expect_json && provider_name == "openai" {
+        body["response_format"] = json!({"type": "json_object"});
+    }
 
     let mut req = ureq::post(&url).set("content-type", "application/json");
-    let key_env = provider
-        .api_key_env
-        .as_deref()
-        .unwrap_or(default_key_env);
+    let key_env = provider.api_key_env.as_deref().unwrap_or(default_key_env);
     if !key_env.is_empty() {
         if let Some(api_key) = credentials
             .resolve(key_env)
@@ -376,14 +444,79 @@ mod tests {
     use super::*;
 
     #[test]
+    fn preserves_json_artifacts_containing_markdown_fences() {
+        let text = json!({"source":"Respond with \"Hello\"", "readme":"```bash\ndevlish -r workflow.dvl\n```"}).to_string();
+        assert_eq!(extract_json_blob(&text), Some(text.as_str()));
+    }
+
+    #[test]
     fn extracts_fenced_json() {
         let text = "Here you go:\n```json\n{\"a\": 1}\n```\n";
         assert_eq!(extract_json_blob(text), Some("{\"a\": 1}"));
     }
 
     #[test]
+    fn parses_wrapped_json_without_repairing_invalid_objects() {
+        let plan = json!({"steps":[{"action":"respond","payload":"Hello"}]});
+        assert_eq!(parse_json_response(&plan.to_string()).unwrap(), plan);
+        assert_eq!(
+            parse_json_response(&json!(plan.to_string()).to_string()).unwrap(),
+            plan
+        );
+        assert_eq!(
+            parse_json_response(&format!("```json\n{plan}\n```")).unwrap(),
+            plan
+        );
+        assert!(parse_json_response("{broken}").is_err());
+        assert_eq!(
+            parse_json_response("{\"answer\":\"Hi\"}").unwrap(),
+            json!({"answer":"Hi"})
+        );
+    }
+
+    #[test]
+    fn openrouter_precedes_openai_and_explicit_choices_never_fall_back() {
+        struct Keys(Vec<&'static str>);
+        impl CredentialResolver for Keys {
+            fn resolve(&self, key: &str) -> Option<String> {
+                self.0.contains(&key).then(|| "synthetic-key".into())
+            }
+        }
+        let mut request = LlmRequest {
+            prompt: "test".into(),
+            model: None,
+            provider: None,
+            expect_json: false,
+            system: None,
+        };
+        let config = LlmConfig::default();
+        assert_eq!(
+            select_provider(
+                &request,
+                &config,
+                &Keys(vec!["OPENROUTER_API_KEY", "OPENAI_API_KEY"])
+            ),
+            "openrouter"
+        );
+        assert_eq!(
+            select_provider(&request, &config, &Keys(vec!["OPENAI_API_KEY"])),
+            "openai"
+        );
+        assert_eq!(
+            select_provider(&request, &config, &Keys(vec![])),
+            "openrouter"
+        );
+        request.provider = Some("openrouter".into());
+        assert_eq!(
+            select_provider(&request, &config, &Keys(vec!["OPENAI_API_KEY"])),
+            "openrouter"
+        );
+    }
+
+    #[test]
     fn default_config_loads() {
         let cfg = LlmConfig::default();
-        assert_eq!(cfg.default_provider, "openai");
+        assert_eq!(cfg.default_provider, "openrouter");
+        assert_eq!(cfg.default_model, "openai/gpt-4o-mini");
     }
 }

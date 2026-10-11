@@ -43,7 +43,7 @@ pub fn run_serve(args: Vec<String>) -> Result<(), String> {
             value if value.starts_with("--log-level=") => {}
             "--help" | "-h" => {
                 println!(
-                    "Usage: devlish-core serve [--bind HOST:PORT] [--tools-dir DIR] [--log-level LEVEL]\n\n\
+                    "Usage: devlish --server [--bind HOST:PORT] [--tools-dir DIR] [--log-level LEVEL]\n\n\
                      Endpoints:\n\
                        GET  /v1/health\n\
                        POST /v1/compile\n\
@@ -208,5 +208,10 @@ fn run_from_json(args: &Value) -> devlish_core::service::ServiceResult {
             .map(String::from),
         model: args.get("model").and_then(Value::as_str).map(String::from),
         search_paths: devlish_search_paths_for(source_path.as_deref().map(std::path::Path::new)),
+        policy_path: None,
+        policy_log: None,
+        default_authorization: None,
+        limits: None,
+        artifact_requirements: None,
     })
 }

@@ -1,3 +1,7 @@
+pub mod effect_budget;
+pub mod policy;
+pub mod tool_request;
+
 use serde_json::{json, Map, Number, Value};
 use std::collections::HashMap;
 
@@ -27,6 +31,11 @@ pub trait HostEffects {
                 .and_then(Value::as_str)
                 .unwrap_or("unknown")
         ))
+    }
+    /// Catalog tool execution requires a platform-qualified host adapter. This
+    /// default never discovers commands through PATH or invokes a shell.
+    fn run_tool(&mut self, _request: &Value) -> Result<Value, String> {
+        Err("catalog tool execution is unavailable: no verified launcher".into())
     }
     fn http_request(
         &mut self,
@@ -674,6 +683,37 @@ impl Vm {
                     ]),
                 );
             }
+            "RUN_TOOL" => {
+                let request = self.register_value(&string_field(instruction, "request")?)?;
+                let tool_id = tool_request::validate(&request).map_err(|e| self.error(e))?;
+                // Unlike legacy effects, this new capability always needs an
+                // explicit declaration, including programs without a manifest.
+                let permitted = self
+                    .manifest
+                    .as_ref()
+                    .and_then(|m| m.get("permissions"))
+                    .and_then(Value::as_array)
+                    .is_some_and(|permissions| {
+                        permissions.iter().any(|p| {
+                            p.get("kind").and_then(Value::as_str) == Some("run_tool")
+                                && match p.get("scope") {
+                                    None | Some(Value::Null) => true,
+                                    Some(Value::String(scope)) => scope == tool_id,
+                                    _ => false,
+                                }
+                        })
+                    });
+                if !permitted {
+                    return Err(self.error(
+                        "Permission denied: run_tool is not declared for this catalog ID".into(),
+                    ));
+                }
+                let dest = string_field(instruction, "dest")?;
+                let result = host
+                    .run_tool(&request)
+                    .map_err(|e| self.error(format!("Catalog tool failed: {e}")))?;
+                self.registers.insert(dest, result);
+            }
             "LLM_COMPLETE" => {
                 let prompt_val = self.register_value(&string_field(instruction, "prompt")?)?;
                 let prompt = match &prompt_val {
@@ -1123,6 +1163,7 @@ impl Vm {
                 let source_val = self.register_value(&string_field(instruction, "source")?)?;
                 let dest_val = self.register_value(&string_field(instruction, "dest")?)?;
                 let dest_str = dest_val.as_str().unwrap_or_default().to_string();
+                self.check_manifest_permission("write_file", Some(&dest_str))?;
                 let request = json!({
                     "source": source_val,
                     "destination": dest_str,
@@ -1359,6 +1400,7 @@ impl Vm {
         if path.trim().is_empty() {
             return Err(self.error("File path cannot be empty".to_string()));
         }
+        self.check_manifest_permission("write_file", Some(&path))?;
 
         let mode = instruction
             .get("mode")
@@ -1428,6 +1470,7 @@ impl Vm {
         if path.trim().is_empty() {
             return Err(self.error("File path cannot be empty".to_string()));
         }
+        self.check_manifest_permission("read_file", Some(&path))?;
 
         let request = json!({ "path": path, "format": format });
         self.push_event(
@@ -1688,6 +1731,7 @@ impl Vm {
         if path.trim().is_empty() {
             return Err(self.error("File path cannot be empty".to_string()));
         }
+        self.check_manifest_permission("write_file", Some(&path))?;
 
         let assertions = self
             .results

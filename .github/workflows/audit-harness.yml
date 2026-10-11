@@ -1,0 +1,50 @@
+name: Audit and harness verification
+
+"on":
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: audit-harness-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  linux:
+    name: Linux audit and harness
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      RUSTUP_TOOLCHAIN: 1.96.0
+      CARGO_TERM_COLOR: never
+      # Verified-session tests hash their real executables. Linux DWARF debug
+      # sections can exceed the verifier's 64 MiB artifact bound.
+      CARGO_PROFILE_DEV_DEBUG: "0"
+      CARGO_PROFILE_TEST_DEBUG: "0"
+    steps:
+      - name: Check out candidate source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install pinned Rust toolchain
+        run: rustup toolchain install "$RUSTUP_TOOLCHAIN" --profile minimal --component clippy --target wasm32-unknown-unknown
+      - name: Record test toolchain
+        run: |
+          rustc --version --verbose
+          cargo --version
+      - name: Independent audit tests
+        run: cargo test --locked --manifest-path crates/devlish_audit/Cargo.toml
+      - name: Native core and harness tests
+        run: cargo test --locked --manifest-path crates/devlish_core/Cargo.toml
+      - name: VM tests
+        run: cargo test --locked --manifest-path crates/devlish_vm/Cargo.toml
+      - name: Model adapter tests
+        run: cargo test --locked --manifest-path crates/devlish_llm/Cargo.toml
+      - name: Strict independent audit lint
+        run: cargo clippy --locked --manifest-path crates/devlish_audit/Cargo.toml --all-targets -- -D warnings
+      - name: Native lint (existing warning baseline)
+        run: cargo clippy --locked --manifest-path crates/devlish_core/Cargo.toml --all-targets
+      - name: Browser compiler compatibility
+        run: cargo check --locked --manifest-path crates/devlish_core/Cargo.toml --target wasm32-unknown-unknown --no-default-features --lib

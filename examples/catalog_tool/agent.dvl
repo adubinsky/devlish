@@ -1,0 +1,10 @@
+Permissions:
+  Run catalog tool "public-grep"
+
+Ask "Which catalog request?" as tool_request
+Run catalog tool tool_request as tool_result
+result_shape equals record with "number" as exit_code and "text" as stdout and "text" as stderr
+Require tool_result matches shape result_shape otherwise fail with "Invalid public search result."
+Require count of keys of tool_result equals 3 otherwise fail with "Invalid public search result."
+Require exit_code of tool_result equals 0 otherwise fail with "Public search did not complete successfully."
+Respond with "Approved public search completed."

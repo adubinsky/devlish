@@ -2,10 +2,40 @@ use serde::Serialize;
 use serde_json::{json, Map, Number, Value};
 use std::collections::{HashMap, HashSet};
 
+#[cfg(feature = "native")]
+pub mod local_tools;
+pub mod governed_run;
+pub mod integrity;
+pub mod artifact_validation;
 pub mod logutil;
+pub mod policy_log;
 
 #[cfg(feature = "native")]
 pub mod service;
+#[cfg(feature = "native")]
+pub mod verified_session;
+#[cfg(feature = "native")]
+pub mod tool_snapshot;
+#[cfg(feature = "native")]
+pub mod tool_image;
+#[cfg(feature = "native")]
+pub mod tool_landlock;
+#[cfg(feature = "native")]
+pub mod tool_descriptors;
+#[cfg(feature = "native")]
+pub mod tool_limits;
+#[cfg(feature = "native")]
+pub mod tool_syscalls;
+#[cfg(feature = "native")]
+pub mod tool_streams;
+#[cfg(feature = "native")]
+pub mod tool_reservations;
+#[cfg(all(test, feature = "native", target_os = "linux", target_arch = "x86_64"))]
+mod tool_broker_test_support;
+#[cfg(feature = "native")]
+pub mod receipt_issuer;
+#[cfg(feature = "native")]
+pub mod receipt_journal;
 
 const FORMAT: &str = "devlish-bytecode";
 const FORMAT_VERSION: u8 = 0;
@@ -280,6 +310,11 @@ enum StatementKind {
         model: Option<String>,
         provider: Option<String>,
         expect_json: bool,
+    },
+    /// Catalog-backed external effect: `Run catalog tool <request> as <dest>`
+    RunTool {
+        request: Expression,
+        dest: String,
     },
     /// Journaled wall clock: `Get the current time as <dest>`
     ClockNow {
@@ -1375,7 +1410,8 @@ fn rename_symbols_in_statement(statement: &mut Statement, rename: &HashMap<Strin
             rename_string(store_as)
         }
         StatementKind::Bind { target_name, .. } => rename_string(target_name),
-        StatementKind::HttpRequest { dest, .. }
+        StatementKind::RunTool { dest, .. }
+        | StatementKind::HttpRequest { dest, .. }
         | StatementKind::XlsxReadRows { dest, .. }
         | StatementKind::FileExists { dest, .. }
         | StatementKind::FileStat { dest, .. }
@@ -1785,7 +1821,8 @@ fn collect_defined_symbols(statement: &Statement, symbols: &mut HashSet<String>)
         StatementKind::FileGlob { dest, .. } => {
             symbols.insert(dest.clone());
         }
-        StatementKind::LlmComplete { dest, .. }
+        StatementKind::RunTool { dest, .. }
+        | StatementKind::LlmComplete { dest, .. }
         | StatementKind::ClockNow { dest, .. }
         | StatementKind::RandomDraw { dest, .. } => {
             symbols.insert(dest.clone());
@@ -2130,6 +2167,7 @@ fn each_expression_in_statement(statement: &Statement, visit: &mut impl FnMut(&E
         StatementKind::XlsxReadRows { path, .. } => visit(path),
         StatementKind::Checkpoint { prompt, .. } => visit(prompt),
         StatementKind::LlmComplete { prompt, .. } => visit(prompt),
+        StatementKind::RunTool { request, .. } => visit(request),
         StatementKind::ClockNow { .. } => {}
         StatementKind::RandomDraw { low, high, .. } => {
             if let Some(low) = low {
@@ -2268,6 +2306,7 @@ fn each_expression_in_statement_mut(
         StatementKind::XlsxReadRows { path, .. } => visit(path),
         StatementKind::Checkpoint { prompt, .. } => visit(prompt),
         StatementKind::LlmComplete { prompt, .. } => visit(prompt),
+        StatementKind::RunTool { request, .. } => visit(request),
         StatementKind::ClockNow { .. } => {}
         StatementKind::RandomDraw { low, high, .. } => {
             if let Some(low) = low {
@@ -2374,6 +2413,7 @@ fn child_statement_blocks(statement: &Statement) -> Vec<&[Statement]> {
         | StatementKind::LlmComplete { .. }
         | StatementKind::ClockNow { .. }
         | StatementKind::RandomDraw { .. }
+        | StatementKind::RunTool { .. }
         | StatementKind::FileCopy { .. }
         | StatementKind::FileMove { .. }
         | StatementKind::FileMkdir { .. }
@@ -2438,6 +2478,7 @@ fn child_statement_blocks_mut(statement: &mut Statement) -> Vec<&mut Vec<Stateme
         | StatementKind::LlmComplete { .. }
         | StatementKind::ClockNow { .. }
         | StatementKind::RandomDraw { .. }
+        | StatementKind::RunTool { .. }
         | StatementKind::FileCopy { .. }
         | StatementKind::FileMove { .. }
         | StatementKind::FileMkdir { .. }
@@ -2828,7 +2869,7 @@ fn parse_manifest_permission(line: &str) -> Option<ManifestPermission> {
     let lower = line.to_ascii_lowercase();
 
     // "Read files from <path>"
-    if let Some(rest) = lower.strip_prefix("read files from ") {
+    if let Some(rest) = strip_prefix_ci(line, "read files from ") {
         return Some(ManifestPermission {
             kind: "read_file".to_string(),
             scope: Some(rest.trim().trim_matches('"').to_string()),
@@ -2842,7 +2883,7 @@ fn parse_manifest_permission(line: &str) -> Option<ManifestPermission> {
         });
     }
     // "Write files to <path>"
-    if let Some(rest) = lower.strip_prefix("write files to ") {
+    if let Some(rest) = strip_prefix_ci(line, "write files to ") {
         return Some(ManifestPermission {
             kind: "write_file".to_string(),
             scope: Some(rest.trim().trim_matches('"').to_string()),
@@ -2853,6 +2894,18 @@ fn parse_manifest_permission(line: &str) -> Option<ManifestPermission> {
         return Some(ManifestPermission {
             kind: "write_file".to_string(),
             scope: None,
+        });
+    }
+    if lower == "run catalog tools" {
+        return Some(ManifestPermission {
+            kind: "run_tool".to_string(),
+            scope: None,
+        });
+    }
+    if let Some(rest) = strip_prefix_ci(line, "Run catalog tool ") {
+        return Some(ManifestPermission {
+            kind: "run_tool".to_string(),
+            scope: Some(rest.trim().trim_matches('"').to_string()),
         });
     }
     // "Call language models" must precede the generic "Call <service> service"
@@ -2878,7 +2931,7 @@ fn parse_manifest_permission(line: &str) -> Option<ManifestPermission> {
         });
     }
     // "HTTP requests" / "HTTP requests to <domain>"
-    if let Some(rest) = lower.strip_prefix("http requests to ") {
+    if let Some(rest) = strip_prefix_ci(line, "HTTP requests to ") {
         return Some(ManifestPermission {
             kind: "http_request".to_string(),
             scope: Some(rest.trim().trim_matches('"').to_string()),
@@ -2903,7 +2956,7 @@ fn parse_manifest_permission(line: &str) -> Option<ManifestPermission> {
         });
     }
     // "Filesystem operations" / "Filesystem operations on <path>"
-    if let Some(rest) = lower.strip_prefix("filesystem operations on ") {
+    if let Some(rest) = strip_prefix_ci(line, "filesystem operations on ") {
         return Some(ManifestPermission {
             kind: "filesystem".to_string(),
             scope: Some(rest.trim().trim_matches('"').to_string()),
@@ -3543,6 +3596,36 @@ fn parse_flat_statement(line_number: usize, line: &str) -> Result<Statement, Com
             StatementKind::Require {
                 condition: parse_condition_expression(rest.trim()),
                 message: None,
+            },
+        ));
+    }
+
+    // The request contains only a catalog ID and an argv list, never a shell.
+    if let Some(rest) = strip_prefix_ci(line, "Run catalog tool ") {
+        // Record expressions also contain `as`; the final unquoted delimiter
+        // names the result. Reuse the established quote-aware scanner.
+        let mut remaining = rest;
+        let mut split = None;
+        while let Some((_, right)) = split_once_ci_outside_quotes(remaining, " as ") {
+            split = Some((&rest[..rest.len() - right.len() - 4], right));
+            remaining = right;
+        }
+        let (request, dest) = split.ok_or_else(|| {
+            CompileError::single(line_number, "Expected tool request as <name>", line)
+        })?;
+        if request.trim().is_empty() || dest.trim().is_empty() {
+            return Err(CompileError::single(
+                line_number,
+                "Expected tool request as <name>",
+                line,
+            ));
+        }
+        return Ok(statement(
+            line_number,
+            line,
+            StatementKind::RunTool {
+                request: parse_expression(request.trim()),
+                dest: sanitize_name(dest.trim()),
             },
         ));
     }
@@ -4765,15 +4848,28 @@ fn split_list_items(text: &str) -> Vec<&str> {
     let bytes = lower.as_bytes();
     let len = bytes.len();
     let mut i = 0;
+    let mut in_quote = false;
     while i < len {
-        if bytes[i] == b',' {
+        if in_quote {
+            if bytes[i] == b'\\' {
+                i += 2;
+                continue;
+            }
+            if bytes[i] == b'"' {
+                in_quote = false;
+            }
+            i += 1;
+        } else if bytes[i] == b'"' {
+            in_quote = true;
+            i += 1;
+        } else if bytes[i] == b',' {
             let segment = text[start..i].trim();
             if !segment.is_empty() {
                 items.push(segment);
             }
             start = i + 1;
             i += 1;
-        } else if i + 5 <= len && &lower[i..i + 5] == " and " {
+        } else if i + 5 <= len && &bytes[i..i + 5] == b" and " {
             let segment = text[start..i].trim();
             if !segment.is_empty() {
                 items.push(segment);
@@ -6123,6 +6219,30 @@ impl BytecodeCompiler {
                 );
                 self.record_effect("llm_complete", statement, vec![]);
             }
+            StatementKind::RunTool { request, dest } => {
+                let request_reg = self.compile_expression(request, statement);
+                // Parsing has sanitized this symbol; preserve module mangling.
+                let dest_sym = dest.clone();
+                let dest_reg = self.next_register();
+                self.emit(
+                    "RUN_TOOL",
+                    map(vec![
+                        ("request", string_value(&request_reg)),
+                        ("dest", string_value(&dest_reg)),
+                    ]),
+                    Some(statement),
+                );
+                self.register_symbol(&dest_sym);
+                self.emit(
+                    "STORE",
+                    map(vec![
+                        ("symbol", string_value(&dest_sym)),
+                        ("value", string_value(&dest_reg)),
+                    ]),
+                    Some(statement),
+                );
+                self.record_effect("run_tool", statement, vec![]);
+            }
             StatementKind::ClockNow { dest, clock_kind } => {
                 let dest_sym = sanitize_name(dest);
                 let dest_reg = self.next_register();
@@ -7160,6 +7280,13 @@ impl BytecodeCompiler {
         }) {
             imports.push("read_file".to_string());
         }
+        if self
+            .effects
+            .iter()
+            .any(|effect| effect["kind"] == "run_tool")
+        {
+            imports.push("run_tool".to_string());
+        }
         imports
     }
 }
@@ -7483,9 +7610,9 @@ fn parse_expression(raw: &str) -> Expression {
         let items = split_list_items(rest.trim());
         let mut fields = Vec::new();
         for item in items {
-            if let Some((val_text, key_text)) = split_once_ci(item.trim(), " as ") {
+            if let Some((val_text, key_text)) = split_once_ci_outside_quotes(item.trim(), " as ") {
                 fields.push((
-                    sanitize_name(key_text.trim()),
+                    record_field_name(key_text.trim()),
                     parse_expression(val_text.trim()),
                 ));
             }
@@ -7524,7 +7651,6 @@ fn parse_expression(raw: &str) -> Expression {
     // Quoted strings
     if let Some((value, rest)) = quoted_prefix(value) {
         if rest.trim().is_empty() {
-            let value = value.replace("\\n", "\n").replace("\\t", "\t");
             return Expression::Literal(Value::String(value));
         }
     }
@@ -7572,7 +7698,7 @@ fn parse_expression(raw: &str) -> Expression {
         if !field_trimmed.is_empty() && !record_trimmed.is_empty() && !field_trimmed.contains(' ') {
             return Expression::FieldAccess {
                 record: Box::new(parse_expression(record_trimmed)),
-                field: sanitize_name(field_trimmed),
+                field: record_field_name(field_trimmed),
             };
         }
     }
@@ -8160,6 +8286,10 @@ fn parse_builtin_call(value: &str) -> Option<Expression> {
         }
     }
 
+    // UTF-8 byte length of text (or item count of a list).
+    if let Some(rest) = strip_prefix_ci(value, "length of ") {
+        return Some(unary_builtin("length", rest));
+    }
     // count of X
     if let Some(rest) = strip_prefix_ci(value, "count of ") {
         return Some(Expression::BuiltinCall {
@@ -8452,8 +8582,8 @@ fn parse_builtin_call(value: &str) -> Option<Expression> {
     }
     // replace X in Y with Z
     if let Some(rest) = strip_prefix_ci(value, "replace ") {
-        if let Some((needle, after_in)) = split_once_ci(rest.trim(), " in ") {
-            if let Some((haystack, replacement)) = split_once_ci(after_in.trim(), " with ") {
+        if let Some((needle, after_in)) = split_once_ci_outside_quotes(rest.trim(), " in ") {
+            if let Some((haystack, replacement)) = split_once_ci_outside_quotes(after_in.trim(), " with ") {
                 return Some(Expression::BuiltinCall {
                     name: "replace".to_string(),
                     arguments: vec![
@@ -8782,7 +8912,9 @@ fn split_once_ci_outside_quotes<'a>(text: &'a str, needle: &str) -> Option<(&'a 
             // splitting (DEVL-127, DEVL-131).
             if ch == '"' {
                 in_quote = true;
-            } else if i + needle_len <= lower.len() && lower[i..i + needle_len] == needle_lower {
+            } else if i + needle_len <= lower.len()
+                && lower.as_bytes()[i..i + needle_len] == *needle_lower.as_bytes()
+            {
                 return Some((&text[..i], &text[i + needle_len..]));
             }
         }
@@ -9085,6 +9217,11 @@ fn strip_name_stop_words(value: &str) -> String {
         return value.trim().to_string();
     }
     kept.join(" ")
+}
+
+// Quoted record keys are external data labels, not normalized Devlish names.
+fn record_field_name(value: &str) -> String {
+    serde_json::from_str::<String>(value).unwrap_or_else(|_| sanitize_name(value))
 }
 
 fn sanitize_name(value: &str) -> String {
@@ -10187,6 +10324,44 @@ mod tests {
                 .and_then(Value::as_str),
             Some("alpha\nbeta"),
         );
+    }
+
+    #[test]
+    fn literal_replace_ignores_delimiters_inside_quoted_text() {
+        let result = compile_and_run_ok(
+            "text equals \"begin in with end\"\nclean equals replace \" in with \" in text with \" - with - \"\nRespond with clean",
+            json!({}),
+        );
+        assert_eq!(result["response"], json!("begin - with - end"));
+    }
+
+    #[test]
+    fn length_of_supports_bounded_utf8_text_and_lists() {
+        let result = compile_and_run_ok(
+            "text equals \"é\"\nitems equals list of 1, 2\nRespond with record with length of text as bytes and length of items as items",
+            json!({}),
+        );
+        assert_eq!(result["response"], json!({"bytes":2,"items":2}));
+    }
+
+    #[test]
+    fn string_literals_decode_escaped_backslashes_only_once() {
+        let result = compile_and_run_ok(r#"Respond with "\\n\\t""#, json!({}));
+        assert_eq!(result["response"], json!("\\n\\t"));
+        let result = compile_and_run_ok(r#"Respond with "\n\t""#, json!({}));
+        assert_eq!(result["response"], json!("\n\t"));
+    }
+
+    #[test]
+    fn quoted_record_fields_preserve_external_json_key_case() {
+        let result = compile_and_run_ok(
+            "address equals record with \"US\" as \"regionCode\"\nshape equals record with \"text\" as \"regionCode\"\nRequire address matches shape shape\nRespond with record with address as address and \"regionCode\" of address as region",
+            json!({}),
+        );
+        assert_eq!(result["response"], json!({"address":{"regionCode":"US"},"region":"US"}));
+        let result = compile_and_run_ok(
+            "Ask \"API response\" as verdict\nRespond with \"addressComplete\" of verdict", json!({"verdict":{"addressComplete":true}}));
+        assert_eq!(result["response"], json!(true));
     }
 
     #[test]
@@ -11484,6 +11659,18 @@ greeting equals "hello""#;
             msg.contains("line 1"),
             "error should cite the Rule: header line, got: {msg}"
         );
+    }
+
+    #[test]
+    fn http_permission_preserves_case_sensitive_endpoint_paths() {
+        let source = "Permissions:\n  HTTP requests to \"https://addressvalidation.googleapis.com/v1:validateAddress\"\nPost to \"https://addressvalidation.googleapis.com/v1:validateAddress\" with \"{}\" as result";
+        let package = compile_ok(source);
+        assert_eq!(package["manifest"]["permissions"][0]["scope"],
+            "https://addressvalidation.googleapis.com/v1:validateAddress");
+        let error = run_package_err(package, json!({}));
+        assert!(!error.contains("Permission denied"), "{error}");
+        let changed = source.replace("Post to \"https://addressvalidation.googleapis.com/v1:validateAddress\"", "Post to \"https://addressvalidation.googleapis.com/v1:validateaddress\"");
+        assert!(run_package_err(compile_ok(&changed), json!({})).contains("Permission denied"));
     }
 
     #[test]

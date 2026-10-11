@@ -12,6 +12,7 @@ Use these as the current source of truth:
 - `docs/BEGINNER_COURSE.md` - beginner-first course plan
 
 Reference:
+- `docs/INDEPENDENT_AUDIT_VERIFIER.md` - offline signature and signed-receipt verification, assurance limits
 - `docs/LANGUAGE_GRAMMAR.ebnf` - parser-faithful grammar
 - `docs/RESERVED_WORDS_CURRENT.md` - canonical reserved-word reference
 - `docs/STANDARD_LIBRARY_CURRENT.md` - language-layer and standard-library split

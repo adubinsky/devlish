@@ -1,0 +1,241 @@
+[
+  {
+    "name": "Exact public search",
+    "input": {
+      "effect": "run_tool",
+      "request": {
+        "tool_id": "public-grep",
+        "arguments": [
+          "--fixed-strings",
+          "--",
+          "published",
+          "/work/public.txt"
+        ]
+      }
+    },
+    "expected": {
+      "allow": true,
+      "reason": "Only the exact public search is permitted."
+    }
+  },
+  {
+    "name": "Alternate binary ID",
+    "input": {
+      "effect": "run_tool",
+      "request": {
+        "tool_id": "ls",
+        "arguments": [
+          "--fixed-strings",
+          "--",
+          "published",
+          "/work/public.txt"
+        ]
+      }
+    },
+    "expected": {
+      "allow": false,
+      "reason": "Private data, alternate programs, arguments and output are not approved."
+    }
+  },
+  {
+    "name": "Private NPPI file",
+    "input": {
+      "effect": "run_tool",
+      "request": {
+        "tool_id": "public-grep",
+        "arguments": [
+          "--fixed-strings",
+          "--",
+          "published",
+          "/private/borrowers.csv"
+        ]
+      }
+    },
+    "expected": {
+      "allow": false,
+      "reason": "Private data, alternate programs, arguments and output are not approved."
+    }
+  },
+  {
+    "name": "Private IP file",
+    "input": {
+      "effect": "run_tool",
+      "request": {
+        "tool_id": "public-grep",
+        "arguments": [
+          "--fixed-strings",
+          "--",
+          "published",
+          "/private/design.txt"
+        ]
+      }
+    },
+    "expected": {
+      "allow": false,
+      "reason": "Private data, alternate programs, arguments and output are not approved."
+    }
+  },
+  {
+    "name": "Shell syntax",
+    "input": {
+      "effect": "run_tool",
+      "request": {
+        "tool_id": "public-grep",
+        "arguments": [
+          "published; cat /private/design.txt"
+        ]
+      }
+    },
+    "expected": {
+      "allow": false,
+      "reason": "Private data, alternate programs, arguments and output are not approved."
+    }
+  },
+  {
+    "name": "Recursive directory read",
+    "input": {
+      "effect": "run_tool",
+      "request": {
+        "tool_id": "public-grep",
+        "arguments": [
+          "-R",
+          "published",
+          "/"
+        ]
+      }
+    },
+    "expected": {
+      "allow": false,
+      "reason": "Private data, alternate programs, arguments and output are not approved."
+    }
+  },
+  {
+    "name": "Extra argument",
+    "input": {
+      "effect": "run_tool",
+      "request": {
+        "tool_id": "public-grep",
+        "arguments": [
+          "--fixed-strings",
+          "--",
+          "published",
+          "/work/public.txt",
+          "/private/design.txt"
+        ]
+      }
+    },
+    "expected": {
+      "allow": false,
+      "reason": "Private data, alternate programs, arguments and output are not approved."
+    }
+  },
+  {
+    "name": "Loader environment",
+    "input": {
+      "effect": "run_tool",
+      "request": {
+        "tool_id": "public-grep",
+        "arguments": [
+          "--fixed-strings",
+          "--",
+          "published",
+          "/work/public.txt"
+        ],
+        "environment": {
+          "LD_PRELOAD": "/tmp/inject.so"
+        }
+      }
+    },
+    "expected": {
+      "allow": false,
+      "reason": "Private data, alternate programs, arguments and output are not approved."
+    }
+  },
+  {
+    "name": "Executable path override",
+    "input": {
+      "effect": "run_tool",
+      "request": {
+        "tool_id": "public-grep",
+        "arguments": [
+          "--fixed-strings",
+          "--",
+          "published",
+          "/work/public.txt"
+        ],
+        "path": "/tmp/grep"
+      }
+    },
+    "expected": {
+      "allow": false,
+      "reason": "Private data, alternate programs, arguments and output are not approved."
+    }
+  },
+  {
+    "name": "Working directory override",
+    "input": {
+      "effect": "run_tool",
+      "request": {
+        "tool_id": "public-grep",
+        "arguments": [
+          "--fixed-strings",
+          "--",
+          "published",
+          "/work/public.txt"
+        ],
+        "cwd": "/private"
+      }
+    },
+    "expected": {
+      "allow": false,
+      "reason": "Private data, alternate programs, arguments and output are not approved."
+    }
+  },
+  {
+    "name": "Sensitive stdin",
+    "input": {
+      "effect": "run_tool",
+      "request": {
+        "tool_id": "public-grep",
+        "arguments": [
+          "--fixed-strings",
+          "--",
+          "published",
+          "/work/public.txt"
+        ],
+        "stdin": "SYNTHETIC_NPPI_123_45_6789"
+      }
+    },
+    "expected": {
+      "allow": false,
+      "reason": "Private data, alternate programs, arguments and output are not approved."
+    }
+  },
+  {
+    "name": "Non-list argv",
+    "input": {
+      "effect": "run_tool",
+      "request": {
+        "tool_id": "public-grep",
+        "arguments": "published /work/public.txt"
+      }
+    },
+    "expected": {
+      "allow": false,
+      "reason": "Private data, alternate programs, arguments and output are not approved."
+    }
+  },
+  {
+    "name": "Tool output disclosure",
+    "input": {
+      "effect": "respond",
+      "request": {
+        "value": "SYNTHETIC_COMPANY_IP"
+      }
+    },
+    "expected": {
+      "allow": false,
+      "reason": "Private data, alternate programs, arguments and output are not approved."
+    }
+  }
+]
