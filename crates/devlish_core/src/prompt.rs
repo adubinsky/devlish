@@ -80,8 +80,8 @@ pub fn run() -> Result<(), String> {
     }
     let (instruction_limit, budget) = limits()?;
     let mut history = Vec::<Value>::new();
-    println!("Devlish {}", super::VERSION);
-    println!("Enter a request. /clear starts a fresh conversation; /exit exits.");
+    println!("Devlish {} harness", super::VERSION);
+    println!("Enter a request or /run FILE. help lists commands; /clear clears; /exit exits.");
     println!(
         "Each turn runs a Devlish program with enforced policy. Audit logs: .devlish/sessions/"
     );
@@ -99,6 +99,16 @@ pub fn run() -> Result<(), String> {
         let text = line.trim();
         match text {
             "/exit" | "/quit" => break,
+            "help" | "/help" => {
+                println!("Harness commands: help, /clear, /exit, /run FILE");
+                println!(
+                    "/run executes a Devlish workflow with its policy, limits, and audit log."
+                );
+                println!(
+                    "For provider, model, input, and authoring options use devlish harness --help."
+                );
+                continue;
+            }
             "/clear" => {
                 history.clear();
                 continue;
@@ -106,10 +116,19 @@ pub fn run() -> Result<(), String> {
             "" => continue,
             _ => {}
         }
+        if let Some(path) = text.strip_prefix("/run ") {
+            let path = path.trim();
+            if let Err(error) =
+                super::harness::run_harness(vec!["harness".into(), "run".into(), path.into()])
+            {
+                eprintln!("Workflow failed: {error}");
+            }
+            continue;
+        }
         let mut pending = history.clone();
         pending.push(json!({"role":"user","content":text}));
         let conversation = format!(
-            "Continue this conversation. Reply to the latest user message.\n{}",
+            "Return a JSON plan, for example {{\"steps\":[{{\"action\":\"respond\",\"payload\":\"Hello.\"}}]}}. Continue this conversation. Reply to the latest user message.\n{}",
             serde_json::to_string(&pending).map_err(|e| e.to_string())?
         );
         if conversation.len() > MAX_CONVERSATION {

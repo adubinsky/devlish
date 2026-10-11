@@ -54,14 +54,42 @@ impl Drop for Fixture {
 }
 
 #[test]
-fn no_arguments_opens_model_prompt_and_eof_or_exit_closes_it() {
+fn no_arguments_opens_harness_and_local_help_needs_no_model() {
     let f = Fixture::new();
-    for input in ["", "/exit\n", "/clear\n/exit\n"] {
+    for input in ["", "/exit\n", "/clear\n/exit\n", "help\n/help\n/exit\n"] {
         let out = f.prompt(input);
         assert!(out.status.success());
         let text = String::from_utf8(out.stdout).unwrap();
         assert!(text.contains("devlish> "));
+        assert!(text.contains("harness"));
+        if input.contains("help") {
+            assert!(text.contains("Harness commands:"));
+            assert!(!String::from_utf8_lossy(&out.stderr).contains("Turn failed"));
+        }
         assert!(!text.contains("Type Devlish statements"));
+        assert!(!f.0.join(".devlish/sessions").exists());
+    }
+}
+
+#[test]
+fn interactive_harness_runs_literal_paths_through_policy_and_recording() {
+    let f = Fixture::new();
+    fs::write(f.0.join("workflow with spaces.dvl"), "Respond with \"Local result\"\n").unwrap();
+    fs::write(f.0.join(".devlish/policy.dvl"), "Rule:\n  id: test.interactive\n  version: 1.0.0\nRespond with record with true as allow and \"Test approval\" as reason\n").unwrap();
+    let out = f.prompt("/run workflow with spaces.dvl\n/exit\n");
+    assert!(out.status.success());
+    assert!(String::from_utf8_lossy(&out.stdout).contains("Local result"), "stdout={} stderr={}", String::from_utf8_lossy(&out.stdout), String::from_utf8_lossy(&out.stderr));
+    assert!(!String::from_utf8_lossy(&out.stderr).contains("failed"));
+    assert!(fs::read_dir(f.0.join(".devlish/sessions")).unwrap().next().is_some());
+}
+
+#[test]
+fn explicit_harness_opens_interactive_mode_without_credentials() {
+    let f = Fixture::new();
+    for args in [vec!["harness"], vec!["harness", "interactive"]] {
+        let out = f.command().args(args).stdin(Stdio::null()).output().unwrap();
+        assert!(out.status.success());
+        assert!(String::from_utf8_lossy(&out.stdout).contains("harness"));
         assert!(!f.0.join(".devlish/sessions").exists());
     }
 }

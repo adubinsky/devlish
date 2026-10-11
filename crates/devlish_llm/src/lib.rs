@@ -233,15 +233,27 @@ pub fn complete(
     };
 
     if request.expect_json {
-        let trimmed = response.text.trim();
-        let json_text = extract_json_blob(trimmed).unwrap_or(trimmed);
-        response.parsed = Some(
-            serde_json::from_str(json_text)
-                .map_err(|e| format!("model did not return valid JSON: {e}"))?,
-        );
+        response.parsed = Some(parse_json_response(&response.text)?);
     }
 
     Ok(response)
+}
+
+fn parse_json_response(text: &str) -> Result<Value, String> {
+    let trimmed = text.trim();
+    let json_text = extract_json_blob(trimmed).unwrap_or(trimmed);
+    let value: Value = serde_json::from_str(json_text)
+        .map_err(|e| format!("model did not return valid JSON: {e}"))?;
+    // Some providers encode the structured object as a JSON string. Unwrap
+    // exactly once; never repair invalid JSON or invent executable plan fields.
+    if let Value::String(encoded) = &value {
+        if let Ok(structured @ (Value::Object(_) | Value::Array(_))) =
+            serde_json::from_str::<Value>(encoded)
+        {
+            return Ok(structured);
+        }
+    }
+    Ok(value)
 }
 
 fn extract_json_blob(text: &str) -> Option<&str> {
@@ -358,10 +370,13 @@ fn complete_openai_compatible(
     }
     messages.push(json!({"role": "user", "content": request.prompt}));
 
-    let body = json!({
+    let mut body = json!({
         "model": model,
         "messages": messages
     });
+    if request.expect_json && provider_name == "openai" {
+        body["response_format"] = json!({"type": "json_object"});
+    }
 
     let mut req = ureq::post(&url).set("content-type", "application/json");
     let key_env = provider.api_key_env.as_deref().unwrap_or(default_key_env);
@@ -438,6 +453,25 @@ mod tests {
     fn extracts_fenced_json() {
         let text = "Here you go:\n```json\n{\"a\": 1}\n```\n";
         assert_eq!(extract_json_blob(text), Some("{\"a\": 1}"));
+    }
+
+    #[test]
+    fn parses_wrapped_json_without_repairing_invalid_objects() {
+        let plan = json!({"steps":[{"action":"respond","payload":"Hello"}]});
+        assert_eq!(parse_json_response(&plan.to_string()).unwrap(), plan);
+        assert_eq!(
+            parse_json_response(&json!(plan.to_string()).to_string()).unwrap(),
+            plan
+        );
+        assert_eq!(
+            parse_json_response(&format!("```json\n{plan}\n```")).unwrap(),
+            plan
+        );
+        assert!(parse_json_response("{broken}").is_err());
+        assert_eq!(
+            parse_json_response("{\"answer\":\"Hi\"}").unwrap(),
+            json!({"answer":"Hi"})
+        );
     }
 
     #[test]

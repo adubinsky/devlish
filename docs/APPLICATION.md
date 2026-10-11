@@ -31,7 +31,12 @@ default_model = "YOUR_OPENROUTER_MODEL"
 and Ollama are also supported by the existing adapter. No provider request is
 made just by opening or closing the prompt.
 
-## Interactive mode
+## Interactive harness mode
+
+Bare `devlish`, `devlish harness`, and `devlish harness interactive` open the harness.
+`help` and `/help` list local commands without calling a model. `/run FILE` runs
+the literal file path through the existing governed harness, including policy,
+limits, and audit recording. Use `devlish harness run` for additional flags.
 
 Type a natural-language request at `devlish>`. The terminal UI supplies the
 conversation to a Devlish program; Devlish calls the model and governs the
@@ -250,3 +255,9 @@ model-generated policy implements the intended business contract: review both
 artifacts before separately running them. The profile deliberately forbids
 subprocesses; general OS containment for approved external tools remains a
 separate boundary. It does not sandbox Codex or user shell commands.
+
+Structured responses accept complete JSON, Markdown JSON fences, and one layer
+of JSON string encoding. OpenAI JSON requests use JSON object response mode
+([API documentation](https://help.openai.com/en/articles/8555517-function-calling-in-the-openai-api)).
+Plan shape validation remains mandatory; parsing does not manufacture steps or
+retry failed model calls.

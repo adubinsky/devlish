@@ -34,7 +34,7 @@ separate compilation step, or checkout to run the application.
 ## Three Application Modes
 
 ```bash
-devlish                     # Interactive model prompt
+devlish                     # Interactive governed harness
 devlish --run workflow.dvl  # Run a Devlish workflow; -r is equivalent
 devlish --server            # Long-lived HTTP service; -s is equivalent
 ```

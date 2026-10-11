@@ -101,7 +101,7 @@ fn run(args: Vec<String>) -> Result<(), String> {
     }
     logutil::init_from_env_and_args(&args)?;
     if args.is_empty() {
-        return prompt::run();
+        return harness::run_harness(vec!["harness".into()]);
     }
 
     match args[0].as_str() {

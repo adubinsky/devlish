@@ -10,9 +10,10 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 pub fn run_harness(args: Vec<String>) -> Result<(), String> {
     if args.len() < 2 {
-        return Err(harness_usage());
+        return super::prompt::run();
     }
     match args[1].as_str() {
+        "interactive" => super::prompt::run(),
         "run" => harness_run(args),
         "generate" => harness_generate(args),
         "resume" => harness_resume(args),
