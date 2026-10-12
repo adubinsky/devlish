@@ -66,7 +66,7 @@ fn actual_local_and_path_programs_run_with_literal_arguments_and_clean_environme
 }
 
 #[test]
-fn outside_symlinks_path_overrides_and_excessive_capture_are_rejected() {
+fn outside_symlinks_and_path_overrides_are_rejected() {
     let root = Fixture::new();
     let outside = Fixture::new();
     outside.script("forbidden", "printf 'outside'");
@@ -80,16 +80,64 @@ fn outside_symlinks_path_overrides_and_excessive_capture_are_rejected() {
     ] {
         assert!(tools.run(&request).is_err());
     }
-    root.script("overflow", "while :; do printf '0123456789012345678901234567890123456789012345678901234567890123456789'; done");
-    assert!(tools
-        .run(&json!({"tool_id":"overflow","arguments":[]}))
-        .unwrap_err()
-        .contains("64 KiB"));
+}
+
+fn fixed_output_script(extra_byte: bool, stderr: bool) -> String {
+    // 1,024 writes of 64 ASCII bytes reach the exact per-stream limit.
+    // Shell builtins avoid depending on PATH utilities or an endless producer.
+    let chunk = "x".repeat(64);
+    let extra = if extra_byte { "printf x;" } else { "" };
+    let redirect = if stderr { " >&2" } else { "" };
+    format!(
+        "{{ i=0; while [ \"$i\" -lt 1024 ]; do printf '%s' '{chunk}'; i=$((i + 1)); done; {extra} }}{redirect}"
+    )
+}
+
+#[test]
+fn exact_capture_limit_is_accepted_for_stdout_and_stderr() {
+    let root = Fixture::new();
+    let tools = LocalTools::new(&root.0, std::ffi::OsStr::new("")).unwrap();
+    for stderr in [false, true] {
+        root.script("bounded", &fixed_output_script(false, stderr));
+        let result = tools
+            .run(&json!({"tool_id":"bounded","arguments":[]}))
+            .unwrap();
+        let stream = if stderr { "stderr" } else { "stdout" };
+        let other = if stderr { "stdout" } else { "stderr" };
+        assert_eq!(result[stream].as_str().unwrap(), "x".repeat(65_536));
+        assert_eq!(result[other], "");
+        assert_eq!(result["exit_code"], 0);
+    }
+}
+
+#[test]
+fn one_byte_over_capture_limit_is_rejected_for_stdout_and_stderr() {
+    let root = Fixture::new();
+    let tools = LocalTools::new(&root.0, std::ffi::OsStr::new("")).unwrap();
+    for stderr in [false, true] {
+        root.script("overflow", &fixed_output_script(true, stderr));
+        let error = tools
+            .run(&json!({"tool_id":"overflow","arguments":[]}))
+            .unwrap_err();
+        assert_eq!(
+            error, "local tool output exceeded 64 KiB; output withheld",
+            "unexpected error for stderr={stderr}: {error}"
+        );
+    }
+}
+
+#[test]
+fn tool_timeout_is_rejected_independently_of_output_limits() {
+    let root = Fixture::new();
+    let tools = LocalTools::new(&root.0, std::ffi::OsStr::new("")).unwrap();
     root.script("timeout", "while :; do :; done");
-    assert!(tools
+    let error = tools
         .run(&json!({"tool_id":"timeout","arguments":[]}))
-        .unwrap_err()
-        .contains("five seconds"));
+        .unwrap_err();
+    assert!(
+        error.contains("five seconds"),
+        "unexpected timeout error: {error}"
+    );
 }
 
 #[test]
