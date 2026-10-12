@@ -1,0 +1,46 @@
+Rule:
+  id: dealstar.jev_document_check_policy
+  version: 1.0.0
+
+Ask "Which effect is requested?" as effect
+Ask "What arguments are requested?" as request
+
+type_criteria equals record with "Certificate of insurance" as insurance and "Another document type" as other and "Insufficient information to classify" as uncertain
+type_question equals record with "choice" as type and "Classify the document using only the supplied text." as instructions and type_criteria as criteria
+type_version equals record with "v1" as version and type_question as question
+limit_criteria equals record with "The stated limit meets the requirement" as matches and "The stated limit is below the requirement" as differs and "The limit cannot be established from the text" as not_in_document
+limit_question equals record with "choice" as type and "Does the text state a general liability limit of at least USD 1,000,000? Do not infer missing information." as instructions and limit_criteria as criteria
+limit_version equals record with "v1" as version and limit_question as question
+signed_question equals record with "noul" as type and "Does the supplied text say this certificate is signed?" as instructions
+signed_version equals record with "v1" as version and signed_question as question
+readability_levels equals list of "No readable coverage information", "Some coverage information", "Clear document identity and coverage information"
+readability_question equals record with "score" as type and "Rate whether the supplied text identifies the document and its coverage." as instructions and readability_levels as criteria
+readability_version equals record with "v1" as version and readability_question as question
+approved_questions equals record with type_version as document_type and limit_version as liability_requirement and signed_version as signed and readability_version as readability
+
+# Synthetic example policy. A production policy must authorize the actual
+# document scope, question definitions and the destination receiving results.
+If effect equals "llm_complete":
+  If count of keys of request equals 3:
+    If provider of request equals "jev" and expect_json of request equals true:
+      batch equals batch of request
+      If model of batch equals "jev-1.13.0":
+        If document_id of batch equals "synthetic-document-001":
+          If correlation_id of batch equals "synthetic-check-001":
+            If idempotency_key of batch equals "synthetic-check-001:v1":
+              approved_text equals "SYNTHETIC TEST DOCUMENT. Certificate of Insurance. Insured: Example Solar LLC. Policy period: January 1, 2026 to December 31, 2026. General liability limit: USD 1,000,000. This certificate is unsigned. No real customer information."
+              If document_text of batch equals approved_text:
+                questions equals questions of batch
+                If questions equals approved_questions:
+                  Respond with record with true as allow and "The synthetic document batch is approved for the JEV route." as reason
+
+# This sample permits typed results to its bound response sink, not writes to
+# checklist state or human approval. Production must restrict that sink too.
+If effect equals "respond":
+  value equals value of request
+  If count of keys of value equals 2:
+    If message of value equals "Document checks evaluated. Review results before changing checklist state.":
+      If provider of evaluation of value equals "jev" and model of evaluation of value equals "jev-1.13.0":
+        Respond with record with true as allow and "Synthetic typed results may reach the approved response sink." as reason
+
+Respond with record with false as allow and "This example denies unapproved model calls and checklist changes." as reason

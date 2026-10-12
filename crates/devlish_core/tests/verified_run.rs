@@ -532,6 +532,131 @@ fn model_route() -> Value {
         "model":"synthetic/approved-model","credential":"SYNTHETIC_MODEL_KEY",
         "timeout_seconds":1,"max_request_bytes":4096,"max_response_bytes":4096,"max_tokens":100})
 }
+
+fn jev_batch() -> Value {
+    let mut batch: Value = serde_json::from_str(include_str!(
+        "../../devlish_llm/tests/fixtures/jev_batch.json"
+    ))
+    .unwrap();
+    batch["model"] = json!("jev-1.13.0");
+    batch
+}
+
+fn permit_jev(f: &mut Fixture) {
+    replace_json(
+        f,
+        "tool-catalog",
+        serde_json::from_str(include_str!("../../../examples/jev_checklist/catalog.json")).unwrap(),
+    );
+    replace_json(
+        f,
+        "permissions",
+        serde_json::from_str(include_str!(
+            "../../../examples/jev_checklist/permissions.json"
+        ))
+        .unwrap(),
+    );
+    replace_compiled(
+        f,
+        "program",
+        include_str!("../../../examples/jev_checklist/check.dvl"),
+    );
+    replace_compiled(
+        f,
+        "policy",
+        &include_str!("../../../examples/jev_checklist/policy.dvl")
+            .replace("dealstar.jev_document_check_policy", "test.verified"),
+    );
+}
+
+#[test]
+fn signed_jev_route_is_admitted_and_missing_credentials_fail_inside_the_recorded_effect() {
+    let mut f = Fixture::new();
+    permit_jev(&mut f);
+    let input = json!({"batch":jev_batch()}).to_string();
+    let result = Command::new(env!("CARGO_BIN_EXE_devlish-core"))
+        .current_dir(&f.dir)
+        .env("DEVLISH_VERIFIED_PROFILE", f.dir.join("profile.json"))
+        .env_remove("JEV_API_KEY")
+        .env_remove("DEVLISH_CREDENTIALS_DIR")
+        .args([
+            "run-verified",
+            "--policy-log",
+            "run.jsonl",
+            "--session-id",
+            "jev-test",
+            "--input",
+            &input,
+        ])
+        .output()
+        .unwrap();
+    assert!(!result.status.success());
+    assert!(result.stdout.is_empty());
+    let log = fs::read_to_string(f.dir.join("run.jsonl")).unwrap();
+    let records: Vec<Value> = log
+        .lines()
+        .map(|s| serde_json::from_str(s).unwrap())
+        .collect();
+    assert_eq!(records[1]["record"]["effect"], "llm_complete");
+    assert_eq!(records[1]["record"]["allow"], true);
+    assert_eq!(records[2]["record"]["outcome"]["status"], "failed");
+    assert!(records[2]["record"]["outcome"]["error_sha256"].is_string());
+    for private in [
+        "Example Solar",
+        "SYNTHETIC TEST DOCUMENT",
+        "document_text",
+        "probabilities",
+    ] {
+        assert!(!log.contains(private));
+    }
+}
+
+#[test]
+fn unsigned_jev_catalog_changes_fail_before_any_run_log_or_dispatch() {
+    let mut f = Fixture::new();
+    permit_jev(&mut f);
+    let mut catalog: Value =
+        serde_json::from_slice(&fs::read(f.dir.join("tool-catalog")).unwrap()).unwrap();
+    catalog["llm_route"]["model"] = json!("jev-1.12.0");
+    fs::write(f.dir.join("tool-catalog"), bytes(&catalog)).unwrap();
+    assert!(!f.run().status.success());
+    f.assert_no_dispatch();
+}
+
+#[test]
+#[ignore = "Explicit synthetic live API smoke test; requires operator-provided JEV_API_KEY"]
+fn signed_jev_program_runs_the_live_synthetic_batch() {
+    assert!(
+        std::env::var("JEV_API_KEY").is_ok(),
+        "operator must provide JEV_API_KEY"
+    );
+    let mut f = Fixture::new();
+    permit_jev(&mut f);
+    let input = json!({"batch":jev_batch()}).to_string();
+    let result = f.command(&[
+        "run-verified",
+        "--policy-log",
+        "run.jsonl",
+        "--session-id",
+        "jev-live-test",
+        "--input",
+        &input,
+    ]);
+    assert!(
+        result.status.success(),
+        "{}",
+        String::from_utf8_lossy(&result.stderr)
+    );
+    let response: Value = serde_json::from_slice(&result.stdout).unwrap();
+    assert_eq!(response["evaluation"]["model"], "jev-1.13.0");
+    assert_eq!(
+        response["evaluation"]["answers"]["document_type"]["choice"],
+        "insurance"
+    );
+    let log = fs::read_to_string(f.dir.join("run.jsonl")).unwrap();
+    assert!(!log.contains("Example Solar"));
+    assert!(!log.contains("probabilities"));
+}
 fn permit_model(f: &mut Fixture, route: Option<Value>) {
     let mut catalog =
         json!({"format":"devlish-tool-catalog","format_version":1,"host_effects":["llm_complete"]});

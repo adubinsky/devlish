@@ -5,6 +5,7 @@
 //! performs the HTTP completion. Secrets never leave the credential chain.
 
 pub mod governed;
+pub mod jev;
 
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};

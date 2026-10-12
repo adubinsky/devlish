@@ -3630,6 +3630,27 @@ fn parse_flat_statement(line_number: usize, line: &str) -> Result<Statement, Com
         ));
     }
 
+    // JEV is a typed specialization of the existing governed model effect.
+    if let Some(rest) = strip_prefix_ci(line, "Ask JEV with ") {
+        let (batch, dest) = split_once_ci_outside_quotes(rest, " as ").ok_or_else(|| {
+            CompileError::single(
+                line_number,
+                "Expected `Ask JEV with <batch> as <name>`",
+                line,
+            )
+        })?;
+        return Ok(statement(
+            line_number,
+            line,
+            StatementKind::LlmComplete {
+                prompt: parse_expression(batch.trim()),
+                dest: sanitize_name(dest.trim()),
+                model: None,
+                provider: Some("jev".into()),
+                expect_json: true,
+            },
+        ));
+    }
     // Ask the model ["model"] with <prompt> [expecting json] as <name>
     if let Some(rest) = strip_prefix_ci(line, "Ask the model ") {
         return parse_ask_the_model(rest, line, line_number);
@@ -13457,6 +13478,19 @@ Copy file from "/a" to "/b""#;
             warnings.is_empty(),
             "expected no warnings, got: {warnings:?}"
         );
+    }
+
+    #[test]
+    fn jev_batch_uses_the_existing_model_effect() {
+        let package = compile_ok("Permissions:\n  Call language models\nAsk \"Document batch?\" as batch\nAsk JEV with batch as evaluation\nRespond with evaluation");
+        let instruction = package["instructions"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|i| i["op"] == "LLM_COMPLETE")
+            .expect("existing model effect");
+        assert_eq!(instruction["provider"], "jev");
+        assert_eq!(instruction["expect_json"], true);
     }
 
     #[test]

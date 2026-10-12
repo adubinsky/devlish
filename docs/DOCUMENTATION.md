@@ -7,7 +7,6 @@ Use these as the current source of truth:
 - `docs/LANGUAGE_REFERENCE.md` - practical authoring guide
 - `docs/NATIVE_COMPILATION_PLAN.md` - compiler and VM roadmap (complete: Devlish is 100% Rust)
 - `docs/BYTECODE_WASM_FIRST_DELIVERABLES.md` - WASM integration status
-- `docs/TOOLRUN_COMPRESSION.md` - LLM token savings via command output compression
 - `docs/course/README.md` - dedicated beginner lesson tree
 - `docs/BEGINNER_COURSE.md` - beginner-first course plan
 

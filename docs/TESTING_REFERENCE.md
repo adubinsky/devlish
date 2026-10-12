@@ -158,9 +158,8 @@ devlish run program.dvl --quiet   # same as --log-level error
 | `debug` | VM instruction events, HTTP body previews, LLM prompt sizes |
 
 JSON event lines on stderr include a `"level"` field; human lines use
-`[error]` / `[info]` / `[debug]` prefixes. Live serve spin-up/down against an
-outbound LLM: `./scripts/llm_serve_harness.sh`. Caller guide:
-`docs/SERVE_QUICKSTART.md`.
+`[error]` / `[info]` / `[debug]` prefixes. The legacy live-model smoke runner has been removed. Live checks require
+verified admission and governed effects. See `docs/JEV_PROVIDER.md`.
 
 ## Current Limitations
 

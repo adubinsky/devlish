@@ -579,6 +579,11 @@ impl HostEffects for ServiceHost {
     }
 
     fn llm_complete(&mut self, request: &Value) -> Result<Value, String> {
+        // This legacy service does not admit authenticated release controls.
+        // JEV is available only through the shared verified execution boundary.
+        if request.get("provider").and_then(Value::as_str) == Some("jev") {
+            return Err("JEV requires an authenticated model route through run-verified".into());
+        }
         let prompt = request
             .get("prompt")
             .and_then(Value::as_str)

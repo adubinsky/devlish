@@ -184,16 +184,13 @@ bin/devlish harness run examples/outbound_classify/classify.dvl \
   --provider openai --model gpt-4o-mini
 ```
 
-## Spin-up / tear-down test harness
+## Governed live execution
 
-```bash
-# Uses OPENAI_API_KEY (or PROVIDER=openrouter + OPENROUTER_API_KEY)
-./scripts/llm_serve_harness.sh
-```
-
-The script starts serve on `127.0.0.1:17420`, checks health, optionally posts
-`/v1/run` against `examples/outbound_classify/classify.dvl`, then kills the
-daemon. Set `KEEP_WORKDIR=1` to inspect logs under the temp directory.
+The legacy live-model smoke script has been removed. Live workflow deployments
+must use verified admission and the governed host boundary. See
+`docs/JEV_PROVIDER.md` for protected profiles, signed releases and policy
+requirements. Legacy service examples here are compatibility references, not
+approved production deployment instructions.
 
 ## Logging for operators
 

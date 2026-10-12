@@ -8,8 +8,8 @@ adapter. There is no production subprocess launcher in this example.
 The built-in native and WASM hosts refuse this effect. `run-verified` and
 `serve-verified` also reject catalogs containing `run_tool` during admission,
 before creating a run log. A declaration or a passing example does not authorize
-an external executable. Do not substitute the development `devlish-toolrun`
-command for a verified launcher.
+an external executable. Standalone command wrappers have been removed and are
+prohibited. A future launcher must satisfy the verified runtime boundary.
 
 ## English program and policy
 

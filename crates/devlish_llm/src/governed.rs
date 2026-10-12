@@ -24,12 +24,16 @@ struct Route {
     timeout_seconds: u64,
     max_request_bytes: usize,
     max_response_bytes: usize,
-    max_tokens: u32,
+    #[serde(default)]
+    max_tokens: Option<u32>,
 }
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct Request {
-    prompt: String,
+    #[serde(default)]
+    prompt: Option<String>,
+    #[serde(default)]
+    batch: Option<Value>,
     #[serde(default)]
     model: Option<String>,
     #[serde(default)]
@@ -44,7 +48,7 @@ impl ApprovedModel {
             serde_json::from_value(value.clone()).map_err(|_| "invalid approved model route")?;
         if r.format != "devlish-model-route"
             || r.format_version != 1
-            || r.provider != "openrouter"
+            || !["openrouter", "jev"].contains(&r.provider.as_str())
             || r.model.is_empty()
             || r.model.len() > 128
             || !r
@@ -61,7 +65,15 @@ impl ApprovedModel {
             || !(1..=120).contains(&r.timeout_seconds)
             || !(1..=1_048_576).contains(&r.max_request_bytes)
             || !(1..=8_388_608).contains(&r.max_response_bytes)
-            || !(1..=32_768).contains(&r.max_tokens)
+            || (r.provider == "openrouter"
+                && !r.max_tokens.is_some_and(|n| (1..=32_768).contains(&n)))
+            || (r.provider == "jev"
+                && (r.max_tokens.is_some()
+                    || r.credential != "JEV_API_KEY"
+                    || !r.model.starts_with("jev-")
+                    || ["jev-latest", "jev-preview"].contains(&r.model.as_str())
+                    || r.max_request_bytes > 1_048_576
+                    || r.max_response_bytes > 1_048_576))
         {
             return Err("unsupported approved model route or limits".into());
         }
@@ -83,11 +95,15 @@ impl ApprovedModel {
         {
             return Err("model request conflicts with approved route".into());
         }
+        if request.batch.is_some() {
+            return Err("chat model cannot accept a JEV batch".into());
+        }
+        let prompt = request.prompt.ok_or("chat model requires a prompt")?;
         let mut messages = vec![];
         if let Some(system) = request.system {
             messages.push(json!({"role":"system","content":system}));
         }
-        messages.push(json!({"role":"user","content":request.prompt}));
+        messages.push(json!({"role":"user","content":prompt}));
         let body = serde_json::to_vec(&json!({"model":self.0.model,"messages":messages,
             "stream":false,"max_tokens":self.0.max_tokens}))
         .expect("JSON serializes");
@@ -104,7 +120,75 @@ impl ApprovedModel {
         value: &Value,
         credentials: &dyn CredentialResolver,
     ) -> Result<LlmResponse, String> {
+        if self.0.provider == "jev" {
+            return self.complete_jev(value, credentials, &mut |_| {});
+        }
         self.send(value, credentials, ENDPOINT, true)
+    }
+
+    /// Same immutable route, with safe provider diagnostics supplied by the host.
+    pub fn complete_with_trace(
+        &self,
+        value: &Value,
+        credentials: &dyn CredentialResolver,
+        trace: &mut dyn FnMut(Value),
+    ) -> Result<LlmResponse, String> {
+        if self.0.provider == "jev" {
+            self.complete_jev(value, credentials, trace)
+        } else {
+            self.complete(value, credentials)
+        }
+    }
+
+    fn jev_batch(&self, value: &Value) -> Result<crate::jev::Batch, String> {
+        let mut counter = SizeLimit(self.0.max_request_bytes);
+        serde_json::to_writer(&mut counter, value)
+            .map_err(|_| "model request exceeds approved limit")?;
+        let r: Request =
+            serde_json::from_value(value.clone()).map_err(|_| "invalid model request fields")?;
+        if r.provider.as_deref() != Some("jev")
+            || r.prompt.is_some()
+            || r.system.is_some()
+            || !r.expect_json
+            || r.model.as_ref().is_some_and(|m| m != &self.0.model)
+        {
+            return Err("model request conflicts with approved route".into());
+        }
+        let batch: crate::jev::Batch =
+            serde_json::from_value(r.batch.ok_or("JEV requires a typed batch")?)
+                .map_err(|_| "invalid JEV batch fields")?;
+        if batch.model != self.0.model {
+            return Err("model request conflicts with approved route".into());
+        }
+        Ok(batch)
+    }
+
+    fn complete_jev(
+        &self,
+        value: &Value,
+        credentials: &dyn CredentialResolver,
+        trace: &mut dyn FnMut(Value),
+    ) -> Result<LlmResponse, String> {
+        let batch = self.jev_batch(value)?;
+        let result = crate::jev::evaluate_approved(
+            &batch,
+            credentials,
+            trace,
+            crate::jev::Limits {
+                timeout: Duration::from_secs(self.0.timeout_seconds),
+                max_request_bytes: self.0.max_request_bytes,
+                max_response_bytes: self.0.max_response_bytes,
+            },
+        )
+        .map_err(|e| e.to_string())?;
+        let model = result.model.clone();
+        let parsed = serde_json::to_value(result).map_err(|_| "JEV result serialization failed")?;
+        Ok(LlmResponse {
+            text: String::new(),
+            provider: "jev".into(),
+            model,
+            parsed: Some(parsed),
+        })
     }
 
     // Destination is only supplied by complete (fixed HTTPS endpoint) or unit tests.
@@ -195,6 +279,62 @@ mod tests {
             "max_request_bytes":4096,"max_response_bytes":4096,"max_tokens":100})
     }
     struct Key;
+    fn jev_route() -> Value {
+        json!({"format":"devlish-model-route","format_version":1,"provider":"jev",
+            "model":"jev-1.13.0","credential":"JEV_API_KEY","timeout_seconds":1,
+            "max_request_bytes":4096,"max_response_bytes":4096})
+    }
+    fn jev_request() -> Value {
+        let mut batch: Value =
+            serde_json::from_str(include_str!("../tests/fixtures/jev_batch.json")).unwrap();
+        batch["model"] = json!("jev-1.13.0");
+        json!({"provider":"jev","expect_json":true,"batch":batch})
+    }
+
+    #[test]
+    fn approved_jev_route_binds_model_credential_and_limits() {
+        let route = ApprovedModel::parse(&jev_route()).unwrap();
+        assert_eq!(route.jev_batch(&jev_request()).unwrap().model, "jev-1.13.0");
+        for (field, value) in [
+            ("credential", json!("OTHER_KEY")),
+            ("model", json!("jev-latest")),
+            ("endpoint", json!("https://unapproved.invalid")),
+            ("max_tokens", json!(100)),
+            ("max_response_bytes", json!(1_048_577)),
+        ] {
+            let mut config = jev_route();
+            config[field] = value;
+            assert!(ApprovedModel::parse(&config).is_err());
+        }
+        let mut config = jev_route();
+        config["max_request_bytes"] = json!(100);
+        assert!(ApprovedModel::parse(&config)
+            .unwrap()
+            .jev_batch(&jev_request())
+            .is_err());
+    }
+
+    #[test]
+    fn jev_caller_cannot_override_the_approved_transport_or_switch_provider() {
+        let route = ApprovedModel::parse(&jev_route()).unwrap();
+        for (field, value) in [
+            ("provider", json!("openrouter")),
+            ("prompt", json!("private")),
+            ("system", json!("private")),
+            ("expect_json", json!(false)),
+            ("model", json!("jev-1.12.0")),
+            ("endpoint", json!("http://unapproved.invalid")),
+        ] {
+            let mut request = jev_request();
+            request[field] = value;
+            assert!(route.jev_batch(&request).is_err());
+        }
+        let mut request = jev_request();
+        request["batch"]["model"] = json!("jev-preview");
+        assert!(route.jev_batch(&request).is_err());
+        let chat_route = ApprovedModel::parse(&self::route()).unwrap();
+        assert!(chat_route.body(&jev_request()).is_err());
+    }
     impl CredentialResolver for Key {
         fn resolve(&self, key: &str) -> Option<String> {
             assert_eq!(key, "SYNTHETIC_MODEL_KEY");
@@ -226,6 +366,9 @@ mod tests {
                 );
                 thread::sleep(Duration::from_millis(5));
             };
+            // Accepted sockets inherit nonblocking mode on macOS. Use bounded
+            // blocking reads after the bounded listener accept loop.
+            stream.set_nonblocking(false).unwrap();
             stream
                 .set_read_timeout(Some(Duration::from_secs(2)))
                 .unwrap();

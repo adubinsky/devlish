@@ -2,6 +2,9 @@
 
 English-first programming language implemented in Rust. See README.md and ARCHITECTURE.md for details.
 
+Read AGENTS.md before making changes. Its mandatory governed execution boundary
+prohibits standalone user-code runners and direct-provider workflow demos.
+
 ## Skill routing
 
 When the user's request matches an available skill, invoke it via the Skill tool. When in doubt, invoke the skill.

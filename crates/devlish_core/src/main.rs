@@ -3212,8 +3212,13 @@ impl HostEffects for NativeHost {
         if let Some(route) = &self.verified_model_route {
             let route = route.as_ref().ok_or("verified model route unavailable")?;
             return route
-                .complete(request, &Creds(&self.credentials))
+                .complete_with_trace(request, &Creds(&self.credentials), &mut |event| {
+                    logutil::debug(event.to_string());
+                })
                 .map(|r| response_value(&r));
+        }
+        if request.get("provider").and_then(Value::as_str) == Some("jev") {
+            return Err("JEV requires an authenticated model route through run-verified".into());
         }
         let prompt = request
             .get("prompt")

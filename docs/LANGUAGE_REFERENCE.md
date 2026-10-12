@@ -674,6 +674,23 @@ Default policy logs record commitments and decisions. `--policy-evidence` opts i
 
 For runnable examples and exact profile limits, see the [local tool guide](https://github.com/adubinsky/devlish/blob/main/examples/local_tools/README.md) and [application guide](https://github.com/adubinsky/devlish/blob/main/docs/APPLICATION.md).
 
+Typed JEV document evaluation uses the same `llm_complete` effect:
+
+```text
+Permissions:
+  Call language models
+
+Ask "Which document batch should be checked?" as batch
+Ask JEV with batch as evaluation
+Respond with evaluation
+```
+
+JEV requires an authenticated, pinned model route through verified execution.
+The ordinary harness/provider defaults cannot enable it. Separate Devlish policy
+governs both the document batch sent to JEV and disclosure of its results.
+See [JEV provider](JEV_PROVIDER.md) and the
+[governed checklist example](../examples/jev_checklist/check.dvl).
+
 ### Clock and randomness (journaled)
 
 ```text

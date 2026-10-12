@@ -735,7 +735,14 @@ impl Vm {
                     .and_then(Value::as_bool)
                     .unwrap_or(false);
                 let mut request = Map::new();
-                request.insert("prompt".to_string(), json!(prompt));
+                if provider.as_deref() == Some("jev") {
+                    if !prompt_val.is_object() || !expect_json {
+                        return Err(self.error("JEV requires a typed batch and JSON output".into()));
+                    }
+                    request.insert("batch".to_string(), prompt_val);
+                } else {
+                    request.insert("prompt".to_string(), json!(prompt));
+                }
                 if let Some(model) = model {
                     request.insert("model".to_string(), json!(model));
                 }
