@@ -196,7 +196,9 @@ until_statement     = ( "Until" | "until" ) , " " , condition_text , [ ":" ] ;
 break_statement     = "Break" | "break" ;
 continue_statement  = "Continue" | "continue" ;
 (* Continue advances the nearest For each loop to the next item.
-   In While/Until it re-evaluates the condition; Break exits the nearest loop. *)
+   In While/Until it re-evaluates the condition; Break exits the nearest loop.
+   Both close Try recovery scopes exited by the jump, preserving scopes enclosing
+   the loop. An Otherwise body has already removed its own handler. *)
 
 catalog_tool_statement = "Run catalog tool" , " " , expression , " as " , name_phrase ;
 model_statement     = "Ask the model" , [ " " , quoted_string ] , " with " ,

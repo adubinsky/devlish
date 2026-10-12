@@ -388,6 +388,11 @@ Fail with "Contact email is required"
 read/write, or explicit `Fail with` errors, Devlish stores `last_error` and
 runs the `Otherwise` body instead of stopping the whole program.
 
+`Break` and `Continue` close recovery scopes they exit. A later failure cannot
+enter an exited block's `Otherwise`; a `Try` surrounding the loop remains active.
+Loop control inside `Otherwise` follows the same rule; that block's own recovery
+handler has already been removed. Closing scopes counts toward instruction limits.
+
 ### Assertions and test runs
 
 ```text

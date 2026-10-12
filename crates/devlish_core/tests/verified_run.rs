@@ -291,6 +291,40 @@ fn replace_compiled(f: &mut Fixture, id: &str, source: &str) {
     f.save();
 }
 #[test]
+fn verified_loop_control_does_not_recover_failures_outside_try() {
+    for loop_header in [
+        "While n is less than 2",
+        "Until n is 2",
+        "For each item in list of 1, 2",
+    ] {
+        for control in ["n equals n", "Break", "Continue"] {
+            let mut f = Fixture::new();
+            let source = format!(
+                "n equals 0\n{loop_header}:\n  n equals n plus 1\n  Try:\n    {control}\n  Otherwise:\n    Respond with \"stale recovery\"\nFail with \"outside recovery\""
+            );
+            replace_compiled(&mut f, "program", &source);
+            let result = f.run();
+            assert!(!result.status.success(), "{loop_header}, {control}");
+            assert!(result.stdout.is_empty());
+            let log = fs::read_to_string(f.dir.join("run.jsonl")).unwrap();
+            let records: Vec<Value> = log
+                .lines()
+                .map(|line| serde_json::from_str::<Value>(line).unwrap()["record"].clone())
+                .collect();
+            assert_eq!(records[0]["session_id"], "test-session");
+            assert_eq!(
+                records[0]["verified_release"]["release_manifest_sha256"],
+                sha256(&bytes(&f.manifest))
+            );
+            assert!(!log.contains("effect_decision"));
+            assert!(!log.contains("effect_outcome"));
+            assert_eq!(records.last().unwrap()["type"], "policy_run_finished");
+            assert_eq!(records.last().unwrap()["success"], false);
+        }
+    }
+}
+
+#[test]
 fn verified_failures_and_fallback_results_do_not_disclose_program_data() {
     let marker = "SYNTHETIC_NPPI_000_12_3456";
     for source in [

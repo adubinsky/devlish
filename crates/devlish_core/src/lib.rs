@@ -5044,6 +5044,7 @@ fn statement(line: usize, source_text: &str, kind: StatementKind) -> Statement {
 struct LoopContext {
     continue_patches: Vec<usize>,
     break_patches: Vec<usize>,
+    try_depth: usize,
 }
 
 struct BytecodeCompiler {
@@ -5057,6 +5058,7 @@ struct BytecodeCompiler {
     effects: Vec<Value>,
     next_register: usize,
     loop_stack: Vec<LoopContext>,
+    try_depth: usize,
     /// Sibling methods of the class being compiled, keyed by ruby_name.
     /// Method calls to these are inlined at the call site (DEVL-132) —
     /// there is no runtime call mechanism. Empty for flat programs.
@@ -5080,6 +5082,7 @@ impl BytecodeCompiler {
             inline_counter: 0,
             next_register: 0,
             loop_stack: Vec::new(),
+            try_depth: 0,
         }
     }
 
@@ -5112,6 +5115,16 @@ impl BytecodeCompiler {
             methods: None,
             manifest,
             stdlib,
+        }
+    }
+
+    fn close_loop_recovery_scopes(&mut self, statement: &Statement) {
+        if let Some(ctx) = self.loop_stack.last() {
+            // Only close scopes exited by this jump, retaining any Try around the loop.
+            // Keep lexical depth unchanged for compilation of subsequent statements.
+            for _ in ctx.try_depth..self.try_depth {
+                self.emit("TRY_END", Map::new(), Some(statement));
+            }
         }
     }
 
@@ -5336,6 +5349,7 @@ impl BytecodeCompiler {
                 self.loop_stack.push(LoopContext {
                     continue_patches: Vec::new(),
                     break_patches: Vec::new(),
+                    try_depth: self.try_depth,
                 });
                 let cond_register = self.compile_expression(condition, statement);
                 let false_jump = self.emit(
@@ -5369,6 +5383,7 @@ impl BytecodeCompiler {
                 self.loop_stack.push(LoopContext {
                     continue_patches: Vec::new(),
                     break_patches: Vec::new(),
+                    try_depth: self.try_depth,
                 });
                 let cond_register = self.compile_expression(condition, statement);
                 // Until = run while condition is false, so jump out when true
@@ -5478,6 +5493,7 @@ impl BytecodeCompiler {
                 self.loop_stack.push(LoopContext {
                     continue_patches: Vec::new(),
                     break_patches: Vec::new(),
+                    try_depth: self.try_depth,
                 });
 
                 // Check index < length
@@ -5606,9 +5622,12 @@ impl BytecodeCompiler {
                     map(vec![("handler", Value::Null)]),
                     Some(statement),
                 );
+                self.try_depth += 1;
                 for child in body {
                     self.compile_statement(child);
                 }
+                // Recovery has already popped this frame before entering Otherwise.
+                self.try_depth -= 1;
                 self.emit("TRY_END", Map::new(), Some(statement));
                 let skip_recovery =
                     self.emit("JUMP", map(vec![("target", Value::Null)]), Some(statement));
@@ -5620,6 +5639,7 @@ impl BytecodeCompiler {
                 self.patch_target(skip_recovery, self.instructions.len());
             }
             StatementKind::Break => {
+                self.close_loop_recovery_scopes(statement);
                 let break_jump =
                     self.emit("JUMP", map(vec![("target", Value::Null)]), Some(statement));
                 if let Some(ctx) = self.loop_stack.last_mut() {
@@ -5628,6 +5648,7 @@ impl BytecodeCompiler {
             }
             StatementKind::Continue => {
                 if !self.loop_stack.is_empty() {
+                    self.close_loop_recovery_scopes(statement);
                     let continue_jump =
                         self.emit("JUMP", map(vec![("target", Value::Null)]), Some(statement));
                     self.loop_stack
