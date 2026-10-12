@@ -141,6 +141,128 @@ fn multiline_csv_reads_remain_governed_and_journaled() {
 }
 
 #[test]
+fn loop_control_closes_exited_recovery_blocks() {
+    let mut mismatches = Vec::new();
+    for loop_header in [
+        "While n is less than 2",
+        "Until n is 2",
+        "For each item in list of 1, 2",
+    ] {
+        for control in ["n equals n", "Break", "Continue"] {
+            for nested in [false, true] {
+                let body = if nested {
+                    format!("    Try:\n      {control}\n    Otherwise:\n      Respond with \"stale inner\"")
+                } else {
+                    format!("    {control}")
+                };
+                let source = format!(
+                    "n equals 0\n{loop_header}:\n  n equals n plus 1\n  Try:\n{body}\n  Otherwise:\n    Respond with \"stale outer\"\nFail with \"outside recovery\""
+                );
+                let mut host = Host::default();
+                let mut recorder = Recorder::default();
+                let result = run(&source, true, &["respond"], 500).run(&mut host, &mut recorder);
+                if result != Err(RunError::Execution)
+                    || !host.responses.is_empty()
+                    || recorder.values.len() != 1
+                    || recorder.values[0]["success"] != false
+                {
+                    mismatches.push(format!(
+                        "{loop_header}, {control}, nested={nested}: {result:?}, responses={:?}, logs={:?}",
+                        host.responses, recorder.values
+                    ));
+                }
+                assert_eq!(host.events, 0);
+            }
+        }
+    }
+    assert!(mismatches.is_empty(), "{}", mismatches.join("\n"));
+}
+
+#[test]
+fn loop_control_preserves_enclosing_recovery_and_handles_otherwise() {
+    for loop_header in [
+        "While n is less than 2",
+        "Until n is 2",
+        "For each item in list of 1, 2",
+    ] {
+        for control in ["Break", "Continue"] {
+            for from_recovery in [false, true] {
+                let body = if from_recovery {
+                    format!("      Try:\n        Fail with \"inner\"\n      Otherwise:\n        {control}")
+                } else {
+                    // This loop is inside the inner Try; its control must retain that handler.
+                    format!("      For each token in list of 1, 2:\n        {control}\n      Fail with \"inner\"")
+                };
+                let source = format!(
+                    "n equals 0\nTry:\n  {loop_header}:\n    n equals n plus 1\n    Try:\n{body}\n    Otherwise:\n      recovered equals last_error\n  Fail with \"outer\"\nOtherwise:\n  Respond with last_error"
+                );
+                let mut host = Host::default();
+                let mut recorder = Recorder::default();
+                run(&source, true, &["respond"], 1000)
+                    .run(&mut host, &mut recorder)
+                    .unwrap();
+                assert_eq!(host.responses, vec![json!({"message":"outer"})]);
+                assert_eq!(recorder.values[0]["effect"], "respond");
+                assert_eq!(recorder.values[1]["outcome"]["status"], "succeeded");
+                assert_eq!(recorder.values.last().unwrap()["success"], true);
+            }
+        }
+    }
+}
+
+#[test]
+fn recovery_loop_control_keeps_instruction_and_effect_limits() {
+    let source = "For each item in list of 1:\n  Try:\n    Continue\n  Otherwise:\n    Fail with \"unexpected recovery\"\nRespond with \"done\"";
+    // One-item For each costs 22 instructions, plus TRY_BEGIN and the closing TRY_END.
+    for (allow, effects, limit, success) in [
+        (true, vec!["respond"], 24, true),
+        (true, vec!["respond"], 23, false),
+        (false, vec!["respond"], 24, false),
+        (true, vec![], 24, false),
+    ] {
+        let mut host = Host::default();
+        let mut recorder = Recorder::default();
+        let result = run(source, allow, &effects, limit).run(&mut host, &mut recorder);
+        assert_eq!(result.is_ok(), success);
+        assert_eq!(host.responses.len(), usize::from(success));
+        assert_eq!(recorder.values.last().unwrap()["success"], success);
+    }
+    for loop_header in ["While true", "Until false"] {
+        let source = format!("{loop_header}:\n  Try:\n    Continue\n  Otherwise:\n    Respond with \"unexpected recovery\"");
+        let mut host = Host::default();
+        let mut recorder = Recorder::default();
+        assert_eq!(
+            run(&source, true, &["respond"], 30).run(&mut host, &mut recorder),
+            Err(RunError::Execution)
+        );
+        assert!(host.responses.is_empty());
+        assert_eq!(recorder.values.last().unwrap()["success"], false);
+    }
+    let source = "Permissions:\n  Read files from \"/inbox/\"\nFor each item in list of 1:\n  Try:\n    Read CSV from \"/inbox/data.csv\" as rows\n    Continue\n  Otherwise:\n    Fail with \"unexpected recovery\"\nRespond with \"done\"";
+    for total in [1, 2] {
+        let mut host = Host {
+            csv: Some("id\n1".into()),
+            ..Host::default()
+        };
+        let mut recorder = Recorder::default();
+        let runner = run(source, true, &["read_file", "respond"], 100)
+            .with_effect_budget(
+                devlish_vm::effect_budget::EffectBudget::parse(
+                    &json!({"total":total,"per_effect":{}}),
+                )
+                .unwrap(),
+            )
+            .unwrap();
+        assert_eq!(runner.run(&mut host, &mut recorder).is_ok(), total == 2);
+        assert_eq!(host.reads.len(), 1);
+        assert_eq!(host.responses.len(), usize::from(total == 2));
+        assert_eq!(recorder.values[2]["effect"], "respond");
+        assert_eq!(recorder.values[2]["allow"], total == 2);
+        assert_eq!(recorder.values.last().unwrap()["success"], total == 2);
+    }
+}
+
+#[test]
 fn for_each_continue_advances_first_middle_and_last_items() {
     for skip in [1, 2, 3] {
         let source = format!(
