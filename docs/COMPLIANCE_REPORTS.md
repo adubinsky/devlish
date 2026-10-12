@@ -182,10 +182,13 @@ be guessed from their hashes.
 
 ## Tamper resistance follows this evidence baseline
 
-The next phase adds independently verified signatures and build provenance,
-protected policy/manifest storage, mandatory verified loading on every entry
-point, constrained external-tool launching, and an external signed audit receipt.
-It must also close diagnostic/output channels before real sensitive workloads.
+Signed release manifest verification, native verified admission, optional
+authenticated builder statements and independent signed-receipt verification
+are implemented. Trusted CI provenance, protected policy/manifest storage,
+mandatory verified loading on every entry point, a qualified verified
+external-tool launcher, and protected receipt issuance with independent retention
+remain separate work. Diagnostic/output channels on ordinary profiles must still
+be closed before sensitive production workloads.
 
 Evidence first makes those future controls testable: replacing a binary,
 changing a policy, forging a decision, removing a record, or replaying different

@@ -5,7 +5,9 @@ compiler and VM support `Run catalog tool request as result`, and the shared
 policy host intercepts `run_tool` before dispatch. Tests use a counting fake
 adapter. There is no production subprocess launcher in this example.
 
-The built-in native and WASM hosts refuse this effect. `run-verified` and
+The WASM and legacy service hosts refuse this effect. Ordinary native file/prompt
+execution supports the separate [local/PATH profile](../local_tools/README.md);
+that profile is not signed catalog execution. `run-verified` and
 `serve-verified` also reject catalogs containing `run_tool` during admission,
 before creating a run log. A declaration or a passing example does not authorize
 an external executable. Standalone command wrappers have been removed and are

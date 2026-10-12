@@ -133,9 +133,12 @@ a governed rule's execution is provable after the fact.
 
 ```text
 crates/
-  devlish_core/     Rust compiler + CLI (~10,400 lines, 103 tests)
-  devlish_vm/       Platform-independent bytecode VM (2,987 lines)
-  devlish_wasm_runner/  WASM shell for browser/Node (221 lines)
+  devlish_audit/      Offline independent verifier; never executes programs
+  devlish_llm/        Provider adapters for governed model effects
+  devlish_wasm_compiler/ WASM compiler interface
+  devlish_core/     Rust compiler + CLI
+  devlish_vm/       Platform-independent bytecode VM
+  devlish_wasm_runner/  WASM shell for browser/Node
 packages/
   devlish-runtime/  npm package: TypeScript wrapper, Web Worker, base64 WASM
 ```
@@ -151,7 +154,7 @@ Devlish supports:
 - **Variables and arithmetic**: `score equals base plus bonus`
 - **Control flow**: `If`, `Otherwise`, `While`, `Until`, `For each`, `Break`, `Continue`
 - **Collections**: `list of`, `record with`, `append`, `pop`, `filter`, `map`, `sort`
-- **Built-in functions**: `count of`, `first of`, `uppercase`, `trim`, `split`, `join`, 26 total
+- **Built-in functions**: `count of`, `first of`, `uppercase`, `trim`, `split`, `join`; see the [current inventory](docs/STANDARD_LIBRARY_CURRENT.md)
 - **Assertions**: `Expect value equals "x" as "test-id"`
 - **Validation sentences**: `amount must be at most 10000`, `Require ... otherwise fail with`
 - **Checkpoints**: `Checkpoint "prompt"` pauses execution and returns structured
@@ -191,7 +194,7 @@ Flip the polarity: a `.dvl` program can call Anthropic, OpenAI, or Ollama.
 ```bash
 devlish harness init-config
 devlish harness run examples/outbound_classify/classify.dvl --provider anthropic \
-  --policy examples/outbound_classify/policy.dvl
+  --policy examples/outbound_classify/policy.dvl --policy-log outbound-policy.jsonl
 devlish serve --bind 127.0.0.1:7420   # HTTP API daemon
 ```
 
@@ -208,9 +211,11 @@ devlish run examples/effect_policy/allowed.dvl \
 ```
 
 Policies return an explicit boolean decision and an English explanation.
-Malformed policies fail closed. This first increment supports CLI `run`;
-offline replay reports are available with `--policy-evidence`. Server enforcement
-and the Devlish agent loop are next.
+Malformed policies fail closed. Policy-enabled CLI runs, the interactive prompt, and governed harness runs share
+this boundary. Offline replay reports use `--policy-evidence`. Verified HTTP
+sessions use signed admission and the shared governed runner; legacy HTTP/MCP
+and browser routes do not install executable effect policies. Durable checkpoint
+recovery remains separate work.
 See [Effect policies](docs/EFFECT_POLICY.md) for the contract and current limits,
 [NPPI and company-IP examples](examples/data_protection/README.md) for tested
 rules, and [Policy provenance](docs/POLICY_PROVENANCE.md) for artifact verification
@@ -253,6 +258,7 @@ API.
 
 ## Documentation
 
+- [Documentation index](docs/DOCUMENTATION.md)
 - [Architecture](ARCHITECTURE.md)
 - [Project instructions](CLAUDE.md)
 

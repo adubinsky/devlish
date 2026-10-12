@@ -20,8 +20,8 @@ For each loops, manifest sections).
 ### Hover Documentation
 
 Hover over any keyword to see its description and syntax example. Covers
-control flow, I/O, filesystem operations, HTTP verbs, validation, manifest
-declarations, and all 26 builtin functions.
+control flow, I/O, filesystem operations, HTTP verbs, validation, and manifest
+declarations.
 
 ### Lint on Save
 

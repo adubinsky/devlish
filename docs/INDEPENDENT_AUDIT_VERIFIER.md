@@ -98,7 +98,7 @@ ASCII(purpose) || 0x00 || exact_file_bytes
 The purpose is checked against the CLI request and the trusted key's allowed
 purposes. Signing context prevents relabeling release signatures as audit
 evidence. This small versioned format is not a Sigstore bundle, certificate
-chain, signed release manifest, or substitute for those future integrations.
+chain or substitute for the separately verified release manifest described below.
 Cryptographic verification uses the pinned
 [ring Ed25519 verifier](https://docs.rs/ring/0.17.14/ring/signature/struct.UnparsedPublicKey.html).
 No custom cryptographic algorithm is implemented.
@@ -127,8 +127,8 @@ Provision the verifier and public keys through independently trusted channels.
 The binary built by the commands above is **not a publisher-signed distribution**.
 An attacker who replaces the verifier, its OS, or the supplied trust file can
 undermine verification. Static local revocation information must be maintained
-by the operator; online revocation, expiry, trusted time and rollback floors
-are not implemented. Verification reads one bounded file snapshot; it does not
+by the operator; generic `verify` does not apply online revocation, release expiry, trusted time
+or rollback floors; release and native admission checks are described below. Verification reads one bounded file snapshot; it does not
 bind that snapshot to a later process launch or detect in-memory injection.
 
 Regular files only: candidate limit 64 MiB, signature and trust limit 64 KiB each.
@@ -355,7 +355,8 @@ wrong scope, expired/future releases and revocation windows, rollback, revoked
 keys/releases, authority separation, missing/duplicate artifacts, manifest
 mutation, and replacement of an external tool through the real CLI.
 
-Remaining DEVL-217 work includes authenticated builder provenance (DEVL-119),
+Remaining DEVL-217 work includes trusted CI build provenance (DEVL-119); optional
+separately authenticated builder statements are implemented as described below,
 protected/fresh trust and revocation distribution, and protected execution across all runtime entry points.
 The governed CLI additions below provide local rollback state and a limited host-effect catalog. Receipt issuance and mandatory runtime loading must consume
 the verified identity rather than merely accept a caller's digest. Reports
@@ -413,9 +414,9 @@ separate work.
 The CLI now supports `run-verified`. The operator sets
 `DEVLISH_VERIFIED_PROFILE` to a profile that selects the program, policy,
 release authority, artifact mapping and admission-state file. When this
-variable is set, all commands except `run-verified`, help and version are
-blocked. Server, MCP, harness, REPL and ordinary `run` have no silent fallback;
-they need dedicated governed adapters before they can be enabled in this mode.
+variable is set, all commands except `run-verified`, `serve-verified`, help and version are
+blocked. Legacy server, MCP, harness, REPL and ordinary `run` have no silent
+fallback. The dedicated `serve-verified` adapter below uses shared signed admission.
 Without this environment variable, existing development commands still work.
 
 ```json
@@ -685,8 +686,10 @@ approved route; non-model catalogs are unchanged.
 ```
 
 The model value above is a placeholder, not a recommendation or available model.
-For this first governed adapter, the only supported provider is `openrouter` and
-the destination is fixed to `https://openrouter.ai/api/v1/chat/completions`.
+Governed routes support OpenRouter at the fixed chat-completions endpoint and
+typed JEV at its fixed endpoint; see [JEV route requirements](JEV_PROVIDER.md).
+The example above is the OpenRouter route, whose destination is fixed to
+`https://openrouter.ai/api/v1/chat/completions`.
 `DEVLISH_CONFIG`, per-user provider defaults, request URLs, headers and conflicting
 model/provider fields cannot redirect it. Unknown route/request fields fail.
 The signed catalog digest in the session binds these settings to the release.

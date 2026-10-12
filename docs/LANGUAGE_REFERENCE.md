@@ -619,7 +619,8 @@ Credentials resolve through the existing `.env` / `--env` chain
 
 CLI:
 ```bash
-devlish harness run workflow.dvl --provider anthropic --model claude-sonnet-4-20250514
+devlish harness run workflow.dvl --provider anthropic --model claude-sonnet-4-20250514 \
+  --policy policy.dvl --policy-log model-policy.jsonl
 devlish serve --bind 127.0.0.1:7420
 ```
 

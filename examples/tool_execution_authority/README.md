@@ -1,9 +1,9 @@
 # Initial tool execution authorization in Devlish
 
 This executable policy prototype makes the initial-execution decision readable
-in Devlish. It is part of DEVL-220 and uses only synthetic fixtures. It is not yet
-connected to a production broker or the Linux broker experiment. Production tool
-dispatch remains disabled.
+in Devlish. It is part of DEVL-220 and uses only synthetic fixtures. The Linux synthetic broker experiment evaluates the signed policy before initial
+continuation. It is not connected to a production broker; verified production
+tool dispatch remains disabled.
 
 The rule permits `continue_initial_tool_exec` only for a reserved initial launch
 whose request matches independently supplied session, tool, release, catalog,

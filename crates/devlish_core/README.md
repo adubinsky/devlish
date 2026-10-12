@@ -1,9 +1,14 @@
 # Devlish Core
 
+Status: Historical compiler-migration note. For current native execution and setup,
+see [the language reference](../../docs/LANGUAGE_REFERENCE.md) and
+[application setup](../../docs/APPLICATION.md). Commands below describe the original
+slice and are not current setup instructions.
+
 `devlish-core` is the native Rust parser and bytecode compiler track for
 Devlish.
 
-The current slice compiles the document/assertion workflows used by the
+The original slice compiles the document/assertion workflows used by the
 token-savings examples plus the first normal workflow shape from the
 bytecode/WASM demo:
 

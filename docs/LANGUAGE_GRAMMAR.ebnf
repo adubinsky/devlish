@@ -47,8 +47,7 @@ snake_identifier    = ( "a" | "b" | "c" | "d" | "e" | "f" | "g" | "h" | "i" | "j
 service_identifier  = letter , { word_char | "." } ;
 number              = digit , { digit } , [ "." , digit , { digit } ] ;
 integer_with_seps   = digit , { digit | "," | "_" } ;
-quoted_string       = "\"" , { ? any character except double quote ? } , "\""
-                    | "'" , { ? any character except single quote ? } , "'" ;
+quoted_string       = "\"" , { ? character or escape accepted by the Rust string parser ? } , "\"" ;
 path_token          = [ quoted_string | unquoted_path ] ;
 unquoted_path       = ? non-space token accepted by the load regex, typically foo/bar.ext ? ;
 
@@ -96,6 +95,7 @@ english_statement   = trigger_statement
                     | standalone_check_statement
                     | catalog_tool_statement
                     | model_statement
+                    | jev_statement
                     | clock_statement
                     | random_statement
                     | checkpoint_statement
@@ -199,6 +199,7 @@ continue_statement  = "Continue" | "continue" ;
 catalog_tool_statement = "Run catalog tool" , " " , expression , " as " , name_phrase ;
 model_statement     = "Ask the model" , [ " " , quoted_string ] , " with " ,
                       expression , [ " expecting json" ] , " as " , name_phrase ;
+jev_statement       = "Ask JEV with " , expression , " as " , name_phrase ;
 clock_statement     = "Get the current time as " , name_phrase ;
 random_statement    = "Draw a random number" ,
                       " between " , expression , " and " , expression ,

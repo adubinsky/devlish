@@ -181,7 +181,8 @@ bin/devlish run examples/outbound_classify/classify.dvl \
 
 # Session transcript under ~/.devlish/sessions/
 bin/devlish harness run examples/outbound_classify/classify.dvl \
-  --provider openai --model gpt-4o-mini
+  --provider openai --model gpt-4o-mini \
+  --policy examples/outbound_classify/policy.dvl --policy-log outbound-policy.jsonl
 ```
 
 ## Governed live execution

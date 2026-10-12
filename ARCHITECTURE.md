@@ -21,14 +21,17 @@ the language, not the product pitch.
 
 ```text
 crates/
-  devlish_core/       Compiler + CLI (~5,100 lines)
-    src/lib.rs         Full-language parser, bytecode emitter, 40 tests
+  devlish_audit/      Offline independent verifier; never executes programs
+  devlish_llm/        Provider adapters for governed model effects
+  devlish_wasm_compiler/ WASM compiler interface
+  devlish_core/       Compiler + CLI
+    src/lib.rs         Full-language parser and bytecode emitter
     src/main.rs        CLI: compile, run, disassemble, validate, lint, new
 
-  devlish_vm/          Bytecode VM (1,159 lines)
-    src/lib.rs         HostEffects trait, 42+ opcodes, 26 built-in functions
+  devlish_vm/          Bytecode VM
+    src/lib.rs         HostEffects trait, opcodes and expression helpers
 
-  devlish_wasm_runner/ WASM shell (110 lines)
+  devlish_wasm_runner/ WASM shell
     src/lib.rs         Implements HostEffects via JS host imports
     js/index.mjs       JavaScript host wrapper
 
@@ -101,8 +104,10 @@ Policy-enabled CLI runs wrap the host with `devlish_vm::policy::PolicyHost`.
 Each tool effect is evaluated by a separately loaded Devlish policy in an
 isolated VM; the wrapper persists the decision before dispatch and its outcome
 afterward. Recording failures block subsequent effects. Existing VM permission
-checks remain in force. Diagnostic events and other CLI/server entry points
-are outside this initial enforcement boundary.
+checks remain in force. Ordinary diagnostic events remain outside this interception boundary. The prompt
+and governed harness install executable policy; verified CLI and authenticated
+HTTP sessions use shared signed admission and `GovernedRun`. Legacy HTTP/MCP
+and browser routes do not install executable effect policy.
 
 `--policy-evidence` explicitly retains sensitive effect exchanges in the policy
 log. `report process` uses them as an offline host while rerunning the program

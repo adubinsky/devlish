@@ -52,8 +52,10 @@ Respond with record with false as allow and "This policy permits only clock read
 ```
 
 Every evaluation runs in a fresh VM without external effects or credentials,
-with a 100,000-instruction limit. It must respond with a record containing a
-boolean `allow` and a nonempty text `reason`. Errors, malformed decisions,
+with a 100,000-instruction limit. It must respond with a record containing
+exactly one boolean `allow` or text `decision` (`allow`, `deny`, or `abstain`),
+and a nonempty text `reason`. Explicit abstentions use the operator-selected
+default authorization; explicit denials always block. Errors, malformed decisions,
 checkpoints, and missing responses are denials. A policy cannot override the
 program's existing manifest restrictions. Manifest rejections happen before
 host dispatch and therefore do not produce a policy decision record.
@@ -109,21 +111,21 @@ reconstruct inputs or replay effects.
 
 ## Current scope and next steps
 
-This increment provides the shared `devlish_vm::policy::PolicyHost` boundary
-and CLI `run` integration. Unflagged runs retain their existing behavior.
-`harness run` and `harness resume` also accept `--policy`, `--policy-log`, and
-`--default-authorization`. `harness generate` uses a fixed authoring policy
-and requires a fresh `--policy-log`. HTTP, MCP, and browser entry points do not
-yet install this boundary.
-A future governed service must install it from operator-owned configuration,
-never from a request's proposed policy.
+The shared `devlish_vm::policy::PolicyHost` boundary is used by policy-enabled CLI
+`run`, the interactive prompt, governed harness execution, and the shared governed
+service API. Unflagged ordinary file runs retain their existing behavior.
+`harness run` and `harness resume` require an independent policy and create fresh
+recording logs. `harness generate` uses a fixed authoring policy and requires a
+fresh `--policy-log`. Verified CLI and authenticated HTTP adapters additionally
+require signed admission and release controls. Legacy HTTP/MCP and browser entry
+points do not install executable effect policies. Policies and controls must come
+from operator-owned configuration, never a request's proposed policy.
 
 Offline policy-aware replay is available through `report process` for format 3
 logs captured with `--policy-evidence`; see [Compliance reports](COMPLIANCE_REPORTS.md).
 The older `--journal`/`replay` interface is separate and still cannot be combined
-with `--policy`. Next are server-owned enforcement, result checks written in
-Devlish, and durable checkpoint recovery. The agent loop will then be authored in Devlish over
-these primitives.
+with `--policy`. The bundled prompt and finite governed-agent example implement plan validation
+in Devlish. Durable checkpoint recovery remains separate work.
 
 This is not an operating-system sandbox. Path arguments are not canonicalized
 by this wrapper; string checks cannot enforce filesystem containment in the
