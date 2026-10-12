@@ -141,6 +141,95 @@ fn multiline_csv_reads_remain_governed_and_journaled() {
 }
 
 #[test]
+fn for_each_continue_advances_first_middle_and_last_items() {
+    for skip in [1, 2, 3] {
+        let source = format!(
+            "visited equals 0\nkept equals 0\nFor each item in list of 1, 2, 3:\n  visited equals visited plus 1\n  If item is {skip}:\n    Continue\n  kept equals kept plus item\nRespond with record with visited as visited and kept as kept"
+        );
+        let mut host = Host::default();
+        let mut recorder = Recorder::default();
+        run(&source, true, &["respond"], 300)
+            .run(&mut host, &mut recorder)
+            .unwrap();
+        assert_eq!(host.responses, vec![json!({"visited":3,"kept":6-skip})]);
+        assert_eq!(recorder.values[0]["effect"], "respond");
+        assert_eq!(recorder.values[1]["outcome"]["status"], "succeeded");
+        assert_eq!(recorder.values.last().unwrap()["success"], true);
+        assert_eq!(host.events, 0);
+    }
+}
+
+#[test]
+fn nested_for_each_continue_and_break_use_nearest_loop() {
+    // The outer Continue follows completed inner loops, as in the header-row failure.
+    let source = "pairs equals 0\nkept equals 0\nFor each row in list of 1, 2, 3:\n  For each token in list of 1, 2, 3:\n    If token is 1:\n      Continue\n    If token is 3:\n      Break\n    pairs equals pairs plus 1\n  If row is 1:\n    For each column in list of 1, 2:\n      Continue\n    Continue\n  If row is 3:\n    Break\n  kept equals kept plus row\nRespond with record with pairs as pairs and kept as kept";
+    let mut host = Host::default();
+    let mut recorder = Recorder::default();
+    run(source, true, &["respond"], 500)
+        .run(&mut host, &mut recorder)
+        .unwrap();
+    assert_eq!(host.responses, vec![json!({"pairs":3,"kept":2})]);
+    assert_eq!(recorder.values.last().unwrap()["success"], true);
+}
+
+#[test]
+fn while_and_until_continue_recheck_conditions_and_preserve_break() {
+    for condition in ["While n is less than 3", "Until n is 3"] {
+        for stop in ["", "  If n is 2:\n    Break\n"] {
+            let source = format!(
+                "n equals 0\nkept equals 0\n{condition}:\n  n equals n plus 1\n  For each token in list of 1, 2:\n    Continue\n{stop}  If n is 1:\n    Continue\n  kept equals kept plus n\nRespond with record with n as n and kept as kept"
+            );
+            let mut host = Host::default();
+            let mut recorder = Recorder::default();
+            run(&source, true, &["respond"], 300)
+                .run(&mut host, &mut recorder)
+                .unwrap();
+            let expected = if stop.is_empty() {
+                json!({"n":3,"kept":5})
+            } else {
+                json!({"n":2,"kept":0})
+            };
+            assert_eq!(host.responses, vec![expected]);
+            assert_eq!(recorder.values.last().unwrap()["success"], true);
+        }
+    }
+}
+
+#[test]
+fn for_each_continue_keeps_instruction_and_response_governance() {
+    let source = "For each item in list of 1, 2, 3:\n  Continue\nRespond with \"done\"";
+    // 7 setup + 3 * (6 item selection + 1 Continue + 5 increment/back edge)
+    // + 3 final condition + 2 response instructions. No extra VM instructions.
+    for (allow, effects, limit, success) in [
+        (true, vec!["respond"], 48, true),
+        (true, vec!["respond"], 47, false),
+        (false, vec!["respond"], 48, false),
+        (true, vec![], 48, false),
+    ] {
+        let mut host = Host::default();
+        let mut recorder = Recorder::default();
+        let result = run(source, allow, &effects, limit).run(&mut host, &mut recorder);
+        if success {
+            assert!(result.is_ok());
+            assert_eq!(host.responses, vec![json!("done")]);
+        } else {
+            assert_eq!(result, Err(RunError::Execution));
+            assert!(host.responses.is_empty());
+        }
+        assert_eq!(recorder.values.last().unwrap()["success"], success);
+    }
+    for source in ["While true:\n  Continue", "Until false:\n  Continue"] {
+        let mut host = Host::default();
+        let mut recorder = Recorder::default();
+        assert_eq!(
+            run(source, true, &[], 48).run(&mut host, &mut recorder),
+            Err(RunError::Execution)
+        );
+        assert_eq!(recorder.values.last().unwrap()["success"], false);
+    }
+}
+
+#[test]
 fn only_approved_responses_leave_private_vm_and_no_debug_events_escape() {
     for source in [
         "Ask \"Secret?\" as secret\nx equals secret",

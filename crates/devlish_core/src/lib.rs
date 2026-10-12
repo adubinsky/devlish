@@ -5042,7 +5042,7 @@ fn statement(line: usize, source_text: &str, kind: StatementKind) -> Statement {
 
 #[derive(Debug, Clone)]
 struct LoopContext {
-    start_address: usize,
+    continue_patches: Vec<usize>,
     break_patches: Vec<usize>,
 }
 
@@ -5334,7 +5334,7 @@ impl BytecodeCompiler {
             StatementKind::WhileLoop { condition, body } => {
                 let loop_start = self.instructions.len();
                 self.loop_stack.push(LoopContext {
-                    start_address: loop_start,
+                    continue_patches: Vec::new(),
                     break_patches: Vec::new(),
                 });
                 let cond_register = self.compile_expression(condition, statement);
@@ -5357,6 +5357,9 @@ impl BytecodeCompiler {
                 let loop_end = self.instructions.len();
                 self.patch_target(false_jump, loop_end);
                 let ctx = self.loop_stack.pop().unwrap();
+                for patch in ctx.continue_patches {
+                    self.patch_target(patch, loop_start);
+                }
                 for patch in ctx.break_patches {
                     self.patch_target(patch, loop_end);
                 }
@@ -5364,7 +5367,7 @@ impl BytecodeCompiler {
             StatementKind::UntilLoop { condition, body } => {
                 let loop_start = self.instructions.len();
                 self.loop_stack.push(LoopContext {
-                    start_address: loop_start,
+                    continue_patches: Vec::new(),
                     break_patches: Vec::new(),
                 });
                 let cond_register = self.compile_expression(condition, statement);
@@ -5426,6 +5429,9 @@ impl BytecodeCompiler {
                 let loop_end = self.instructions.len();
                 self.patch_target(false_jump, loop_end);
                 let ctx = self.loop_stack.pop().unwrap();
+                for patch in ctx.continue_patches {
+                    self.patch_target(patch, loop_start);
+                }
                 for patch in ctx.break_patches {
                     self.patch_target(patch, loop_end);
                 }
@@ -5470,7 +5476,7 @@ impl BytecodeCompiler {
 
                 let loop_start = self.instructions.len();
                 self.loop_stack.push(LoopContext {
-                    start_address: loop_start,
+                    continue_patches: Vec::new(),
                     break_patches: Vec::new(),
                 });
 
@@ -5538,6 +5544,8 @@ impl BytecodeCompiler {
                     self.compile_statement(child);
                 }
 
+                // Continue must advance the item before checking the condition again.
+                let continue_target = self.instructions.len();
                 // Increment index
                 let idx_load3 = self.next_register();
                 self.emit(
@@ -5585,6 +5593,9 @@ impl BytecodeCompiler {
                 let loop_end = self.instructions.len();
                 self.patch_target(exit_jump, loop_end);
                 let ctx = self.loop_stack.pop().unwrap();
+                for patch in ctx.continue_patches {
+                    self.patch_target(patch, continue_target);
+                }
                 for patch in ctx.break_patches {
                     self.patch_target(patch, loop_end);
                 }
@@ -5616,13 +5627,14 @@ impl BytecodeCompiler {
                 }
             }
             StatementKind::Continue => {
-                if let Some(ctx) = self.loop_stack.last() {
-                    let start = ctx.start_address;
-                    self.emit(
-                        "JUMP",
-                        map(vec![("target", number_value(start as i64))]),
-                        Some(statement),
-                    );
+                if !self.loop_stack.is_empty() {
+                    let continue_jump =
+                        self.emit("JUMP", map(vec![("target", Value::Null)]), Some(statement));
+                    self.loop_stack
+                        .last_mut()
+                        .unwrap()
+                        .continue_patches
+                        .push(continue_jump);
                 }
             }
             StatementKind::Fail { message } => {
