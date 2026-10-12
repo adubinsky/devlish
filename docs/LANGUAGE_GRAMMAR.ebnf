@@ -195,6 +195,8 @@ while_statement     = ( "While" | "while" ) , " " , condition_text , [ ":" ] ;
 until_statement     = ( "Until" | "until" ) , " " , condition_text , [ ":" ] ;
 break_statement     = "Break" | "break" ;
 continue_statement  = "Continue" | "continue" ;
+(* Continue advances the nearest For each loop to the next item.
+   In While/Until it re-evaluates the condition; Break exits the nearest loop. *)
 
 catalog_tool_statement = "Run catalog tool" , " " , expression , " as " , name_phrase ;
 model_statement     = "Ask the model" , [ " " , quoted_string ] , " with " ,

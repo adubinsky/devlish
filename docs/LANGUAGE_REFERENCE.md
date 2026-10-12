@@ -367,8 +367,9 @@ Until status is "complete":
   status equals "complete"
 ```
 
-Use `Continue` inside a loop to skip to the next pass. Use `Break` to stop the
-loop.
+Use `Continue` inside a loop to skip the rest of the current pass. In `For each`,
+it advances to the next item; in `While` and `Until`, it rechecks the condition.
+Use `Break` to stop the loop. Both affect the nearest enclosing loop.
 
 ### Failure, requirements, and recovery
 
