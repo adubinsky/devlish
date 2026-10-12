@@ -1,26 +1,44 @@
-# Devlish - Provable programs, written in English
+# Devlish
+
+Your AI can say it did the work. Devlish lets you verify recorded execution.
 
 User workflows must stay inside the governed runtime. See
 [the mandatory execution boundary](docs/EXECUTION_BOUNDARY.md). Contributors run
 `make install-hooks` to install the pre-commit enforcement check.
 
-Last updated: 2026-07-23
-Status: Current entry point. Website: https://devlish.dev
 
-Devlish is an English-first programming language for AI-era work: deterministic
-workflows that can be read by non-programmers, compiled to bytecode, executed
-natively or in the browser, and **verified after the fact**. Your AI can say it
-did the work; Devlish lets you prove it.
+Last updated: 2026-10-11
+Status: Current entry point. Website: https://www.devlish.com
 
-The design rule: if a step can be deterministic, remove it from the model. If
-it requires judgment, expose it as a named `Checkpoint`. Everything around the
-checkpoint is compiled behavior with an identity, declared permissions,
-assertions, evidence, and replay.
+Devlish is an inspectable execution and verification layer for AI work: if a
+step can be deterministic, remove it from the model; if it requires judgment,
+expose it as a named `Checkpoint`. Everything around the checkpoint is compiled
+behavior with an identity, declared permissions, assertions, evidence, and
+replay.
 
-Devlish is implemented entirely in Rust. A native compiler (`devlish-core`)
-parses the full language and emits bytecode. A shared VM (`devlish-vm`)
-executes the bytecode natively on the command line or via WASM in browsers
-and Node. No Ruby, Python, or Node runtime is needed.
+Readable English source is a property of the language, not the headline. A
+native Rust compiler (`devlish-core`) parses `.dvl` files and emits bytecode.
+A shared VM (`devlish-vm`) executes that bytecode natively on the command line
+or via WASM in browsers and Node. No Ruby, Python, or Node runtime is needed
+to compile or run. MIT licensed.
+
+```dvl
+Operations's Invoice Reviewer:
+  review invoice using invoice amount:
+    review_needed equals false
+    review_needed equals true if invoice amount >= 10000
+    escalation_label equals "standard"
+    escalation_label equals "priority" if review_needed == true
+    respond with escalation_label
+```
+
+The first method from `docs/course/04-methods-and-classes/examples/04_invoice_reviewer.dvl`.
+Save this single-method example as `invoice_review.dvl`, then run:
+
+```bash
+devlish run invoice_review.dvl --input '{"invoice_amount":12000}' --quiet
+# Response: "priority"
+```
 
 ## Getting Started
 
@@ -34,6 +52,10 @@ This builds and installs the native application as `~/.local/bin/devlish`.
 Put that directory on your PATH if it is not already there. Use `PREFIX` to
 select another installation directory. Installed users need no Rust commands,
 separate compilation step, or checkout to run the application.
+
+No install at all: the full compiler and VM also run in your browser at
+https://www.devlish.com/playground.html (WebAssembly; nothing you type is
+uploaded).
 
 ## Three Application Modes
 
@@ -73,7 +95,7 @@ entry point does not add local-tool execution to HTTP requests.
 Developer and audit interfaces remain available for existing integrations;
 they are not additional steps required to use these three modes. Contributors
 can use `make build` and `make test`. The browser playground remains available
-at https://devlish.dev/playground.html.
+at https://www.devlish.com/playground.html.
 
 ## Governance and Verification
 
@@ -231,10 +253,14 @@ API.
 
 ## Documentation
 
+- [Architecture](ARCHITECTURE.md)
+- [Project instructions](CLAUDE.md)
+
 - `docs/LANGUAGE_REFERENCE.md` - authoring guide
 - `docs/AUDIT.md` - execution provenance audit log
 - `docs/EVIDENCE.md` - test evidence bundles
 - `docs/RELEASE.md` - controlled release workflow
 - `docs/NATIVE_COMPILATION_PLAN.md` - compiler and VM roadmap
 - `docs/BYTECODE_WASM_FIRST_DELIVERABLES.md` - WASM integration status
-- https://devlish.dev - website, playground, and rendered docs
+- `extensions/devlish-vscode/` - VS Code language support
+- https://www.devlish.com - website, playground, and rendered docs

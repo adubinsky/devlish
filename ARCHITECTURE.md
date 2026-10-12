@@ -1,12 +1,13 @@
 # Devlish Architecture
 
-Last updated: 2026-07-10
+Last updated: 2026-09-01
 
 ## Overview
 
-Devlish is an English-first programming language implemented entirely in Rust.
-Users write `.dvl` source files in natural English syntax, compile them to
-bytecode, and run them natively or in browsers via WASM.
+Devlish is an inspectable execution and verification layer implemented entirely
+in Rust. Users write `.dvl` source in readable English, compile it to bytecode,
+and run it natively or in browsers via WASM. Readable English is a property of
+the language, not the product pitch.
 
 ```text
 .dvl source

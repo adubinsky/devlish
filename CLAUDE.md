@@ -1,6 +1,6 @@
 # Devlish
 
-English-first programming language implemented in Rust. See README.md and ARCHITECTURE.md for details.
+Inspectable execution and verification layer implemented in Rust. See README.md and ARCHITECTURE.md for details.
 
 Read AGENTS.md before making changes. Its mandatory governed execution boundary
 prohibits standalone user-code runners and direct-provider workflow demos.
