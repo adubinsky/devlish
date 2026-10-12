@@ -18,7 +18,7 @@ Last updated: 2026-09-20
 - CLI: `devlish harness run|resume|init-config`
 - Sessions under `~/.devlish/sessions/`
 - Children: DEVL-209 .. DEVL-214
-- DEVL-214: ReplayHost unit coverage for `llm_complete` / `clock_now` / `random_draw`; live spin-up/down via `scripts/llm_serve_harness.sh` (OpenAI/OpenRouter)
+- DEVL-214: ReplayHost unit coverage for `llm_complete` / `clock_now` / `random_draw`; legacy live smoke runner removed; live checks require governed admission (OpenAI/OpenRouter)
 
 ### HTTP daemon
 - `devlish serve --bind 127.0.0.1:7420 [--log-level info|debug|error]`

@@ -1,0 +1,43 @@
+Rule:
+  id: harness.synthetic_loan_review
+  version: 1.0.0
+
+Ask "Which effect is requested?" as effect
+Ask "What arguments are requested?" as request
+
+# Model egress is fixed independently of the program and model's proposed plan.
+approved_prompt equals "Choose the order for recording two review statuses. Return JSON with only steps, a list of two records containing only action and loan_token. Use action record_review for each token exactly once: loan_AB12CD34 and loan_CD56EF78. Do not supply status, destinations, code, or additional fields."
+If effect equals "llm_complete":
+  model_shape equals record with "text" as prompt and "boolean" as expect_json
+  If request matches shape model_shape:
+    fields equals keys of request
+    If count of fields equals 2:
+      If expect_json of request equals true:
+        If prompt of request equals approved_prompt:
+          Respond with record with true as allow and "Only the approved token-only planning prompt may reach the model." as reason
+
+If effect equals "call_service":
+  outer_fields equals keys of request
+  If count of outer_fields is not 3:
+    Respond with record with false as allow and "Service calls may contain only service, action and arguments." as reason
+  If service of request equals "loanreview":
+    If action of request equals "create":
+      details equals arguments of request
+      shape equals record with "text" as loan_token and "text" as status
+      If details matches shape shape:
+        fields equals keys of details
+        If count of fields equals 2:
+          token equals loan_token of details
+          If token equals "loan_AB12CD34" or token equals "loan_CD56EF78":
+            status equals status of details
+            If status equals "needs_review" or status equals "complete":
+              Respond with record with true as allow and "Only the approved token and local review status may reach LoanReview." as reason
+
+If effect equals "respond":
+  outer_fields equals keys of request
+  If count of outer_fields is not 1:
+    Respond with record with false as allow and "Only the approved response value is permitted." as reason
+  If value of request equals "Review statuses recorded.":
+    Respond with record with true as allow and "The fixed completion acknowledgement contains no private case data." as reason
+
+Respond with record with false as allow and "This harness permits only its minimal planning request, review tool, and fixed acknowledgement." as reason

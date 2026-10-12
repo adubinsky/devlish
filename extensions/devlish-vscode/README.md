@@ -1,7 +1,8 @@
 # Devlish for VS Code
 
-Language support for [Devlish](https://github.com/adubinsky/devlish), the
-English-first programming language.
+Language support for [Devlish](https://github.com/adubinsky/devlish), an
+inspectable execution and verification layer for AI work. Programs are
+readable English `.dvl` source.
 
 ## Features
 
@@ -19,8 +20,8 @@ For each loops, manifest sections).
 ### Hover Documentation
 
 Hover over any keyword to see its description and syntax example. Covers
-control flow, I/O, filesystem operations, HTTP verbs, validation, manifest
-declarations, and all 26 builtin functions.
+control flow, I/O, filesystem operations, HTTP verbs, validation, and manifest
+declarations.
 
 ### Lint on Save
 

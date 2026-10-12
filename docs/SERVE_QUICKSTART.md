@@ -2,17 +2,18 @@
 
 Last updated: 2026-09-20
 
-`devlish serve` is a long-lived HTTP daemon around the same compile/run/lint
+`devlish --server` is a long-lived HTTP daemon around the same compile/run/lint
 service used by the CLI and MCP. Callers build applications by talking JSON
 over HTTP — no Devlish embedding required.
 
 ## What a caller sees
 
-1. Start one daemon process (`devlish serve`).
+1. Start one daemon process (`devlish --server`).
 2. `GET /v1/health` to confirm it is up.
 3. `POST /v1/compile`, `/v1/run`, `/v1/lint` (or `/v1/validate`) with JSON bodies.
-4. Optional: `POST /v1/harness/sessions` for an outbound-LLM run that persists a
-   session transcript under `~/.devlish/sessions/`.
+4. Optional: `POST /v1/harness/sessions` for an outbound-LLM run. This route
+   currently returns an execution result; durable HTTP session management is
+   separate work.
 5. Stop the process (SIGINT / kill). There is no separate shutdown protocol.
 
 Auth is optional. If `DEVLISH_SERVE_TOKEN` is set, every route except
@@ -28,12 +29,11 @@ Anthropic is unavailable.
 ### 1. Build
 
 ```bash
-cd crates/devlish_core
-cargo build
-# or: cargo build --release
+make install
 ```
 
-The `bin/devlish` shim finds the debug/release binary.
+This installs the native `devlish` application in `~/.local/bin`; put that
+directory on PATH if needed.
 
 ### 2. Start the daemon
 
@@ -42,7 +42,7 @@ The `bin/devlish` shim finds the debug/release binary.
 export OPENAI_API_KEY=sk-...          # or OPENROUTER_API_KEY
 # optional: export DEVLISH_SERVE_TOKEN=secret
 
-bin/devlish serve --bind 127.0.0.1:7420 --log-level info
+devlish --server
 ```
 
 Flags / env:
@@ -181,19 +181,17 @@ bin/devlish run examples/outbound_classify/classify.dvl \
 
 # Session transcript under ~/.devlish/sessions/
 bin/devlish harness run examples/outbound_classify/classify.dvl \
-  --provider openai --model gpt-4o-mini
+  --provider openai --model gpt-4o-mini \
+  --policy examples/outbound_classify/policy.dvl --policy-log outbound-policy.jsonl
 ```
 
-## Spin-up / tear-down test harness
+## Governed live execution
 
-```bash
-# Uses OPENAI_API_KEY (or PROVIDER=openrouter + OPENROUTER_API_KEY)
-./scripts/llm_serve_harness.sh
-```
-
-The script starts serve on `127.0.0.1:17420`, checks health, optionally posts
-`/v1/run` against `examples/outbound_classify/classify.dvl`, then kills the
-daemon. Set `KEEP_WORKDIR=1` to inspect logs under the temp directory.
+The legacy live-model smoke script has been removed. Live workflow deployments
+must use verified admission and the governed host boundary. See
+`docs/JEV_PROVIDER.md` for protected profiles, signed releases and policy
+requirements. Legacy service examples here are compatibility references, not
+approved production deployment instructions.
 
 ## Logging for operators
 

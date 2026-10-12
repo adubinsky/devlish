@@ -1,12 +1,13 @@
 # Devlish Architecture
 
-Last updated: 2026-07-10
+Last updated: 2026-09-01
 
 ## Overview
 
-Devlish is an English-first programming language implemented entirely in Rust.
-Users write `.dvl` source files in natural English syntax, compile them to
-bytecode, and run them natively or in browsers via WASM.
+Devlish is an inspectable execution and verification layer implemented entirely
+in Rust. Users write `.dvl` source in readable English, compile it to bytecode,
+and run it natively or in browsers via WASM. Readable English is a property of
+the language, not the product pitch.
 
 ```text
 .dvl source
@@ -20,19 +21,20 @@ bytecode, and run them natively or in browsers via WASM.
 
 ```text
 crates/
-  devlish_core/       Compiler + CLI (~5,100 lines)
-    src/lib.rs         Full-language parser, bytecode emitter, 40 tests
+  devlish_audit/      Offline independent verifier; never executes programs
+  devlish_llm/        Provider adapters for governed model effects
+  devlish_wasm_compiler/ WASM compiler interface
+  devlish_core/       Compiler + CLI
+    src/lib.rs         Full-language parser and bytecode emitter
     src/main.rs        CLI: compile, run, disassemble, validate, lint, new
 
-  devlish_vm/          Bytecode VM (1,159 lines)
-    src/lib.rs         HostEffects trait, 42+ opcodes, 26 built-in functions
+  devlish_vm/          Bytecode VM
+    src/lib.rs         HostEffects trait, opcodes and expression helpers
 
-  devlish_wasm_runner/ WASM shell (110 lines)
+  devlish_wasm_runner/ WASM shell
     src/lib.rs         Implements HostEffects via JS host imports
     js/index.mjs       JavaScript host wrapper
 
-  devlish_toolrun/     LLM token compression (662 lines)
-    src/main.rs        Command output summarizer for agent workflows
 ```
 
 ## Compilation Pipeline
@@ -94,3 +96,40 @@ is present. Programs without a manifest are unrestricted.
 
 `bin/devlish` is a bash shim that execs the `devlish-core` Rust binary.
 No Ruby, Python, or Node runtime is needed.
+
+
+## Policy interception and repeatable reports
+
+Policy-enabled CLI runs wrap the host with `devlish_vm::policy::PolicyHost`.
+Each tool effect is evaluated by a separately loaded Devlish policy in an
+isolated VM; the wrapper persists the decision before dispatch and its outcome
+afterward. Recording failures block subsequent effects. Existing VM permission
+checks remain in force. Ordinary diagnostic events remain outside this interception boundary. The prompt
+and governed harness install executable policy; verified CLI and authenticated
+HTTP sessions use shared signed admission and `GovernedRun`. Legacy HTTP/MCP
+and browser routes do not install executable effect policy.
+
+`--policy-evidence` explicitly retains sensitive effect exchanges in the policy
+log. `report process` uses them as an offline host while rerunning the program
+and policy, comparing decisions and the terminal result without live effects.
+Application and policy reports bind the file baseline and golden cases to that
+process report. These are tamper-evidence checks, not signature verification
+or independent runtime attestation.
+
+See [Effect policies](docs/EFFECT_POLICY.md),
+[Compliance reports](docs/COMPLIANCE_REPORTS.md), and
+[Policy provenance](docs/POLICY_PROVENANCE.md).
+
+
+## Independent audit verifier
+
+`crates/devlish_audit` builds a separate offline verifier without dependencies on
+Devlish's compiler, VM, model providers or service host. It authenticates exact
+bytes under operator-supplied Ed25519 trust keys, and checks signed receipts
+against format-3 policy logs and independently supplied receipt digests.
+It also checks signed release manifests and binds approved artifact identities
+to reports and receipts. The native `run-verified` command consumes verified
+program and policy buffers with a durable local rollback floor. The browser
+compiler excludes this native crypto dependency. Neither component proves
+runtime memory integrity. Protected signing, independent receipt custody and
+protected execution remain separate work. See [Independent audit verifier](docs/INDEPENDENT_AUDIT_VERIFIER.md).

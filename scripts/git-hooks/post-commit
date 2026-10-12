@@ -1,0 +1,51 @@
+#!/usr/bin/env bash
+# Comment LOOP: runtime-ready <sha> on DEVL Bugs when a loop commit lands.
+# Does not start Codex. Does not commit.
+set -euo pipefail
+
+MSG="$(git log -1 --pretty=%B)"
+if ! grep -qE 'DEVL-[0-9]+' <<<"$MSG"; then
+  exit 0
+fi
+if ! grep -qiE 'loop:ready|loop:failed|LOOP:' <<<"$MSG"; then
+  # Require an explicit loop signal in the commit message.
+  if ! grep -qiE '\bloop\b' <<<"$MSG"; then
+    exit 0
+  fi
+fi
+
+ISSUE_KEY="$(grep -oE 'DEVL-[0-9]+' <<<"$MSG" | head -1)"
+SHA="$(git rev-parse --short HEAD)"
+FULL="$(git rev-parse HEAD)"
+STARPORT_DIR="${STARPORT_DIR:-$HOME/code/starport}"
+
+ROOT="$(git rev-parse --show-toplevel)"
+MANIFEST="$ROOT/crates/devlish_core/Cargo.toml"
+BUILD_LINE="build not checked"
+if command -v cargo >/dev/null 2>&1 && [[ -f "$MANIFEST" ]]; then
+  if cargo build -q --locked --manifest-path "$MANIFEST" >/tmp/devlish-loop-build.log 2>&1; then
+    BUILD_LINE="cargo build ok"
+  else
+    BUILD_LINE="cargo build failed (see /tmp/devlish-loop-build.log)"
+  fi
+fi
+
+BODY="LOOP: runtime-ready ${FULL}
+Commit ${SHA}. ${BUILD_LINE}."
+
+export BUNDLE_WITHOUT="${BUNDLE_WITHOUT:-development:test}"
+export BUNDLE_GEMFILE="${BUNDLE_GEMFILE:-$STARPORT_DIR/Gemfile}"
+
+(
+  cd "$STARPORT_DIR"
+  bundle exec ruby -Ilib -e '
+require "starport"
+require "starport/cli"
+Starport::CLI.new(ARGV).run
+' -- jira comment --key "$ISSUE_KEY" --body "$BODY"
+) || {
+  echo "post-commit: failed to comment on $ISSUE_KEY" >&2
+  exit 0
+}
+
+echo "post-commit: commented $ISSUE_KEY ($BODY)"

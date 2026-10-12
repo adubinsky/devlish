@@ -1,0 +1,10 @@
+{
+  "model": "jev-1.13.0",
+  "answers": {
+    "document_type": {"type": "choice", "choice": "insurance", "confidence": 1.0, "probabilities": {"insurance": 1.0, "other": 0.0, "uncertain": 0.0}},
+    "liability_requirement": {"type": "choice", "choice": "matches", "confidence": 1.0, "probabilities": {"matches": 1.0, "differs": 0.0, "not_in_document": 0.0}},
+    "signed": {"type": "noul", "noul": 0.01},
+    "readability": {"type": "score", "score": 1.98, "confidence": 0.97, "probabilities": {"0": 0.0, "1": 0.02, "2": 0.98}, "legend": {"0": "No readable coverage information", "1": "Some coverage information", "2": "Clear document identity and coverage information"}}
+  },
+  "usage": {"input_tokens": 577, "output_tokens": 116}
+}

@@ -1,0 +1,13 @@
+Rule:
+  id: examples.outbound_classify.policy
+  version: 1.0.0
+
+Ask "Effect?" as effect
+Ask "Request?" as request
+If effect equals "clock" or effect equals "respond":
+  Respond with record with true as allow and "Classification timing and response." as reason
+If effect equals "llm_complete":
+  If prompt of request equals "Classify this support note as one of: billing, product, or other. Reply with JSON {\"category\":\"...\",\"rationale\":\"...\"}. Note: Customer asked for a refund on last month's invoice.":
+    If expect_json of request equals true:
+      Respond with record with true as allow and "Fixed classification request." as reason
+Respond with record with false as allow and "Outside classification contract." as reason

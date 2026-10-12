@@ -7,6 +7,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Independent audit verification
+- Share verified admission as a single-use native session retaining signed snapshots and the rollback lock through execution; CLI uses the same API, checks startup freshness and rejects log reuse before effects.
+- Require signed catalog routes for verified model effects; fixed OpenRouter destination/model, no mutable provider-config fallback, redirect/proxy suppression, bounded transport and redacted errors. Reissue existing model-enabled catalogs with `llm_route`.
+- Fix the existing LLM default-config regression (Rust `Default` now agrees with deserialization defaults) and synchronize its lockfile's already-declared JSON dependency edges.
+- Extract the verified CLI execution boundary into a single-use shared governed runner with redacted failures, completion-only results, instruction bounds and fail-closed terminal recording; future service adapters still require authenticated admission.
+- Add a Devlish-authored bounded planning harness example with complete-plan validation, minimal model/tool payloads, separate effect policy and deterministic failure/disclosure tests.
+- Add bounded durable issuer journals and operator-opted raw evidence; `report receipt-issuer` replays recorded Devlish decisions against a retained digest without contacting a signer or authenticating authority state.
+- Add read-only `verify-issuance` to recheck saved reservations/completions against current key trust, pinned identities, retained terminal receipts and execution logs; stored verification flags never grant assurance.
+- Extend repeatable policy reports to separate authority fixtures, with explicit JSON and Devlish-English limits on what those fixtures authenticate.
+- Connect Devlish preflight/final receipt authorization to durable reservation and a native signing-backend interface; denials, recorder failures, stale/revoked key identities and competing issuance block backend calls. No production signer or network endpoint is included.
+- Reserve terminal receipt issuance durably in operator-owned Unix storage; concurrent/abandoned slots fail closed and completion validates exact bytes, reserved key, purpose and revocation without loading private keys.
+- Add Devlish-authored terminal-receipt authorization rules and synthetic cases, with a separate host authority input and no signing backend or execution-assurance claim.
+- Add a standalone offline verifier for exact-byte Ed25519 signatures, explicit operator trust keys, revocation flags, and signature-purpose separation.
+- Verify signed checkpoints and terminal receipts against independently supplied digests and policy-log chains, while distinguishing recorded history from actual execution assurance.
+- Add synthetic signing examples, adversarial verification tests, and an independent-verifier guide. Protected receipt issuance and runtime attestation remain future work.
+- Verify signed release manifests, operator scope, expiry, revocation and artifact identities; bind them to audit reports and receipts.
+- Add native `run-verified` admission with a durable local rollback floor, signed effect permissions and instruction limits, and operator-gated sensitive evidence. Unsupported governed entry points fail closed.
+- Prepare unsigned receipt bytes from verified log history for a separate signing authority; preparation does not prove execution or authorize signing.
+- Keep native signature verification out of the browser compiler dependency graph.
+- Reject named pipes promptly when checking artifact and report inputs instead of waiting indefinitely for a writer.
+
+### Policy enforcement and tamper-evidence reports
+- Add separately supplied Devlish effect policies to CLI runs, with deny-by-default decisions, durable pre-dispatch records, and fail-closed recording errors.
+- Add repeatable application-integrity, policy-case, and offline process-replay reports, externally checkable report digests, and English explanations authored in Devlish.
+- Add opt-in sensitive effect evidence, exact-byte artifact verification, and compiled-policy digest pinning.
+- Add NPPI and company-IP disclosure policies with 25 synthetic scenarios and tests for denial, tampering, replay, and artifact substitution.
+- Preserve quoted commas, conjunctions, and field-binding words in audit explanations and other record/list literals.
+- Document the current CLI-only enforcement boundary and the remaining signature, build-provenance, protected-loading, and external-tool-launcher work.
+
 ### Changed
 - Single quotes are no longer string delimiters; string literals are double-quoted only. Apostrophes are ordinary English text everywhere, which removes an entire class of parser bugs where a possessive (`math's pi times 2`, `r equals math's pi if flag`) silently swallowed the rest of the line by "opening a string": the operator splitter, trailing-`if` splitter, and bracket guard no longer treat `'` as a quote. Possessive markers fold into names with `_` as the only connector (`Set salesperson's commission to 5` binds `salesperson_commission`, `owners' equity` becomes `owners_equity`; read back with the plain phrasing `salesperson commission`). In expression position `X's Y` remains a module reference and errors loudly when `X` is not a `Use`d module. `Import 'file.dvl'` must now be written with double quotes.
 

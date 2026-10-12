@@ -1,0 +1,15 @@
+{
+  "format": "devlish-tool-catalog",
+  "format_version": 1,
+  "host_effects": ["llm_complete", "respond"],
+  "llm_route": {
+    "format": "devlish-model-route",
+    "format_version": 1,
+    "provider": "jev",
+    "model": "jev-1.13.0",
+    "credential": "JEV_API_KEY",
+    "timeout_seconds": 30,
+    "max_request_bytes": 16384,
+    "max_response_bytes": 16384
+  }
+}

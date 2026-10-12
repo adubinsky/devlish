@@ -1,10 +1,17 @@
 # Devlish Testing Reference
 
-Last updated: 2026-03-23
-Status: Current reference for Devlish-native tests.
+Last updated: 2026-10-11
+Status: Historical scenario-test design; not implemented by the current native CLI.
 
-Devlish tests let users validate Devlish programs in near-English, without
-dropping into Ruby.
+The scenario format below describes an earlier testing design. The current native
+CLI does not implement `devlish test` or execute `.dvt` files. Do not create an
+alternate runner to make these historical examples executable.
+
+Current application checks execute `.dvl` programs through the existing governed
+harness with operator-selected policy and limits; use assertions within those
+programs, compare their output, and inspect the durable decision log. See
+[governed harness execution](APPLICATION.md#governed-harness-execution). Runtime
+and boundary regressions use the [Cargo/Python suites](AUDIT_HARNESS_CI.md).
 
 ## File Type
 
@@ -20,13 +27,10 @@ Then review_status should equal "approved"
 Then the route should be "approved_queue"
 ```
 
-Run with:
+The historical `devlish test` invocation is unavailable in the native CLI.
+The following sections document that scenario design, not current CLI support.
 
-```bash
-devlish test examples/tutorial/tests/tutorial_curriculum.dvt
-```
-
-## Supported Structure
+## Historical Structure
 
 Each test file contains one or more `Scenario` or `Test` blocks.
 
@@ -34,7 +38,7 @@ Supported top-level lines:
 - `Scenario "title"`
 - `Test "title"`
 
-## Supported Given Steps
+## Historical Given Steps
 
 Load input for an inline program or provide external fixtures:
 
@@ -48,7 +52,7 @@ Given this document:
   claims queue: claims_review_queue.
 ```
 
-## Supported When Steps
+## Historical When Steps
 
 Run an existing Devlish program file:
 
@@ -73,7 +77,7 @@ When I run:
     Route invoice to manual_review_queue
 ```
 
-## Supported Then Steps
+## Historical Then Steps
 
 Run status:
 
@@ -125,7 +129,7 @@ Then service "NotificationService" action "send_email" should have template "rev
 Then service "MessagingService" action "send_message" should have to "claims_review_queue"
 ```
 
-## Current Scope
+## Historical Scope
 
 The first test harness is aimed at the Devlish 2.0 tutorial subset:
 - loading
@@ -158,11 +162,10 @@ devlish run program.dvl --quiet   # same as --log-level error
 | `debug` | VM instruction events, HTTP body previews, LLM prompt sizes |
 
 JSON event lines on stderr include a `"level"` field; human lines use
-`[error]` / `[info]` / `[debug]` prefixes. Live serve spin-up/down against an
-outbound LLM: `./scripts/llm_serve_harness.sh`. Caller guide:
-`docs/SERVE_QUICKSTART.md`.
+`[error]` / `[info]` / `[debug]` prefixes. The legacy live-model smoke runner has been removed. Live checks require
+verified admission and governed effects. See `docs/JEV_PROVIDER.md`.
 
-## Current Limitations
+## Historical Limitations
 
 The current harness does not yet support:
 - nested scenario groups

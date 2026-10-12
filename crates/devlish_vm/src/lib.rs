@@ -1,3 +1,7 @@
+pub mod effect_budget;
+pub mod policy;
+pub mod tool_request;
+
 use serde_json::{json, Map, Number, Value};
 use std::collections::HashMap;
 
@@ -27,6 +31,11 @@ pub trait HostEffects {
                 .and_then(Value::as_str)
                 .unwrap_or("unknown")
         ))
+    }
+    /// Catalog tool execution requires a platform-qualified host adapter. This
+    /// default never discovers commands through PATH or invokes a shell.
+    fn run_tool(&mut self, _request: &Value) -> Result<Value, String> {
+        Err("catalog tool execution is unavailable: no verified launcher".into())
     }
     fn http_request(
         &mut self,
@@ -674,6 +683,37 @@ impl Vm {
                     ]),
                 );
             }
+            "RUN_TOOL" => {
+                let request = self.register_value(&string_field(instruction, "request")?)?;
+                let tool_id = tool_request::validate(&request).map_err(|e| self.error(e))?;
+                // Unlike legacy effects, this new capability always needs an
+                // explicit declaration, including programs without a manifest.
+                let permitted = self
+                    .manifest
+                    .as_ref()
+                    .and_then(|m| m.get("permissions"))
+                    .and_then(Value::as_array)
+                    .is_some_and(|permissions| {
+                        permissions.iter().any(|p| {
+                            p.get("kind").and_then(Value::as_str) == Some("run_tool")
+                                && match p.get("scope") {
+                                    None | Some(Value::Null) => true,
+                                    Some(Value::String(scope)) => scope == tool_id,
+                                    _ => false,
+                                }
+                        })
+                    });
+                if !permitted {
+                    return Err(self.error(
+                        "Permission denied: run_tool is not declared for this catalog ID".into(),
+                    ));
+                }
+                let dest = string_field(instruction, "dest")?;
+                let result = host
+                    .run_tool(&request)
+                    .map_err(|e| self.error(format!("Catalog tool failed: {e}")))?;
+                self.registers.insert(dest, result);
+            }
             "LLM_COMPLETE" => {
                 let prompt_val = self.register_value(&string_field(instruction, "prompt")?)?;
                 let prompt = match &prompt_val {
@@ -695,7 +735,14 @@ impl Vm {
                     .and_then(Value::as_bool)
                     .unwrap_or(false);
                 let mut request = Map::new();
-                request.insert("prompt".to_string(), json!(prompt));
+                if provider.as_deref() == Some("jev") {
+                    if !prompt_val.is_object() || !expect_json {
+                        return Err(self.error("JEV requires a typed batch and JSON output".into()));
+                    }
+                    request.insert("batch".to_string(), prompt_val);
+                } else {
+                    request.insert("prompt".to_string(), json!(prompt));
+                }
                 if let Some(model) = model {
                     request.insert("model".to_string(), json!(model));
                 }
@@ -1123,6 +1170,7 @@ impl Vm {
                 let source_val = self.register_value(&string_field(instruction, "source")?)?;
                 let dest_val = self.register_value(&string_field(instruction, "dest")?)?;
                 let dest_str = dest_val.as_str().unwrap_or_default().to_string();
+                self.check_manifest_permission("write_file", Some(&dest_str))?;
                 let request = json!({
                     "source": source_val,
                     "destination": dest_str,
@@ -1359,6 +1407,7 @@ impl Vm {
         if path.trim().is_empty() {
             return Err(self.error("File path cannot be empty".to_string()));
         }
+        self.check_manifest_permission("write_file", Some(&path))?;
 
         let mode = instruction
             .get("mode")
@@ -1428,6 +1477,7 @@ impl Vm {
         if path.trim().is_empty() {
             return Err(self.error("File path cannot be empty".to_string()));
         }
+        self.check_manifest_permission("read_file", Some(&path))?;
 
         let request = json!({ "path": path, "format": format });
         self.push_event(
@@ -1688,6 +1738,7 @@ impl Vm {
         if path.trim().is_empty() {
             return Err(self.error("File path cannot be empty".to_string()));
         }
+        self.check_manifest_permission("write_file", Some(&path))?;
 
         let assertions = self
             .results
@@ -2536,14 +2587,12 @@ fn csv_escape(value: &str) -> String {
 }
 
 fn parse_csv(text: &str) -> Result<Value, String> {
-    let mut lines = text.lines().filter(|line| !line.trim().is_empty());
-    let Some(header_line) = lines.next() else {
+    let mut chars = text.chars().peekable();
+    let Some(headers) = parse_csv_record(&mut chars)? else {
         return Ok(Value::Array(Vec::new()));
     };
-    let headers = parse_csv_line(header_line)?;
     let mut rows = Vec::new();
-    for line in lines {
-        let values = parse_csv_line(line)?;
+    while let Some(values) = parse_csv_record(&mut chars)? {
         let mut row = Map::new();
         for (index, header) in headers.iter().enumerate() {
             row.insert(
@@ -2560,13 +2609,16 @@ fn parse_csv(text: &str) -> Result<Value, String> {
     Ok(Value::Array(rows))
 }
 
-fn parse_csv_line(line: &str) -> Result<Vec<String>, String> {
+fn parse_csv_record(
+    chars: &mut std::iter::Peekable<std::str::Chars<'_>>,
+) -> Result<Option<Vec<String>>, String> {
     let mut fields = Vec::new();
     let mut current = String::new();
-    let mut chars = line.chars().peekable();
     let mut in_quotes = false;
+    let mut has_content = false;
 
     while let Some(ch) = chars.next() {
+        has_content |= !ch.is_whitespace();
         match ch {
             '"' if in_quotes && chars.peek() == Some(&'"') => {
                 current.push('"');
@@ -2574,7 +2626,17 @@ fn parse_csv_line(line: &str) -> Result<Vec<String>, String> {
             }
             '"' => in_quotes = !in_quotes,
             ',' if !in_quotes => {
-                fields.push(current.clone());
+                fields.push(std::mem::take(&mut current));
+            }
+            '\n' | '\r' if !in_quotes && (ch == '\n' || chars.peek() == Some(&'\n')) => {
+                if ch == '\r' {
+                    chars.next();
+                }
+                if has_content {
+                    fields.push(current);
+                    return Ok(Some(fields));
+                }
+                // Ignore blank physical lines only outside quoted fields.
                 current.clear();
             }
             other => current.push(other),
@@ -2584,8 +2646,12 @@ fn parse_csv_line(line: &str) -> Result<Vec<String>, String> {
     if in_quotes {
         return Err("unterminated quoted CSV field".to_string());
     }
-    fields.push(current);
-    Ok(fields)
+    if has_content {
+        fields.push(current);
+        Ok(Some(fields))
+    } else {
+        Ok(None)
+    }
 }
 
 fn sanitize_csv_header(value: &str) -> String {
@@ -3794,6 +3860,112 @@ fn sha256(input: &[u8]) -> [u8; 32] {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // Value: protects=JEV requires an object batch and JSON output before dispatch;
+    // fails_when=either VM typed-effect guard is removed; why_new=no malformed JEV VM cases;
+    // seam=none; no_claim=provider acceptance or release admission.
+    #[test]
+    fn jev_typed_effect_guards_prevent_host_dispatch() {
+        #[derive(Default)]
+        struct ModelHost(Vec<Value>);
+        impl HostEffects for ModelHost {
+            fn emit_event(&mut self, _: &Value) {}
+            fn write_file(&mut self, _: &Value) -> Result<(), String> {
+                Ok(())
+            }
+            fn llm_complete(&mut self, request: &Value) -> Result<Value, String> {
+                self.0.push(request.clone());
+                Ok(json!({"json":{"accepted":true}}))
+            }
+        }
+        for (batch, expect_json, allowed) in [
+            (json!({"document_id":"synthetic"}), true, true),
+            (json!({"document_id":"synthetic"}), false, false),
+            (json!("not a batch"), true, false),
+            (json!([]), true, false),
+            (Value::Null, true, false),
+        ] {
+            let package = json!({"format":"devlish-bytecode","format_version":0,
+                "constant_pool":[batch.clone()],"instructions":[
+                    {"op":"CONST","dest":"batch","const":0},
+                    {"op":"LLM_COMPLETE","prompt":"batch","dest":"result",
+                     "provider":"jev","expect_json":expect_json}],
+                "manifest":{"permissions":[{"kind":"llm_complete"}]}});
+            let mut host = ModelHost::default();
+            let result = Vm::new(package, json!({})).unwrap().run(&mut host);
+            if allowed {
+                assert!(result.is_ok());
+                assert_eq!(
+                    host.0,
+                    vec![json!({"batch":batch,"provider":"jev","expect_json":true})]
+                );
+            } else {
+                assert!(result
+                    .unwrap_err()
+                    .message
+                    .contains("JEV requires a typed batch and JSON output"));
+                assert!(host.0.is_empty());
+            }
+        }
+    }
+
+    #[test]
+    fn csv_preserves_quoted_multiline_fields_and_escaped_quotes() {
+        for separator in ["\n", "\r\n"] {
+            let text = format!(
+                "Invoice ID,Amount,Notes{separator}1,1200.50,\"first, line\n\nlast \"\"quote\"\"\"{separator}2,800,\"CRLF\r\n\r\npreserved\"{separator}3,150.25,\"終わり\n\""
+            );
+            assert_eq!(
+                parse_csv(&text).unwrap(),
+                json!([
+                    {"invoice_id":"1", "amount":"1200.50", "notes":"first, line\n\nlast \"quote\""},
+                    {"invoice_id":"2", "amount":"800", "notes":"CRLF\r\n\r\npreserved"},
+                    {"invoice_id":"3", "amount":"150.25", "notes":"終わり\n"}
+                ])
+            );
+        }
+    }
+
+    #[test]
+    fn csv_export_round_trips_multiline_values() {
+        let rows = json!([
+            {"name":"Ada", "notes":"\n\"quoted\", comma\r\n\r\nend\r"},
+            {"name":"Grace", "notes":""}
+        ]);
+        let text = file_content(&rows, "csv");
+        assert_eq!(parse_csv(&text).unwrap(), rows);
+    }
+
+    #[test]
+    fn csv_retains_blank_record_and_column_mapping_behavior() {
+        for text in ["", " \r\n\t\n", "Name,Amount\n"] {
+            assert_eq!(parse_csv(text).unwrap(), json!([]));
+        }
+        assert_eq!(
+            parse_csv("\n \r\nName,Amount,Notes\r\n\t\nAda,1200\nGrace,800,,ignored\r\n,,\n\"\",\"\",\"\"\n").unwrap(),
+            json!([
+                {"name":"Ada", "amount":"1200", "notes":null},
+                {"name":"Grace", "amount":"800", "notes":""},
+                {"name":"", "amount":"", "notes":""},
+                {"name":"", "amount":"", "notes":""}
+            ])
+        );
+        assert_eq!(
+            parse_csv("\"Display\nName\",Notes\nAda,ok").unwrap(),
+            json!([{"display_name":"Ada", "notes":"ok"}])
+        );
+    }
+
+    #[test]
+    fn csv_rejects_unterminated_quoted_fields_at_end_of_input() {
+        for text in [
+            "\"header\ncontinued",
+            "name,notes\nAda,\"first\r\n\r\nlast",
+            "name,notes\nAda,\"escaped \"\"",
+        ] {
+            assert_eq!(parse_csv(text).unwrap_err(), "unterminated quoted CSV field");
+        }
+    }
 
     struct TestHost {
         events: Vec<Value>,

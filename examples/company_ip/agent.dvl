@@ -1,0 +1,53 @@
+# A model may order public excerpts; it cannot draft or approve publication text.
+Permissions:
+  Call language models
+  Call PublicNotes service
+
+Ask "Which local release material is available?" as release_material
+input_shape equals record with "text" as internal_draft and "boolean" as publication_requested
+If not release_material matches shape input_shape:
+  Fail with "Release material requires a draft and a publication request flag."
+If publication_requested of release_material equals false:
+  Respond with "Publication was not requested."
+
+# Private drafts are never interpolated into this fixed planning prompt.
+prompt equals "Order two approved public excerpts. Return JSON with only steps, a list of two records containing only action and excerpt_id. Use action publish_excerpt with public_overview and public_integration exactly once each. Do not supply text, destinations, code, or additional fields."
+Ask the model with prompt expecting json as plan
+plan_shape equals record with "list" as steps
+If not plan matches shape plan_shape:
+  Fail with "The model plan must contain a steps list."
+If count of keys of plan is not 1:
+  Fail with "The model plan contains unsupported fields."
+steps equals steps of plan
+If count of steps is not 2:
+  Fail with "The model must select both approved excerpts exactly once."
+seen_overview equals false
+seen_integration equals false
+step_shape equals record with "text" as action and "text" as excerpt_id
+For each step in steps:
+  If not step matches shape step_shape:
+    Fail with "The model step has an invalid shape."
+  If count of keys of step is not 2:
+    Fail with "The model step contains unsupported fields."
+  If action of step is not "publish_excerpt":
+    Fail with "The model requested an uncatalogued action."
+  excerpt equals excerpt_id of step
+  If excerpt is not "public_overview" and excerpt is not "public_integration":
+    Fail with "The model requested an unapproved excerpt."
+  If excerpt equals "public_overview":
+    If seen_overview equals true:
+      Fail with "The model repeated an excerpt."
+    seen_overview equals true
+  If excerpt equals "public_integration":
+    If seen_integration equals true:
+      Fail with "The model repeated an excerpt."
+    seen_integration equals true
+
+# All validation completes before the first publication effect.
+For each step in steps:
+  excerpt equals excerpt_id of step
+  approved_text equals "The product supports governed workflow automation."
+  If excerpt equals "public_integration":
+    approved_text equals "The product offers CLI and HTTP integration."
+  Create PublicNotes entry with "public-release-notes" as channel and excerpt as excerpt_id and approved_text as text
+Respond with "Approved public excerpts recorded."

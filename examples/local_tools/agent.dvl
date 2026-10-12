@@ -1,0 +1,10 @@
+Permissions:
+  Call language models
+  Run catalog tool "ls"
+  Run catalog tool "grep"
+
+prompt equals "Return only a JSON object with tool_id set to ls and arguments set to a list containing -1. No other fields."
+Ask the model with prompt expecting json as tool_request
+Run catalog tool tool_request as tool_result
+Require exit_code of tool_result equals 0 otherwise fail with "The local program failed."
+Respond with "Local tool completed."

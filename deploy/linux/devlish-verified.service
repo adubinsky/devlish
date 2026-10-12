@@ -1,0 +1,64 @@
+# QUALIFICATION CANDIDATE: not a tested isolation or attestation guarantee.
+# See README.md. Install only after qualifying a Linux host with systemd >= 255.
+[Unit]
+Description=Devlish governed execution service
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=exec
+User=devlish-executor
+Group=devlish-executor
+WorkingDirectory=/opt/devlish/deployment
+ExecStart=/opt/devlish/runtime/devlish-core serve-verified --bind 127.0.0.1:7421 --log-dir /var/log/devlish
+Environment=DEVLISH_VERIFIED_PROFILE=/opt/devlish/deployment/profile.json
+Environment=DEVLISH_CREDENTIALS_DIR=%d
+Environment=LANG=C.UTF-8
+Environment=TZ=UTC
+UnsetEnvironment=LD_PRELOAD LD_LIBRARY_PATH LD_AUDIT GCONV_PATH GLIBC_TUNABLES DYLD_INSERT_LIBRARIES DEVLISH_SERVE_TOKEN OPENROUTER_API_KEY DEVLISH_AUDIT_LOG
+LoadCredential=DEVLISH_SERVE_TOKEN:/etc/devlish/secrets/serve-token
+LoadCredential=OPENROUTER_API_KEY:/etc/devlish/secrets/openrouter-key
+StateDirectory=devlish
+StateDirectoryMode=0700
+LogsDirectory=devlish
+LogsDirectoryMode=0700
+UMask=0077
+NoNewPrivileges=yes
+CapabilityBoundingSet=
+AmbientCapabilities=
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+PrivateMounts=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+ProtectProc=invisible
+ProcSubset=pid
+RestrictNamespaces=yes
+RestrictSUIDSGID=yes
+RestrictRealtime=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+SystemCallArchitectures=native
+SystemCallFilter=~@debug @mount @privileged
+SystemCallErrorNumber=EPERM
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+ReadWritePaths=/var/lib/devlish /var/log/devlish
+InaccessiblePaths=/etc/devlish/secrets
+LimitCORE=0
+TasksMax=32
+MemoryMax=512M
+StandardOutput=journal
+StandardError=journal
+# Restarting cannot resolve an uncertain business effect. Operator review first.
+Restart=no
+KillMode=control-group
+TimeoutStopSec=30s
+
+[Install]
+WantedBy=multi-user.target

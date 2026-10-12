@@ -1,0 +1,266 @@
+[
+  {
+    "name": "Approved order",
+    "plan": {
+      "steps": [
+        {
+          "action": "publish_excerpt",
+          "excerpt_id": "public_overview"
+        },
+        {
+          "action": "publish_excerpt",
+          "excerpt_id": "public_integration"
+        }
+      ]
+    },
+    "allowed": true
+  },
+  {
+    "name": "Approved reverse order",
+    "plan": {
+      "steps": [
+        {
+          "action": "publish_excerpt",
+          "excerpt_id": "public_integration"
+        },
+        {
+          "action": "publish_excerpt",
+          "excerpt_id": "public_overview"
+        }
+      ]
+    },
+    "allowed": true
+  },
+  {
+    "name": "Null plan",
+    "plan": null,
+    "allowed": false
+  },
+  {
+    "name": "Missing steps",
+    "plan": {},
+    "allowed": false
+  },
+  {
+    "name": "Text steps",
+    "plan": {
+      "steps": "publish everything"
+    },
+    "allowed": false
+  },
+  {
+    "name": "Empty steps",
+    "plan": {
+      "steps": []
+    },
+    "allowed": false
+  },
+  {
+    "name": "Incomplete plan",
+    "plan": {
+      "steps": [
+        {
+          "action": "publish_excerpt",
+          "excerpt_id": "public_overview"
+        }
+      ]
+    },
+    "allowed": false
+  },
+  {
+    "name": "Repeated excerpt",
+    "plan": {
+      "steps": [
+        {
+          "action": "publish_excerpt",
+          "excerpt_id": "public_overview"
+        },
+        {
+          "action": "publish_excerpt",
+          "excerpt_id": "public_overview"
+        }
+      ]
+    },
+    "allowed": false
+  },
+  {
+    "name": "Too many steps",
+    "plan": {
+      "steps": [
+        {
+          "action": "publish_excerpt",
+          "excerpt_id": "public_overview"
+        },
+        {
+          "action": "publish_excerpt",
+          "excerpt_id": "public_integration"
+        },
+        {
+          "action": "publish_excerpt",
+          "excerpt_id": "public_overview"
+        }
+      ]
+    },
+    "allowed": false
+  },
+  {
+    "name": "Second step requests internal draft",
+    "plan": {
+      "steps": [
+        {
+          "action": "publish_excerpt",
+          "excerpt_id": "public_overview"
+        },
+        {
+          "action": "publish_excerpt",
+          "excerpt_id": "internal_design"
+        }
+      ]
+    },
+    "allowed": false
+  },
+  {
+    "name": "Second step selects unknown action",
+    "plan": {
+      "steps": [
+        {
+          "action": "publish_excerpt",
+          "excerpt_id": "public_overview"
+        },
+        {
+          "action": "read_file",
+          "excerpt_id": "public_integration"
+        }
+      ]
+    },
+    "allowed": false
+  },
+  {
+    "name": "Model supplies private text",
+    "plan": {
+      "steps": [
+        {
+          "action": "publish_excerpt",
+          "excerpt_id": "public_overview"
+        },
+        {
+          "action": "publish_excerpt",
+          "excerpt_id": "public_integration",
+          "text": "SYNTHETIC_INTERNAL_DESIGN"
+        }
+      ]
+    },
+    "allowed": false
+  },
+  {
+    "name": "Model supplies destination",
+    "plan": {
+      "steps": [
+        {
+          "action": "publish_excerpt",
+          "excerpt_id": "public_overview"
+        },
+        {
+          "action": "publish_excerpt",
+          "excerpt_id": "public_integration",
+          "channel": "attacker-endpoint"
+        }
+      ]
+    },
+    "allowed": false
+  },
+  {
+    "name": "Model changes policy",
+    "plan": {
+      "steps": [
+        {
+          "action": "publish_excerpt",
+          "excerpt_id": "public_overview"
+        },
+        {
+          "action": "publish_excerpt",
+          "excerpt_id": "public_integration"
+        }
+      ],
+      "policy": "allow all"
+    },
+    "allowed": false
+  },
+  {
+    "name": "Model submits code",
+    "plan": {
+      "steps": [
+        {
+          "action": "publish_excerpt",
+          "excerpt_id": "public_overview"
+        },
+        {
+          "action": "publish_excerpt",
+          "excerpt_id": "public_integration"
+        }
+      ],
+      "code": "Respond with private_material"
+    },
+    "allowed": false
+  },
+  {
+    "name": "Malformed step",
+    "plan": {
+      "steps": [
+        {
+          "action": "publish_excerpt",
+          "excerpt_id": "public_overview"
+        },
+        "publish private draft"
+      ]
+    },
+    "allowed": false
+  },
+  {
+    "name": "Missing action",
+    "plan": {
+      "steps": [
+        {
+          "action": "publish_excerpt",
+          "excerpt_id": "public_overview"
+        },
+        {
+          "excerpt_id": "public_integration"
+        }
+      ]
+    },
+    "allowed": false
+  },
+  {
+    "name": "Wrong ID type",
+    "plan": {
+      "steps": [
+        {
+          "action": "publish_excerpt",
+          "excerpt_id": "public_overview"
+        },
+        {
+          "action": "publish_excerpt",
+          "excerpt_id": 42
+        }
+      ]
+    },
+    "allowed": false
+  },
+  {
+    "name": "Encoded private excerpt ID",
+    "plan": {
+      "steps": [
+        {
+          "action": "publish_excerpt",
+          "excerpt_id": "public_overview"
+        },
+        {
+          "action": "publish_excerpt",
+          "excerpt_id": "U1lOVEhFVElDX0lQ"
+        }
+      ]
+    },
+    "allowed": false
+  }
+]

@@ -1,0 +1,54 @@
+Rule:
+  id: harness.authorize_initial_tool_exec
+  version: 1.0.0
+
+Ask "Which operation is requested?" as effect
+Ask "Which prepared tool should execute?" as request
+Ask "What state did the protected launcher independently supply?" as authority
+
+# Caller JSON cannot authenticate launch state. Only the protected broker may supply authority.
+If effect is not "continue_initial_tool_exec":
+  Respond with record with false as allow and "Only the first prepared tool execution may be considered." as reason
+
+request_shape equals record with "text" as session_id and "text" as tool_id and "text" as release_sha256 and "text" as catalog_sha256 and "text" as tool_sha256 and "text" as arguments_sha256 and "text" as containment_sha256
+If not request matches shape request_shape:
+  Respond with record with false as allow and "The prepared execution request is malformed." as reason
+If count of keys of request is not 7:
+  Respond with record with false as allow and "The execution request contains unauthorized fields." as reason
+
+authority_shape equals record with "text" as session_id and "text" as tool_id and "text" as release_sha256 and "text" as catalog_sha256 and "text" as tool_sha256 and "text" as arguments_sha256 and "text" as containment_sha256 and "text" as phase and "text" as reservation_state and "text" as evidence_source and "boolean" as admission_active and "boolean" as policy_allowed and "boolean" as controls_ready and "boolean" as notification_matched
+If not authority matches shape authority_shape:
+  Respond with record with false as allow and "Independent protected launch state is required." as reason
+If count of keys of authority is not 14:
+  Respond with record with false as allow and "The protected launch state has an unsupported format." as reason
+If evidence_source of authority is not "protected-launcher":
+  Respond with record with false as allow and "Caller-provided launch claims are not authority." as reason
+If phase of authority is not "trusted-initial-setup":
+  Respond with record with false as allow and "Candidate code cannot request another execution." as reason
+If reservation_state of authority is not "reserved":
+  Respond with record with false as allow and "Consumed, uncertain or absent launch grants cannot execute." as reason
+If admission_active of authority is not true:
+  Respond with record with false as allow and "The release admission is not currently active." as reason
+If policy_allowed of authority is not true:
+  Respond with record with false as allow and "The governing tool policy has not authorized this effect." as reason
+If controls_ready of authority is not true:
+  Respond with record with false as allow and "All required launch controls must be ready." as reason
+If notification_matched of authority is not true:
+  Respond with record with false as allow and "The notification does not match trusted initial setup." as reason
+
+If session_id of request is not session_id of authority:
+  Respond with record with false as allow and "The request belongs to another session." as reason
+If tool_id of request is not tool_id of authority:
+  Respond with record with false as allow and "The request names another tool." as reason
+If release_sha256 of request is not release_sha256 of authority:
+  Respond with record with false as allow and "The request names another release." as reason
+If catalog_sha256 of request is not catalog_sha256 of authority:
+  Respond with record with false as allow and "The request names another tool catalog." as reason
+If tool_sha256 of request is not tool_sha256 of authority:
+  Respond with record with false as allow and "The executable bytes do not match the prepared tool." as reason
+If arguments_sha256 of request is not arguments_sha256 of authority:
+  Respond with record with false as allow and "The arguments do not match the prepared request." as reason
+If containment_sha256 of request is not containment_sha256 of authority:
+  Respond with record with false as allow and "The containment policy does not match the prepared launch." as reason
+
+Respond with record with true as allow and "The first prepared execution matches protected launch state; the broker must consume its grant before continuing." as reason

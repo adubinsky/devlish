@@ -1,0 +1,33 @@
+Rule:
+  id: local.program_policy
+  version: 1.0.0
+
+Ask "Which effect?" as effect
+Ask "Which arguments?" as request
+
+# Explicit prohibitions are checked before any allowance or abstention.
+If effect equals "run_tool":
+  If tool_id of request equals "grep":
+    Respond with record with "deny" as decision and "This example explicitly forbids grep." as reason
+  If tool_id of request equals "ls":
+    arguments equals arguments of request
+    If count of arguments is not 1:
+      Respond with record with "deny" as decision and "Only the single approved listing argument is permitted." as reason
+    For each argument in arguments:
+      If argument is not "-1":
+        Respond with record with "deny" as decision and "Only the single approved listing argument is permitted." as reason
+    Respond with record with "abstain" as decision and "The operator default determines whether this listing is allowed." as reason
+  Respond with record with "deny" as decision and "This example does not permit other programs." as reason
+
+If effect equals "llm_complete":
+  If prompt of request equals "Return only a JSON object with tool_id set to ls and arguments set to a list containing -1. No other fields.":
+    If expect_json of request equals true:
+      Respond with record with "allow" as decision and "The fixed public planning prompt is permitted." as reason
+  Respond with record with "deny" as decision and "Other model prompts are forbidden." as reason
+
+If effect equals "respond":
+  If value of request equals "Local tool completed.":
+    Respond with record with "allow" as decision and "The fixed acknowledgement discloses no captured output." as reason
+  Respond with record with "deny" as decision and "Raw tool output is not approved for disclosure." as reason
+
+Respond with record with "deny" as decision and "Other effects are forbidden by this example." as reason

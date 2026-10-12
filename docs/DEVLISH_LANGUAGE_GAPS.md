@@ -1,7 +1,24 @@
 # Devlish Language Gaps
 
-Last updated: 2026-07-10
-Status: Current gap reference for teaching and language planning.
+Last reviewed: 2026-10-09
+Status: Historical teaching/planning gap inventory with current implementation notes.
+
+## Current implementation notes
+
+The inventory below predates the native Rust compiler/shared VM architecture.
+References to AST/IR interpreters and Ruby/JavaScript compilation describe the
+older implementation, not the current native or browser execution path.
+
+Current language coverage includes expression callbacks, exact decimals and
+fractions, extended arithmetic, regex helpers, namespaced bundled modules,
+journaled model/clock/random effects, and declared catalog/local tool effects.
+Policy decisions support allow/deny/abstain with operator-selected defaults.
+The application now has prompt, workflow, and server entry points. These are
+implemented features and should not be counted as remaining language gaps.
+
+Use `LANGUAGE_REFERENCE.md`, `STANDARD_LIBRARY_CURRENT.md`, and `APPLICATION.md`
+for current authoring and runtime behavior. The remaining historical discussion
+is planning context, not a verified current backlog.
 
 ## Purpose
 

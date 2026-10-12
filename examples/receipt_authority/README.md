@@ -1,0 +1,168 @@
+# Receipt authorization in Devlish
+
+This example makes receipt-signing decisions reviewable as Devlish rules. It is
+an executable authorization contract for DEVL-225. The native in-process issuer
+now connects these rules to durable reservation and a signing adapter; it is not
+a protected service. The policy itself loads no key and issues no signature. Every fixture is synthetic.
+
+`authorize.dvl` permits one narrowly scoped operation: a terminal audit receipt
+for recorded history. It compares the caller's tenant, session, release, receipt
+digest and key selection against independently supplied authority state. It
+rejects revoked/inactive keys, unavailable signing, incomplete or paused runs,
+unreserved or consumed issuance, unknown fields and stronger execution claims.
+
+The policy has two phases: `prepare_audit_receipt` approves a candidate before
+consuming a slot; `issue_audit_receipt` requires the exclusive reservation before
+signing. Preflight approval alone never authorizes a backend call.
+
+Run the cases and integration checks from the repository root:
+
+```bash
+cargo test --locked --manifest-path crates/devlish_core/Cargo.toml --test receipt_authority
+cargo test --locked --manifest-path crates/devlish_core/Cargo.toml --test receipt_issuer
+```
+
+Generate and explain a repeatable policy report without a signing backend:
+
+```bash
+devlish compile examples/receipt_authority/authorize.dvl --output receipt-policy.json
+devlish report policy receipt-policy.json examples/receipt_authority/cases.json \
+  --output receipt-policy-report.json
+devlish report explain receipt-policy-report.json
+```
+
+The report treats `input.authority` as supplied test data and explicitly declines
+to authenticate it. It does not create a reservation or call a signer.
+
+`cases.json` contains the expected English decision for every scenario. The test
+runs each case twice to check repeatability. A separate test proves that ordinary
+host policy evaluation cannot obtain authority by nesting it inside a request,
+and that a denied service call never reaches the underlying host.
+
+## Two input channels
+
+`EffectPolicy::evaluate_with_authority(effect, request, authority)` evaluates a
+compiled Devlish policy without external effects, under the existing instruction
+budget. Request and authority remain separate top-level values. The ordinary
+`evaluate` and `PolicyHost` paths supply null authority. Request fields cannot
+replace it.
+
+This separation prevents accidental request merging; it does not authenticate
+JSON or protect the process. A Rust caller able to supply both arguments can
+fabricate both. A production signing service must own the authority channel,
+pinned policy, session records and keys independently of the agent.
+
+The authoritative descriptor must be derived from validated native state, not
+copied from uploaded documents or request booleans:
+
+| Field | Host obligation |
+| --- | --- |
+| tenant_id, session_id | Resolve authenticated tenant and executor-owned session; reject missing or empty identities. |
+| release_sha256 | Verify release admission under operator trust and retain its exact manifest digest. |
+| receipt_sha256 | Prepare receipt from a checked immutable log snapshot, retain exact receipt bytes, and compute its canonical lowercase SHA-256. |
+| key_id, key_active | Resolve an active receipt-purpose key authorized for this tenant/environment; evaluate current revocation state. |
+| signer_available | Establish authorized backend availability; failure must not select a fallback key. |
+| terminal_ready | Derive from the verified log's finished/unpaused state with no unmatched effect intent. A failed but completed run may still receive a truthful receipt. |
+| reservation_state | Atomically reserve this operation under service-owned state before evaluation; never accept the caller's claim of a reservation. |
+| evidence_source | Use `verified-history` only after independent release and log verification. |
+| assurance_profile | Use `recorded-history`; neither this policy nor a signature proves governed execution. |
+
+The policy checks types and allowed fields; the host must validate canonical
+identities and digests before constructing the descriptor. The integration tests exercise the real in-process issuer with synthetic log
+history and ephemeral test keys. A protected service remains unimplemented.
+
+## Integration sequence
+
+1. Authenticate the caller outside the model/agent process and select the
+   operator-pinned authorization policy and tenant-scoped receipt key.
+2. Verify release and log history, then prepare exact receipt bytes. Retain these
+   bytes inside the service; do not accept arbitrary caller-selected bytes.
+3. Evaluate Devlish preflight against the prepared candidate and record the
+   decision. A denial creates no reservation and never reaches signing.
+4. Acquire an exclusive durable reservation for the session, receipt kind and
+   digest. A conflicting or consumed reservation fails closed.
+5. Supply the requested operation and independently constructed authority state
+   separately to the Devlish policy. Errors, missing decisions and denials stop
+   issuance. Persist the policy identity, authority-state commitment and decision
+   in the signer's independent audit record before contacting the key backend.
+6. Sign those same retained bytes using the existing `audit-receipt` signing
+   domain. Key material must never enter Devlish variables, logs or model input.
+7. Persist the result and reservation transition before responding. Retry may
+   return the stored identical receipt, but must not sign a competing receipt.
+   A crash with uncertain backend outcome requires reconciliation, not blind retry.
+8. Retain receipt commitments outside the executor's control. A failed retention
+   operation cannot be reported as independently anchored evidence.
+
+The pure policy cannot implement atomic reservation, prevent concurrent duplicate
+issuance, authenticate a key backend, protect storage from administrators or
+prove log truth. Tests of `reserved` and `consumed` show the decision contract,
+not a working concurrency mechanism. The audit library now supplies an exclusive durable local reservation and
+validated completion primitive; see the [reservation guide](../../docs/INDEPENDENT_AUDIT_VERIFIER.md#durable-local-terminal-receipt-reservation).
+The native in-process issuer wires it to this policy and a backend trait. There
+is no production backend, network endpoint or authenticated tenant routing.
+Protected integration, restart reconciliation and the remaining controls stay
+DEVL-225/DEVL-224 work. Key provisioning, rotation, revocation and incident response likewise need
+an operator-controlled backend; no software secret is embedded in this example.
+
+## Native in-process issuer
+
+`devlish_core::receipt_issuer::ReceiptIssuer` pins exact compiled authorization
+policy bytes and an operator-selected tenant, directory and receipt key. Each
+call rechecks the supplied current trust snapshot, prepares receipt bytes from
+the verified release/log, evaluates Devlish preflight, reserves the slot, then
+evaluates final Devlish approval. Both decisions must be recorded before the
+backend receives the domain-separated retained receipt bytes. No caller-selected
+bytes, purpose, key endpoint or tenant routing enter the backend call.
+
+By default, decision records contain operation identity, policy identity and
+request/authority/reason digests, not raw caller payloads. The recorder must durably persist each record. Denial or
+recording failure before signing prevents the backend call. Backend uncertainty
+or an invalid signature leaves the reservation pending. A recording failure after
+completion retains the signed result on disk and returns an error; the caller
+must reconcile it before retrying. Completion still makes no independently
+verified policy-enforcement or execution-origin claim.
+
+`ReceiptSigningBackend` has no production implementation. Its only implementation
+in this increment is an ephemeral test signer. A real deployment must isolate
+credentials, authenticate the caller and host state, select fresh release/trust
+snapshots, protect the policy pin and storage, and retain evidence independently.
+The Rust API is not a boundary against malicious code in the same process.
+The separate `report receipt-issuer` command can replay operator-enabled evidence;
+ordinary process reports remain scoped to application execution.
+
+## Verify the retained issuance
+
+The independent `devlish-audit verify-issuance` command rechecks the saved
+pending/completed records with current trust and independently supplied receipt,
+session, tenant, release and public-key expectations. See
+[the verifier guide](../../docs/INDEPENDENT_AUDIT_VERIFIER.md#independently-check-saved-issuance-records)
+for the command and input format. The issuer integration test feeds its actual
+saved records to this checker.
+
+This proves consistency with a freshly verified receipt and log. It does not
+replay issuer decisions or authenticate the unsigned tenant label. Saved
+verification flags cannot establish stronger assurance or bypass revocation.
+
+## Record and replay issuer decisions
+
+For one issuance attempt, the native host can create a durable
+`devlish_core::receipt_journal::ReceiptJournal` and pass it as the issuer's
+recorder. Explicitly enable `issuer.with_replay_evidence()` only when raw request
+and authority snapshots may be retained in protected storage. Default recording
+contains only digests. A closed or failed journal cannot be reused for another
+attempt, and the journal cannot authorize a backend call itself.
+
+```bash
+devlish report receipt-issuer receipt-policy.json issuer.jsonl \
+  --sha256 "$RETAINED_ISSUER_JOURNAL_SHA256" --output issuer-report.json
+devlish report explain issuer-report.json
+```
+
+The lowercase journal digest must have been retained independently. Replay uses
+the supplied compiled Devlish policy, checks both decisions and their context,
+and verifies recorded ordering and outcome binding. It never contacts a signer.
+A denial or recorded uncertainty can reproduce successfully; the report keeps
+that status separate from successful issuance. Missing outcomes fail replay and
+require reconciliation. Authority authenticity, signature verification and
+protected execution are outside this replay claim. See the
+[report guide](../../docs/COMPLIANCE_REPORTS.md#replay-recorded-receipt-authorization).

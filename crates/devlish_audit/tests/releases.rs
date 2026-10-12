@@ -1,0 +1,1794 @@
+use devlish_audit::{hex, release::verify_release, sha256, signing_message, Purpose};
+use ring::{
+    rand::SystemRandom,
+    signature::{Ed25519KeyPair, KeyPair},
+};
+use serde_json::{json, Value};
+
+struct Fixture {
+    key: Ed25519KeyPair,
+    manifest: Value,
+    requirements: Value,
+    trust: Value,
+}
+fn bytes(value: &Value) -> Vec<u8> {
+    serde_json::to_vec(value).unwrap()
+}
+impl Fixture {
+    fn new() -> Self {
+        let key = Ed25519KeyPair::generate_pkcs8(&SystemRandom::new()).unwrap();
+        let key = Ed25519KeyPair::from_pkcs8(key.as_ref()).unwrap();
+        let artifacts: Vec<_> = [
+            "runtime",
+            "compiler",
+            "policy",
+            "tool-catalog",
+            "permissions",
+            "containment",
+            "source-closure",
+            "build-attestation",
+            "tool",
+        ]
+        .iter()
+        .map(|role| json!({"id": role, "role":role,"sha256":sha256(role.as_bytes())}))
+        .collect();
+        let manifest = json!({"format":"devlish-release-manifest","format_version":1,
+            "release_id":"synthetic-v2", "environment":"test", "target":"test-target", "sequence":2,
+            "valid_from":100,"valid_until":200,"repository":"synthetic-repo","commit":"synthetic-commit",
+            "workflow":"release", "policy_id":"nppi", "policy_version":"1", "artifacts":artifacts});
+        let requirements = json!({"format":"devlish-release-requirements","format_version":1,
+            "environment":"test","target":"test-target","repository":"synthetic-repo","commit":"synthetic-commit",
+            "workflow":"release","policy_id":"nppi","policy_version":"1","minimum_sequence":2,
+            "evaluated_at":150,"revocations_valid_from":100,"revocations_valid_until":200,
+            "revoked_manifest_sha256":[],"authorized_release_keys":["release"]});
+        let trust = json!({"format":"devlish-audit-trust","format_version":1,"keys":[{
+            "id":"release","public_key_hex":hex(key.public_key().as_ref()),"purposes":["release-manifest"],"revoked":false}]});
+        Self {
+            key,
+            manifest,
+            requirements,
+            trust,
+        }
+    }
+    fn signature(&self) -> Vec<u8> {
+        bytes(
+            &json!({"format":"devlish-detached-signature","format_version":1,"algorithm":"ed25519",
+            "key_id":"release","purpose":"release-manifest",
+            "signature_hex":hex(self.key.sign(&signing_message(Purpose::ReleaseManifest, &bytes(&self.manifest))).as_ref())}),
+        )
+    }
+    fn check(&self) -> Result<devlish_audit::release::ReleaseVerification, String> {
+        verify_release(
+            &bytes(&self.manifest),
+            &self.signature(),
+            &bytes(&self.trust),
+            &bytes(&self.requirements),
+            |id| Ok(id.as_bytes().to_vec()),
+        )
+    }
+}
+#[test]
+fn repeatable_approval_does_not_claim_build_or_execution_verification() {
+    let f = Fixture::new();
+    let report = f.check().unwrap();
+    assert!(report.release_requirements_verified && report.artifact_snapshots_verified);
+    assert!(
+        !report.build_provenance_verified
+            && !report.execution_origin_verified
+            && !report.policy_enforcement_verified
+    );
+    assert_eq!(
+        serde_json::to_value(report).unwrap(),
+        serde_json::to_value(f.check().unwrap()).unwrap()
+    );
+}
+#[test]
+fn signed_wrong_scope_is_rejected_before_reading_artifacts() {
+    for field in [
+        "environment",
+        "target",
+        "repository",
+        "commit",
+        "workflow",
+        "policy_id",
+        "policy_version",
+    ] {
+        let mut f = Fixture::new();
+        f.manifest[field] = json!("wrong");
+        let err = verify_release(
+            &bytes(&f.manifest),
+            &f.signature(),
+            &bytes(&f.trust),
+            &bytes(&f.requirements),
+            |_| panic!("must not read artifacts"),
+        )
+        .unwrap_err();
+        assert!(err.contains("scope"), "{field}: {err}");
+    }
+}
+#[test]
+fn expiry_future_release_stale_revocations_and_rollback_fail() {
+    for (field, value) in [
+        ("evaluated_at", 99),
+        ("evaluated_at", 200),
+        ("minimum_sequence", 3),
+        ("revocations_valid_from", 151),
+        ("revocations_valid_until", 150),
+    ] {
+        let mut f = Fixture::new();
+        f.requirements[field] = json!(value);
+        assert!(f.check().is_err(), "{field}");
+    }
+    let mut f = Fixture::new();
+    f.requirements["evaluated_at"] = json!(100);
+    assert!(f.check().is_ok());
+    f.manifest["valid_until"] = json!(100);
+    assert!(f.check().is_err());
+}
+#[test]
+fn revoked_release_key_and_non_release_authority_fail() {
+    let mut f = Fixture::new();
+    f.requirements["revoked_manifest_sha256"] = json!([sha256(&bytes(&f.manifest))]);
+    assert!(f.check().unwrap_err().contains("revoked"));
+    f.requirements["revoked_manifest_sha256"] = json!([]);
+    f.trust["keys"][0]["revoked"] = json!(true);
+    assert!(f.check().unwrap_err().contains("revoked"));
+    f.trust["keys"][0]["revoked"] = json!(false);
+    f.requirements["authorized_release_keys"] = json!(["builder"]);
+    assert!(f.check().unwrap_err().contains("release authority"));
+}
+#[test]
+fn missing_duplicate_and_invalid_artifacts_fail() {
+    let mut f = Fixture::new();
+    f.manifest["artifacts"].as_array_mut().unwrap().remove(0);
+    assert!(f.check().unwrap_err().contains("missing required"));
+    let mut f = Fixture::new();
+    f.manifest["artifacts"][1]["id"] = json!("runtime");
+    assert!(f.check().unwrap_err().contains("duplicate"));
+    f.manifest["artifacts"][1]["id"] = json!("../compiler");
+    assert!(f.check().unwrap_err().contains("artifact ID"));
+    let mut f = Fixture::new();
+    f.manifest["artifacts"][0]["sha256"] = json!("0".repeat(64));
+    assert!(f.check().unwrap_err().contains("digest"));
+}
+#[test]
+fn modified_manifest_and_replaced_artifact_fail() {
+    let f = Fixture::new();
+    let mut altered = bytes(&f.manifest);
+    altered.push(b' ');
+    assert!(verify_release(
+        &altered,
+        &f.signature(),
+        &bytes(&f.trust),
+        &bytes(&f.requirements),
+        |_| panic!("unauthenticated reads")
+    )
+    .is_err());
+    assert!(verify_release(
+        &bytes(&f.manifest),
+        &f.signature(),
+        &bytes(&f.trust),
+        &bytes(&f.requirements),
+        |_| Ok(b"replacement".to_vec())
+    )
+    .unwrap_err()
+    .contains("digest"));
+}
+#[test]
+fn cli_reads_operator_mapping_and_rejects_replaced_tool() {
+    use std::{fs, process::Command};
+    let f = Fixture::new();
+    let dir = std::env::temp_dir().join(format!(
+        "devlish-release-{}-{}",
+        std::process::id(),
+        hex(f.key.public_key().as_ref())
+    ));
+    fs::create_dir(&dir).unwrap();
+    for (name, data) in [
+        ("manifest.json", bytes(&f.manifest)),
+        ("requirements.json", bytes(&f.requirements)),
+        ("trust.json", bytes(&f.trust)),
+        ("signature.json", f.signature()),
+    ] {
+        fs::write(dir.join(name), data).unwrap();
+    }
+    let mut mapping = Vec::new();
+    for artifact in f.manifest["artifacts"].as_array().unwrap() {
+        let id = artifact["id"].as_str().unwrap();
+        fs::write(dir.join(id), id).unwrap();
+        mapping.push(json!({"id":id,"path":id}));
+    }
+    fs::write(dir.join("artifacts.json"), bytes(&json!(mapping))).unwrap();
+    let run = || {
+        Command::new(env!("CARGO_BIN_EXE_devlish-audit"))
+            .current_dir(&dir)
+            .args([
+                "verify-release",
+                "manifest.json",
+                "--signature",
+                "signature.json",
+                "--trust",
+                "trust.json",
+                "--requirements",
+                "requirements.json",
+                "--artifacts",
+                "artifacts.json",
+            ])
+            .output()
+            .unwrap()
+    };
+    let result = run();
+    assert!(
+        result.status.success(),
+        "{}",
+        String::from_utf8_lossy(&result.stdout)
+    );
+    fs::write(dir.join("tool"), "modified external program").unwrap();
+    let result = run();
+    assert!(!result.status.success());
+    assert!(
+        String::from_utf8_lossy(&result.stdout).contains("artifact digest or size mismatch: tool")
+    );
+    fs::remove_dir_all(dir).unwrap();
+}
+
+fn seal_report(kind: &str, details: Value) -> Vec<u8> {
+    let mut value = json!({"format":"devlish-compliance-report","format_version":1,"kind":kind,"passed":true,"details":details});
+    value["report_sha256"] = json!(sha256(&bytes(&value)));
+    bytes(&value)
+}
+#[test]
+fn release_binding_checks_reports_receipts_and_recorded_identities() {
+    let mut f = Fixture::new();
+    let policy_bytes = br#"{"rule":"nppi"}"#;
+    let program_bytes = br#"{"rule":"agent"}"#;
+    f.manifest["artifacts"][2]["sha256"] = json!(sha256(policy_bytes));
+    f.manifest["artifacts"]
+        .as_array_mut()
+        .unwrap()
+        .push(json!({"id":"program","role":"program","sha256":sha256(program_bytes)}));
+    f.trust["keys"][0]["purposes"] = json!(["release-manifest", "audit-receipt"]);
+    let release = verify_release(
+        &bytes(&f.manifest),
+        &f.signature(),
+        &bytes(&f.trust),
+        &bytes(&f.requirements),
+        |id| {
+            Ok(match id {
+                "policy" => policy_bytes.to_vec(),
+                "program" => program_bytes.to_vec(),
+                _ => id.as_bytes().to_vec(),
+            })
+        },
+    )
+    .unwrap();
+    let application = |runtime: &str| {
+        seal_report(
+            "application",
+            json!({"files":[
+        {"id":"runtime","role":"runtime","passed":true,"actual_sha256":runtime,"expected_sha256":runtime},
+        {"id":"policy","role":"policy","passed":true,"actual_sha256":sha256(policy_bytes),"expected_sha256":sha256(policy_bytes)}]}),
+        )
+    };
+    let policy = seal_report("policy", json!({"policy_file_sha256":sha256(policy_bytes)}));
+    let app = application(&sha256(b"runtime"));
+    let binding = release.bind_reports(&app, &policy).unwrap();
+    assert_eq!(binding["reported_identities_match_release"], true);
+    assert_eq!(binding["report_claims_independently_verified"], false);
+    assert!(release
+        .bind_reports(&application(&sha256(b"other runtime")), &policy)
+        .is_err());
+    let other_policy = seal_report(
+        "policy",
+        json!({"policy_file_sha256":sha256(b"other policy")}),
+    );
+    assert!(release.bind_reports(&app, &other_policy).is_err());
+    let canonical = |data: &[u8]| {
+        sha256(&serde_json::to_vec_pretty(&serde_json::from_slice::<Value>(data).unwrap()).unwrap())
+    };
+    let start = json!({"type":"policy_run_started","format_version":3,"session_id":"test-session","runtime_file_sha256":sha256(b"runtime"),
+        "policy":{"artifact_sha256":canonical(policy_bytes)},"program_sha256":canonical(program_bytes)});
+    let sign_log = |start: Value, manifest_digest: String| {
+        let mut log = Vec::new();
+        let mut previous = String::new();
+        for (sequence, record) in [
+            start,
+            json!({"type":"policy_run_finished","success":true,"paused":false}),
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            let mut envelope =
+                json!({"sequence":sequence,"previous_sha256":previous,"record":record});
+            previous = sha256(&bytes(&envelope));
+            envelope["record_sha256"] = json!(previous);
+            log.extend(bytes(&envelope));
+            log.push(b'\n');
+        }
+        let receipt = bytes(
+            &json!({"format":"devlish-audit-receipt","format_version":1,"kind":"terminal","session_id":"test-session",
+            "release_manifest_sha256":manifest_digest,"log_file_sha256":sha256(&log),"log_head_sha256":previous,"record_count":2}),
+        );
+        let sig = bytes(
+            &json!({"format":"devlish-detached-signature","format_version":1,"algorithm":"ed25519","key_id":"release","purpose":"audit-receipt",
+            "signature_hex":hex(f.key.sign(&signing_message(Purpose::AuditReceipt,&receipt)).as_ref())}),
+        );
+        (log, receipt, sig)
+    };
+    let digest = sha256(&bytes(&f.manifest));
+    let (log, receipt, sig) = sign_log(start.clone(), digest.clone());
+    let result = release
+        .bind_receipt(
+            &log,
+            &receipt,
+            &sig,
+            &bytes(&f.trust),
+            &sha256(&receipt),
+            "test-session",
+        )
+        .unwrap();
+    assert!(release.bind_run_reports(&app, &policy, &log).is_ok());
+    let mut wrong_start: Value =
+        serde_json::from_slice(log.split(|b| *b == b'\n').next().unwrap()).unwrap();
+    wrong_start["record"]["runtime_file_sha256"] = json!(sha256(b"other"));
+    assert!(release
+        .bind_run_reports(&app, &policy, &bytes(&wrong_start))
+        .is_err());
+    assert!(result.release_manifest_verified);
+    let prepared = release
+        .prepare_receipt(
+            &log,
+            "test-session",
+            devlish_audit::receipt::ReceiptKind::Terminal,
+        )
+        .unwrap();
+    let prepared_value: Value = serde_json::from_slice(&prepared).unwrap();
+    assert_eq!(prepared_value["log_file_sha256"], sha256(&log));
+    assert_eq!(prepared_value["record_count"], 2);
+    assert_eq!(prepared_value["release_manifest_sha256"], digest);
+    assert_eq!(
+        prepared,
+        release
+            .prepare_receipt(
+                &log,
+                "test-session",
+                devlish_audit::receipt::ReceiptKind::Terminal
+            )
+            .unwrap()
+    );
+    let prefix = &log[..=log.iter().position(|b| *b == b'\n').unwrap()];
+    assert!(release
+        .prepare_receipt(
+            prefix,
+            "test-session",
+            devlish_audit::receipt::ReceiptKind::Checkpoint
+        )
+        .is_ok());
+    assert!(release
+        .prepare_receipt(
+            prefix,
+            "test-session",
+            devlish_audit::receipt::ReceiptKind::Terminal
+        )
+        .is_err());
+    assert!(release
+        .prepare_receipt(
+            &log,
+            "wrong-session",
+            devlish_audit::receipt::ReceiptKind::Terminal
+        )
+        .is_err());
+
+    assert!(!result.execution_origin_verified && !result.policy_enforcement_verified);
+    for field in ["runtime_file_sha256", "program_sha256", "policy"] {
+        let mut other = start.clone();
+        other[field] = json!("0".repeat(64));
+        let (log, receipt, sig) = sign_log(other, digest.clone());
+        assert!(release
+            .bind_receipt(
+                &log,
+                &receipt,
+                &sig,
+                &bytes(&f.trust),
+                &sha256(&receipt),
+                "test-session"
+            )
+            .unwrap_err()
+            .contains("not bound"));
+    }
+    let (other_log, other_receipt, other_sig) = sign_log(start, "0".repeat(64));
+    assert!(release
+        .bind_receipt(
+            &other_log,
+            &other_receipt,
+            &other_sig,
+            &bytes(&f.trust),
+            &sha256(&other_receipt),
+            "test-session"
+        )
+        .is_err());
+
+    // Exercise the public command with a complete evidence bundle.
+    use std::{fs, process::Command};
+    let dir = std::env::temp_dir().join(format!(
+        "devlish-binding-{}",
+        hex(f.key.public_key().as_ref())
+    ));
+    fs::create_dir(&dir).unwrap();
+    let mut mapping = Vec::new();
+    for artifact in f.manifest["artifacts"].as_array().unwrap() {
+        let id = artifact["id"].as_str().unwrap();
+        let data = match id {
+            "policy" => policy_bytes.to_vec(),
+            "program" => program_bytes.to_vec(),
+            _ => id.as_bytes().to_vec(),
+        };
+        fs::write(dir.join(id), data).unwrap();
+        mapping.push(json!({"id":id,"path":id}));
+    }
+    let evidence = json!({"application_report":"app.json","policy_report":"policy.json","log":"log.jsonl",
+        "receipt":"receipt.json","signature":"receipt.sig.json","trust":"trust.json","retained_receipt_sha256":sha256(&receipt),"session_id":"test-session"});
+    for (name, data) in [
+        ("manifest.json", bytes(&f.manifest)),
+        ("signature.json", f.signature()),
+        ("trust.json", bytes(&f.trust)),
+        ("requirements.json", bytes(&f.requirements)),
+        ("artifacts.json", bytes(&json!(mapping))),
+        ("evidence.json", bytes(&evidence)),
+        ("app.json", app),
+        ("policy.json", policy),
+        ("log.jsonl", log.clone()),
+        ("receipt.json", receipt),
+        ("receipt.sig.json", sig),
+    ] {
+        fs::write(dir.join(name), data).unwrap();
+    }
+    let run = || {
+        Command::new(env!("CARGO_BIN_EXE_devlish-audit"))
+            .current_dir(&dir)
+            .args([
+                "verify-release",
+                "manifest.json",
+                "--signature",
+                "signature.json",
+                "--trust",
+                "trust.json",
+                "--requirements",
+                "requirements.json",
+                "--artifacts",
+                "artifacts.json",
+                "--evidence",
+                "evidence.json",
+            ])
+            .output()
+            .unwrap()
+    };
+    let result = run();
+    assert!(
+        result.status.success(),
+        "{}",
+        String::from_utf8_lossy(&result.stdout)
+    );
+    let result: Value = serde_json::from_slice(&result.stdout).unwrap();
+    assert_eq!(result["receipt"]["release_manifest_verified"], true);
+    fs::write(dir.join("app.json"), application(&sha256(b"different"))).unwrap();
+    assert!(!run().status.success());
+    fs::write(dir.join("prepare.json"),bytes(&json!({"log":"log.jsonl","session_id":"test-session","kind":"terminal","output":"unsigned-receipt.json"}))).unwrap();
+    let prepare = || {
+        Command::new(env!("CARGO_BIN_EXE_devlish-audit"))
+            .current_dir(&dir)
+            .args([
+                "verify-release",
+                "manifest.json",
+                "--signature",
+                "signature.json",
+                "--trust",
+                "trust.json",
+                "--requirements",
+                "requirements.json",
+                "--artifacts",
+                "artifacts.json",
+                "--prepare-receipt",
+                "prepare.json",
+            ])
+            .output()
+            .unwrap()
+    };
+    let output = prepare();
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stdout)
+    );
+    let output: Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(output["receipt_signed"], false);
+    assert_eq!(output["signer_authorized"], false);
+    assert_eq!(
+        fs::read(dir.join("unsigned-receipt.json")).unwrap(),
+        prepared
+    );
+    assert!(!prepare().status.success(), "must not overwrite receipt");
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let receipt_key = devlish_audit::issuance::ReceiptKey {
+            id: "release".into(),
+            public_key_sha256: sha256(f.key.public_key().as_ref()),
+        };
+        let authority_dir = dir.join("authority");
+        fs::create_dir(&authority_dir).unwrap();
+        fs::set_permissions(&authority_dir, fs::Permissions::from_mode(0o700)).unwrap();
+        assert!(release
+            .reserve_terminal_receipt(
+                &authority_dir,
+                "tenant",
+                "test-session",
+                &receipt_key,
+                b"invalid log"
+            )
+            .is_err());
+        assert_eq!(fs::read_dir(&authority_dir).unwrap().count(), 0);
+        let reservation = release
+            .reserve_terminal_receipt(&authority_dir, "tenant", "test-session", &receipt_key, &log)
+            .unwrap();
+        assert_eq!(reservation.receipt(), prepared);
+        assert_eq!(reservation.receipt_sha256(), sha256(&prepared));
+        assert_eq!(reservation.key_id(), "release");
+        let signature = bytes(
+            &json!({"format":"devlish-detached-signature","format_version":1,"algorithm":"ed25519","key_id":"release","purpose":"audit-receipt",
+            "signature_hex":hex(f.key.sign(&signing_message(Purpose::AuditReceipt,reservation.receipt())).as_ref())}),
+        );
+        reservation.complete(&signature, &bytes(&f.trust)).unwrap();
+        assert!(release
+            .reserve_terminal_receipt(&authority_dir, "tenant", "test-session", &receipt_key, &log)
+            .is_err());
+    }
+    fs::remove_dir_all(dir).unwrap();
+}
+
+#[cfg(unix)]
+#[test]
+fn durable_admission_rejects_rollback_equivocation_and_concurrent_runs() {
+    let mut f = Fixture::new();
+    let dir = std::env::temp_dir().join(format!(
+        "devlish-floor-{}",
+        hex(f.key.public_key().as_ref())
+    ));
+    std::fs::create_dir(&dir).unwrap();
+    let path = dir.join("state.json");
+    devlish_audit::admission::initialize(&path, &bytes(&f.requirements)).unwrap();
+    assert!(devlish_audit::admission::initialize(&path, &bytes(&f.requirements)).is_err());
+    let old = f.check().unwrap();
+    let guard = old.admit(&path).unwrap();
+    assert!(matches!(old.admit(&path), Err(e) if e.contains("locked")));
+    drop(guard);
+    f.manifest["sequence"] = json!(3);
+    let newer = f.check().unwrap();
+    drop(newer.admit(&path).unwrap());
+    assert!(old.admit(&path).is_err());
+    f.manifest["release_id"] = json!("different-same-sequence");
+    let other = f.check().unwrap();
+    assert!(other.admit(&path).is_err());
+    // Caller mutation of public report fields cannot defeat private admission identity.
+    let mut old = old;
+    old.sequence = 100;
+    assert!(old.admit(&path).is_err());
+    drop(newer.admit(&path).unwrap());
+    std::fs::write(&path, b"interrupted update").unwrap();
+    assert!(newer.admit(&path).is_err());
+    std::fs::remove_file(&path).unwrap();
+    assert!(newer.admit(&path).is_err());
+    std::fs::remove_dir_all(dir).unwrap();
+}
+
+#[test]
+fn recorded_controls_match_signed_permissions_and_counts_not_execution() {
+    let mut f = Fixture::new();
+    let policy = br#"{"rule":"nppi"}"#.to_vec();
+    let program = br#"{"rule":"agent"}"#.to_vec();
+    let permissions = bytes(
+        &json!({"format":"devlish-runtime-permissions","format_version":1,"allowed_effects":["respond","clock_now"],"instruction_limit":1000,"effect_budget":{"total":3,"per_effect":{"clock_now":1}}}),
+    );
+    let mut snapshots = std::collections::BTreeMap::new();
+    for artifact in f.manifest["artifacts"].as_array_mut().unwrap() {
+        let id = artifact["id"].as_str().unwrap().to_owned();
+        let data = match id.as_str() {
+            "policy" => policy.clone(),
+            "permissions" => permissions.clone(),
+            _ => id.as_bytes().to_vec(),
+        };
+        artifact["sha256"] = json!(sha256(&data));
+        snapshots.insert(id, data);
+    }
+    snapshots.insert("program".into(), program.clone());
+    f.manifest["artifacts"]
+        .as_array_mut()
+        .unwrap()
+        .push(json!({"id":"program","role":"program","sha256":sha256(&program)}));
+    f.trust["keys"][0]["purposes"] = json!(["release-manifest", "audit-receipt"]);
+    let release = verify_release(
+        &bytes(&f.manifest),
+        &f.signature(),
+        &bytes(&f.trust),
+        &bytes(&f.requirements),
+        |id| Ok(snapshots[id].clone()),
+    )
+    .unwrap();
+    let canonical = |b: &[u8]| {
+        sha256(&serde_json::to_vec_pretty(&serde_json::from_slice::<Value>(b).unwrap()).unwrap())
+    };
+    let identity = json!({"artifact_sha256":canonical(&policy)});
+    let start = json!({"type":"policy_run_started","format_version":3,"session_id":"controls","runtime_file_sha256":sha256(b"runtime"),"policy":identity,"program_sha256":canonical(&program),"verified_release":{
+        "session_id":"controls","release_manifest_sha256":sha256(&bytes(&f.manifest)),"runtime_file_sha256":sha256(b"runtime"),"permissions_sha256":sha256(&permissions),"catalog_sha256":sha256(b"tool-catalog"),"containment_sha256":sha256(b"containment"),"allowed_effects":["clock_now","respond"],"instruction_limit":1000,"effect_budget":{"total":3,"per_effect":{"clock_now":1}}
+    }});
+    let make_log = |start: Value, effects: &[(&str, bool)]| {
+        let mut records = vec![start];
+        for (index, (kind, allow)) in effects.iter().enumerate() {
+            records.push(json!({"type":"effect_decision","effect_id":index+1,"effect":kind,"allow":allow,"policy":identity}));
+            if *allow {
+                records.push(json!({"type":"effect_outcome","effect_id":index+1,"effect":kind,"outcome":{"status":"succeeded"}}));
+            }
+        }
+        records.push(json!({"type":"policy_run_finished","success":true,"paused":false}));
+        let mut previous = String::new();
+        let mut log = vec![];
+        for (sequence, record) in records.into_iter().enumerate() {
+            let mut envelope =
+                json!({"sequence":sequence,"previous_sha256":previous,"record":record});
+            previous = sha256(&bytes(&envelope));
+            envelope["record_sha256"] = json!(previous);
+            log.extend(bytes(&envelope));
+            log.push(b'\n');
+        }
+        log
+    };
+    let log = make_log(
+        start.clone(),
+        &[("clock_now", true), ("clock_now", false), ("respond", true)],
+    );
+    let receipt = release
+        .prepare_receipt(
+            &log,
+            "controls",
+            devlish_audit::receipt::ReceiptKind::Terminal,
+        )
+        .unwrap();
+    let signature = bytes(
+        &json!({"format":"devlish-detached-signature","format_version":1,"algorithm":"ed25519","key_id":"release","purpose":"audit-receipt","signature_hex":hex(f.key.sign(&signing_message(Purpose::AuditReceipt,&receipt)).as_ref())}),
+    );
+    let result = release
+        .bind_receipt(
+            &log,
+            &receipt,
+            &signature,
+            &bytes(&f.trust),
+            &sha256(&receipt),
+            "controls",
+        )
+        .unwrap();
+    assert!(result.recorded_controls_match_release);
+    assert!(
+        !result.execution_origin_verified
+            && !result.policy_enforcement_verified
+            && !result.replay_verified
+    );
+    for (field, replacement) in [
+        ("permissions_sha256", json!("a".repeat(64))),
+        ("catalog_sha256", json!("a".repeat(64))),
+        ("containment_sha256", json!("a".repeat(64))),
+        ("runtime_file_sha256", json!("a".repeat(64))),
+        ("instruction_limit", json!(1001)),
+        (
+            "allowed_effects",
+            json!(["respond", "clock_now", "write_file"]),
+        ),
+        (
+            "allowed_effects",
+            json!(["respond", "clock_now", "respond"]),
+        ),
+        (
+            "effect_budget",
+            json!({"total":4,"per_effect":{"clock_now":1}}),
+        ),
+        ("effect_budget", Value::Null),
+    ] {
+        let mut changed = start.clone();
+        changed["verified_release"][field] = replacement;
+        assert!(
+            release
+                .prepare_receipt(
+                    &make_log(changed, &[]),
+                    "controls",
+                    devlish_audit::receipt::ReceiptKind::Terminal
+                )
+                .is_err(),
+            "{field}"
+        );
+    }
+    for effects in [
+        vec![("clock_now", true), ("clock_now", true)],
+        vec![("clock_now", false), ("clock_now", true)],
+        vec![("write_file", true)],
+        vec![
+            ("respond", false),
+            ("respond", false),
+            ("respond", false),
+            ("respond", true),
+        ],
+    ] {
+        assert!(
+            release
+                .prepare_receipt(
+                    &make_log(start.clone(), &effects),
+                    "controls",
+                    devlish_audit::receipt::ReceiptKind::Terminal
+                )
+                .is_err(),
+            "{effects:?}"
+        );
+        // Even a correctly signed fabricated receipt cannot promote these assertions.
+        let bad_log = make_log(start.clone(), &effects);
+        let lines: Vec<_> = bad_log
+            .split(|b| *b == b'\n')
+            .filter(|line| !line.is_empty())
+            .collect();
+        let tail: Value = serde_json::from_slice(lines.last().unwrap()).unwrap();
+        let receipt = bytes(
+            &json!({"format":"devlish-audit-receipt","format_version":1,"kind":"terminal","session_id":"controls","release_manifest_sha256":sha256(&bytes(&f.manifest)),"log_file_sha256":sha256(&bad_log),"log_head_sha256":tail["record_sha256"],"record_count":lines.len()}),
+        );
+        let signature = bytes(
+            &json!({"format":"devlish-detached-signature","format_version":1,"algorithm":"ed25519","key_id":"release","purpose":"audit-receipt","signature_hex":hex(f.key.sign(&signing_message(Purpose::AuditReceipt,&receipt)).as_ref())}),
+        );
+        assert!(release
+            .bind_receipt(
+                &bad_log,
+                &receipt,
+                &signature,
+                &bytes(&f.trust),
+                &sha256(&receipt),
+                "controls"
+            )
+            .is_err());
+    }
+    // An older log without claimed controls can bind identities but gets no control assurance.
+    let mut legacy = start;
+    legacy.as_object_mut().unwrap().remove("verified_release");
+    let legacy = make_log(legacy, &[]);
+    let receipt = release
+        .prepare_receipt(
+            &legacy,
+            "controls",
+            devlish_audit::receipt::ReceiptKind::Terminal,
+        )
+        .unwrap();
+    let signature = bytes(
+        &json!({"format":"devlish-detached-signature","format_version":1,"algorithm":"ed25519","key_id":"release","purpose":"audit-receipt","signature_hex":hex(f.key.sign(&signing_message(Purpose::AuditReceipt,&receipt)).as_ref())}),
+    );
+    assert!(
+        !release
+            .bind_receipt(
+                &legacy,
+                &receipt,
+                &signature,
+                &bytes(&f.trust),
+                &sha256(&receipt),
+                "controls"
+            )
+            .unwrap()
+            .recorded_controls_match_release
+    );
+    // Operator requirements are independently trusted; log metadata cannot relax them.
+    f.requirements["require_recorded_controls"] = json!(true);
+    let strict = verify_release(
+        &bytes(&f.manifest),
+        &f.signature(),
+        &bytes(&f.trust),
+        &bytes(&f.requirements),
+        |id| Ok(snapshots[id].clone()),
+    )
+    .unwrap();
+    assert_eq!(
+        serde_json::to_value(&strict).unwrap()["recorded_controls_required"],
+        true
+    );
+    assert!(strict
+        .prepare_receipt(
+            &legacy,
+            "controls",
+            devlish_audit::receipt::ReceiptKind::Terminal
+        )
+        .is_err());
+    assert!(strict
+        .bind_receipt(
+            &legacy,
+            &receipt,
+            &signature,
+            &bytes(&f.trust),
+            &sha256(&receipt),
+            "controls"
+        )
+        .is_err());
+    assert!(strict
+        .prepare_receipt(
+            &log,
+            "controls",
+            devlish_audit::receipt::ReceiptKind::Terminal
+        )
+        .is_ok());
+}
+
+#[test]
+fn recorded_control_requirement_is_explicit_boolean_operator_configuration() {
+    let mut f = Fixture::new();
+    assert_eq!(
+        serde_json::to_value(f.check().unwrap()).unwrap()["recorded_controls_required"],
+        false
+    );
+    for invalid in [Value::Null, json!("true"), json!(1), json!({})] {
+        f.requirements["require_recorded_controls"] = invalid;
+        assert!(f.check().is_err());
+    }
+    f.requirements["require_recorded_controls"] = json!(true);
+    assert_eq!(
+        serde_json::to_value(f.check().unwrap()).unwrap()["recorded_controls_required"],
+        true
+    );
+}
+
+
+fn tool_catalog_fixture() -> (Fixture, Value) {
+    let mut fixture = Fixture::new();
+    fixture.manifest["target"] = json!(devlish_audit::tool_catalog::STATIC_TARGET);
+    fixture.requirements["target"] = fixture.manifest["target"].clone();
+    let catalog = json!({"format":"devlish-external-tool-catalog","format_version":1,
+    "target":devlish_audit::tool_catalog::STATIC_TARGET,"tools":[{
+        "id":"public-grep","artifact_id":"tool","path":"/opt/devlish/tools/grep",
+        "image_profile":devlish_audit::tool_catalog::STATIC_PROFILE,
+        "containment_id":"containment",
+        "allowed_arguments":[["--fixed-strings","--","published","/work/public.txt"]]
+    }]});
+    (fixture, catalog)
+}
+fn verify_with_catalog(
+    f: &mut Fixture,
+    catalog: &Value,
+) -> devlish_audit::release::ReleaseVerification {
+    let snapshot = bytes(catalog);
+    f.manifest["artifacts"][3]["sha256"] = json!(sha256(&snapshot));
+    verify_release(
+        &bytes(&f.manifest),
+        &f.signature(),
+        &bytes(&f.trust),
+        &bytes(&f.requirements),
+        |id| {
+            Ok(if id == "tool-catalog" {
+                snapshot.clone()
+            } else {
+                id.as_bytes().to_vec()
+            })
+        },
+    )
+    .unwrap()
+}
+#[test]
+fn signed_catalog_selects_exact_arguments_and_retains_release_commitments() {
+    let (mut f, catalog) = tool_catalog_fixture();
+    let release = verify_with_catalog(&mut f, &catalog);
+    let verified = release
+        .tool_catalog("tool-catalog", &bytes(&catalog))
+        .unwrap();
+    let arguments: Vec<String> = ["--fixed-strings", "--", "published", "/work/public.txt"]
+        .map(str::to_string)
+        .into();
+    let selection = verified.select("public-grep", &arguments, 150).unwrap();
+    assert_eq!(selection.id(), "public-grep");
+    assert_eq!(selection.path(), "/opt/devlish/tools/grep");
+    assert_eq!(selection.arguments(), arguments);
+    assert_eq!(selection.artifact_id(), "tool");
+    assert_eq!(
+        selection.image_profile(),
+        devlish_audit::tool_catalog::STATIC_PROFILE
+    );
+    assert_eq!(selection.containment_id(), "containment");
+    assert_eq!(selection.tool_sha256(), sha256(b"tool"));
+    assert_eq!(selection.containment_sha256(), sha256(b"containment"));
+    assert_eq!(selection.catalog_sha256(), sha256(&bytes(&catalog)));
+    assert_eq!(selection.manifest_sha256(), sha256(&bytes(&f.manifest)));
+    assert_eq!(selection.valid_until(), 200);
+    assert!(!release.execution_origin_verified && !release.policy_enforcement_verified);
+    for id in ["Public-grep", "grep", "/usr/bin/grep", ""] {
+        assert!(verified.select(id, &arguments, 150).is_err());
+    }
+    for args in [
+        vec!["-R", "/work/private"],
+        vec!["--fixed-strings", "--", "published", "/work/nppi.csv"],
+        vec![
+            "--fixed-strings",
+            "--",
+            "published",
+            "/work/company-secret.txt",
+        ],
+        vec!["$(cat /work/private)"],
+        vec![],
+    ] {
+        assert!(verified
+            .select(
+                "public-grep",
+                &args.into_iter().map(str::to_string).collect::<Vec<_>>(),
+                150
+            )
+            .is_err());
+    }
+}
+#[test]
+fn catalog_uses_private_release_state_not_mutable_report_fields() {
+    let (mut f, catalog) = tool_catalog_fixture();
+    f.requirements["revocations_valid_until"] = json!(180);
+    let mut release = verify_with_catalog(&mut f, &catalog);
+    let digest = sha256(&bytes(&f.manifest));
+    release.evaluated_at = 0;
+    release.manifest_signature.artifact_sha256 = "f".repeat(64);
+    release.release_requirements_verified = false;
+    let verified = release
+        .tool_catalog("tool-catalog", &bytes(&catalog))
+        .unwrap();
+    let args = catalog["tools"][0]["allowed_arguments"][0]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|s| s.as_str().unwrap().to_string())
+        .collect::<Vec<_>>();
+    assert!(verified.select("public-grep", &args, 149).is_err());
+    assert!(verified.select("public-grep", &args, 180).is_err());
+    let selected = verified.select("public-grep", &args, 179).unwrap();
+    assert_eq!(selected.valid_until(), 180);
+    assert_eq!(selected.manifest_sha256(), digest);
+}
+#[test]
+fn replaced_catalog_wrong_id_role_or_release_is_rejected() {
+    let (mut f, mut catalog) = tool_catalog_fixture();
+    let release = verify_with_catalog(&mut f, &catalog);
+    assert!(release.tool_catalog("tool", &bytes(&catalog)).is_err());
+    assert!(release.tool_catalog("missing", &bytes(&catalog)).is_err());
+    catalog["tools"][0]["path"] = json!("/tmp/attacker");
+    assert!(release
+        .tool_catalog("tool-catalog", &bytes(&catalog))
+        .is_err());
+    let other = verify_with_catalog(&mut f, &catalog);
+    assert!(other
+        .tool_catalog("tool-catalog", &vec![b' '; 65537])
+        .is_err());
+}
+#[test]
+fn signed_catalog_rejects_unsafe_paths_profiles_and_artifact_roles() {
+    let (mut f, baseline) = tool_catalog_fixture();
+    for (field, bad) in [
+        ("id", "../grep"),
+        ("id", ""),
+        ("artifact_id", "runtime"),
+        ("artifact_id", "missing"),
+        ("containment_id", "tool"),
+        ("containment_id", "missing"),
+        ("path", "grep"),
+        ("path", "/"),
+        ("path", "/tmp//grep"),
+        ("path", "/tmp/../grep"),
+        ("path", "/tmp/./grep"),
+        ("path", "/tmp/grep/"),
+        ("path", "/tmp/grep\0"),
+        ("image_profile", "dynamic"),
+        ("environment", "LD_PRELOAD=attacker"),
+    ] {
+        let mut catalog = baseline.clone();
+        catalog["tools"][0][field] = json!(bad);
+        let release = verify_with_catalog(&mut f, &catalog);
+        assert!(
+            release
+                .tool_catalog("tool-catalog", &bytes(&catalog))
+                .is_err(),
+            "{field} {bad:?}"
+        );
+    }
+    for (field, value) in [
+        ("target", json!("aarch64-unknown-linux-gnu")),
+        ("format_version", json!(2)),
+        ("format", json!("devlish-tool-catalog")),
+        ("tools", json!([])),
+    ] {
+        let mut catalog = baseline.clone();
+        catalog[field] = value;
+        let release = verify_with_catalog(&mut f, &catalog);
+        assert!(release
+            .tool_catalog("tool-catalog", &bytes(&catalog))
+            .is_err());
+    }
+}
+#[test]
+fn signed_catalog_rejects_duplicate_ids_arguments_and_transport_overflow() {
+    let (mut f, baseline) = tool_catalog_fixture();
+    let mut duplicate = baseline.clone();
+    duplicate["tools"]
+        .as_array_mut()
+        .unwrap()
+        .push(baseline["tools"][0].clone());
+    let release = verify_with_catalog(&mut f, &duplicate);
+    assert!(release
+        .tool_catalog("tool-catalog", &bytes(&duplicate))
+        .is_err());
+    for arguments in [
+        json!([]),
+        json!([["x"], ["x"]]),
+        json!([["\0"]]),
+        json!([["x".repeat(4097)]]),
+        json!([vec!["x"; 65]]),
+        json!([vec!["x".repeat(4096); 5]]),
+        json!([null]),
+        json!([[1]]),
+    ] {
+        let mut catalog = baseline.clone();
+        catalog["tools"][0]["allowed_arguments"] = arguments;
+        let release = verify_with_catalog(&mut f, &catalog);
+        assert!(release
+            .tool_catalog("tool-catalog", &bytes(&catalog))
+            .is_err());
+    }
+    // The maximum accepted argument bytes are UTF-8 bytes, not characters.
+    let mut catalog = baseline;
+    catalog["tools"][0]["allowed_arguments"] = json!([
+        vec!["é".repeat(2048); 4],
+        vec![""; 64],
+        Vec::<String>::new()
+    ]);
+    let release = verify_with_catalog(&mut f, &catalog);
+    let verified = release
+        .tool_catalog("tool-catalog", &bytes(&catalog))
+        .unwrap();
+    assert!(verified.select("public-grep", &[], 150).is_ok());
+}
+
+#[test]
+fn tool_request_report_is_repeatable_redacted_and_cannot_invent_execution() {
+    let (mut f, catalog) = tool_catalog_fixture();
+    let mut release = verify_with_catalog(&mut f, &catalog);
+    let request = bytes(
+        &json!({"tool_id":"public-grep","arguments":catalog["tools"][0]["allowed_arguments"][0]}),
+    );
+    let first = release
+        .verify_tool_request("tool-catalog", &bytes(&catalog), &request)
+        .unwrap();
+    release.evaluated_at = 199;
+    release.execution_origin_verified = true;
+    release.policy_enforcement_verified = true;
+    let second = release
+        .verify_tool_request("tool-catalog", &bytes(&catalog), &request)
+        .unwrap();
+    assert_eq!(first, second);
+    assert_eq!(first["catalog_membership_verified"], true);
+    assert_eq!(first["tool_artifact_snapshot_verified"], true);
+    assert_eq!(first["evaluated_at"], 150);
+    assert_eq!(first["request_sha256"], sha256(&request));
+    for key in [
+        "tool_image_profile_verified",
+        "containment_enforcement_verified",
+        "execution_origin_verified",
+        "policy_enforcement_verified",
+    ] {
+        assert_eq!(first[key], false);
+    }
+    let output = first.to_string();
+    assert!(
+        !output.contains("/work/public.txt")
+            && !output.contains("--fixed-strings")
+            && !output.contains("/opt/devlish")
+    );
+    for request in [
+        r#"{"tool_id":"public-grep","tool_id":"public-grep","arguments":[]}"#,
+        r#"{"tool_id":"public-grep","arguments":[],"catalog_id":"other"}"#,
+        r#"{"tool_id":"public-grep","arguments":[],"evaluated_at":150}"#,
+        r#"{"tool_id":"public-grep","arguments":["--nppi"]}"#,
+    ] {
+        assert!(release
+            .verify_tool_request("tool-catalog", &bytes(&catalog), request.as_bytes())
+            .is_err());
+    }
+    assert!(release
+        .verify_tool_request("tool-catalog", &bytes(&catalog), &vec![b' '; 65537])
+        .is_err());
+}
+
+#[test]
+fn cli_tool_report_reverifies_bytes_trust_and_options_without_executing() {
+    use std::{fs, process::Command};
+    let (mut f, catalog) = tool_catalog_fixture();
+    verify_with_catalog(&mut f, &catalog);
+    let containment = bytes(&recognized_containment());
+    f.manifest["artifacts"][5]["sha256"] = json!(sha256(&containment));
+    let dir = std::env::temp_dir().join(format!(
+        "devlish-catalog-cli-{}",
+        hex(f.key.public_key().as_ref())
+    ));
+    fs::create_dir(&dir).unwrap();
+    for (name, data) in [
+        ("manifest.json", bytes(&f.manifest)),
+        ("signature.json", f.signature()),
+        ("trust.json", bytes(&f.trust)),
+        ("requirements.json", bytes(&f.requirements)),
+        ("supplied-containment.json", containment.clone()),
+        (
+            "request.json",
+            bytes(
+                &json!({"tool_id":"public-grep","arguments":catalog["tools"][0]["allowed_arguments"][0]}),
+            ),
+        ),
+    ] {
+        fs::write(dir.join(name), data).unwrap();
+    }
+    let mut mapping = Vec::new();
+    for artifact in f.manifest["artifacts"].as_array().unwrap() {
+        let id = artifact["id"].as_str().unwrap();
+        fs::write(
+            dir.join(id),
+            if id == "tool-catalog" {
+                bytes(&catalog)
+            } else if id == "containment" {
+                containment.clone()
+            } else {
+                id.as_bytes().to_vec()
+            },
+        )
+        .unwrap();
+        mapping.push(json!({"id":id,"path":id}));
+    }
+    fs::write(dir.join("artifacts.json"), bytes(&json!(mapping))).unwrap();
+    let run = |text: bool, extra: &[&str]| {
+        let mut command = Command::new(env!("CARGO_BIN_EXE_devlish-audit"));
+        command.current_dir(&dir);
+        if text {
+            command.arg("--text");
+        }
+        command
+            .args([
+                "verify-release",
+                "manifest.json",
+                "--signature",
+                "signature.json",
+                "--trust",
+                "trust.json",
+                "--requirements",
+                "requirements.json",
+                "--artifacts",
+                "artifacts.json",
+            ])
+            .args(extra)
+            .output()
+            .unwrap()
+    };
+    let options = [
+        "--tool-catalog",
+        "tool-catalog",
+        "--tool-request",
+        "request.json",
+    ];
+    let first = run(false, &options);
+    assert!(
+        first.status.success(),
+        "{}",
+        String::from_utf8_lossy(&first.stdout)
+    );
+    assert_eq!(first.stdout, run(false, &options).stdout);
+    let report: Value = serde_json::from_slice(&first.stdout).unwrap();
+    assert_eq!(
+        report["tool_selection"]["tool_image_profile_verified"],
+        false
+    );
+    assert_eq!(
+        report["tool_selection"]["containment_profile_verified"],
+        false
+    );
+    let mut with_containment = options.to_vec();
+    with_containment.extend(["--tool-containment", "supplied-containment.json"]);
+    let checked = run(false, &with_containment);
+    assert!(
+        checked.status.success(),
+        "{}",
+        String::from_utf8_lossy(&checked.stderr)
+    );
+    assert_eq!(checked.stdout, run(false, &with_containment).stdout);
+    let checked_report: Value = serde_json::from_slice(&checked.stdout).unwrap();
+    assert_eq!(
+        checked_report["tool_selection"]["containment_profile_verified"],
+        true
+    );
+    assert_eq!(
+        checked_report["tool_selection"]["containment_profile"],
+        devlish_audit::tool_containment::PROFILE
+    );
+    for key in [
+        "containment_enforcement_verified",
+        "execution_origin_verified",
+        "policy_enforcement_verified",
+    ] {
+        assert_eq!(checked_report["tool_selection"][key], false);
+    }
+    let checked_text = run(true, &with_containment);
+    assert!(checked_text.status.success());
+    let checked_text = String::from_utf8(checked_text.stdout).unwrap();
+    assert!(checked_text.contains("Signed containment requirements recognized: Yes"));
+    assert!(checked_text.contains("Actual containment enforcement independently established: No"));
+    assert!(!checked_text.contains("/work/public.txt"));
+    let release = verify_release(
+        &bytes(&f.manifest),
+        &f.signature(),
+        &bytes(&f.trust),
+        &bytes(&f.requirements),
+        |id| {
+            Ok(if id == "tool-catalog" {
+                bytes(&catalog)
+            } else if id == "containment" {
+                containment.clone()
+            } else {
+                id.as_bytes().to_vec()
+            })
+        },
+    )
+    .unwrap();
+    let verified_catalog = release
+        .tool_catalog("tool-catalog", &bytes(&catalog))
+        .unwrap();
+    let arguments: Vec<String> =
+        serde_json::from_value(catalog["tools"][0]["allowed_arguments"][0].clone()).unwrap();
+    let selected = verified_catalog
+        .select("public-grep", &arguments, 150)
+        .unwrap();
+    let reservation = launch_reservation_fixture(&selected, true);
+    let reservation_digest = sha256(&reservation);
+    fs::write(dir.join("slot.jsonl"), &reservation).unwrap();
+    let mut with_reservation = with_containment.clone();
+    with_reservation.extend([
+        "--tool-reservation",
+        "slot.jsonl",
+        "--reservation-sha256",
+        &reservation_digest,
+    ]);
+    let checked_slot = run(false, &with_reservation);
+    assert!(
+        checked_slot.status.success(),
+        "{}",
+        String::from_utf8_lossy(&checked_slot.stderr)
+    );
+    assert_eq!(checked_slot.stdout, run(false, &with_reservation).stdout);
+    let slot_report: Value = serde_json::from_slice(&checked_slot.stdout).unwrap();
+    let slot = &slot_report["tool_selection"]["launch_reservation"];
+    assert_eq!(slot["reservation_bytes_match_anchor"], true);
+    assert_eq!(slot["reservation_recorded_consumed"], true);
+    for claim in [
+        "reservation_writer_authenticated",
+        "execution_origin_verified",
+        "policy_enforcement_verified",
+    ] {
+        assert_eq!(slot[claim], false);
+    }
+    let slot_text = run(true, &with_reservation);
+    assert!(slot_text.status.success());
+    let slot_text = String::from_utf8(slot_text.stdout).unwrap();
+    assert!(slot_text.contains("Local record states the launch slot was consumed: Yes"));
+    assert!(slot_text.contains("Reservation writer independently authenticated: No"));
+    assert!(!slot_text.contains("/work/public.txt"));
+    // The same CLI verifies a terminal claim while refusing to turn it into
+    // execution proof or a disclosure decision.
+    let first_record: Value = serde_json::from_slice(reservation.split(|b| *b == b'\n').next().unwrap()).unwrap();
+    let terminal = json!({"state":"completed","operation_id":first_record["operation_id"],
+        "consumed_sha256":reservation_digest,"exit_code":37,
+        "stdout_bytes":0,"stdout_sha256":sha256(b""),
+        "stderr_bytes":0,"stderr_sha256":sha256(b"")});
+    let mut completed = reservation.clone();
+    completed.extend_from_slice(&serde_json::to_vec(&terminal).unwrap());
+    completed.push(b'\n');
+    let completed_digest = sha256(&completed);
+    fs::write(dir.join("slot.jsonl"), &completed).unwrap();
+    let mut with_completed = with_reservation.clone();
+    *with_completed.last_mut().unwrap() = &completed_digest;
+    let terminal_report = run(false, &with_completed);
+    assert!(terminal_report.status.success());
+    assert_eq!(terminal_report.stdout, run(false, &with_completed).stdout);
+    let terminal_report: Value = serde_json::from_slice(&terminal_report.stdout).unwrap();
+    let terminal_report = &terminal_report["tool_selection"]["launch_reservation"];
+    assert_eq!(terminal_report["reservation_recorded_completed"], true);
+    assert_eq!(terminal_report["recorded_completion"]["recorded_exit_code"], 37);
+    assert_eq!(terminal_report["output_disclosure_authorized"], false);
+    let terminal_text = run(true, &with_completed);
+    assert!(terminal_text.status.success());
+    let terminal_text = String::from_utf8(terminal_text.stdout).unwrap();
+    assert!(terminal_text.contains("Local record states capture completed: Yes"));
+    assert!(terminal_text.contains("Output disclosure authorized by this report: No"));
+    assert!(!run(false, &with_reservation).status.success());
+    fs::write(
+        dir.join("slot.jsonl"),
+        &reservation[..reservation.len() - 1],
+    )
+    .unwrap();
+    assert!(!run(false, &with_reservation).status.success());
+    fs::write(dir.join("slot.jsonl"), &reservation).unwrap();
+    for extra in [
+        vec!["--tool-reservation", "slot.jsonl"],
+        vec!["--reservation-sha256", &reservation_digest],
+        vec![
+            "--tool-reservation",
+            "slot.jsonl",
+            "--reservation-sha256",
+            &reservation_digest,
+        ],
+    ] {
+        assert!(!run(false, &extra).status.success());
+    }
+    let mut missing_anchor = options.to_vec();
+    missing_anchor.extend(["--tool-reservation", "slot.jsonl"]);
+    assert!(!run(false, &missing_anchor).status.success());
+    fs::write(dir.join("supplied-containment.json"), b"substituted").unwrap();
+    assert!(!run(false, &with_containment).status.success());
+    assert!(run(false, &options).status.success());
+    fs::write(dir.join("supplied-containment.json"), &containment).unwrap();
+    // An authentic release may declare unsupported requirements. Membership
+    // alone can pass, while the explicitly requested profile check must fail.
+    let mut weaker = recognized_containment();
+    weaker["network"] = json!("allow");
+    let weaker = bytes(&weaker);
+    f.manifest["artifacts"][5]["sha256"] = json!(sha256(&weaker));
+    for (name, data) in [
+        ("manifest.json", bytes(&f.manifest)),
+        ("signature.json", f.signature()),
+        ("containment", weaker.clone()),
+        ("supplied-containment.json", weaker),
+    ] {
+        fs::write(dir.join(name), data).unwrap();
+    }
+    assert!(run(false, &options).status.success());
+    assert!(!run(false, &with_containment).status.success());
+    f.manifest["artifacts"][5]["sha256"] = json!(sha256(&containment));
+    for (name, data) in [
+        ("manifest.json", bytes(&f.manifest)),
+        ("signature.json", f.signature()),
+        ("containment", containment.clone()),
+        ("supplied-containment.json", containment.clone()),
+    ] {
+        fs::write(dir.join(name), data).unwrap();
+    }
+    let english = run(true, &options);
+    assert!(english.status.success());
+    let english = String::from_utf8(english.stdout).unwrap();
+    assert!(english.contains("Catalog membership verified: Yes"));
+    assert!(english.contains("Actual policy enforcement independently established: No"));
+    assert!(!english.contains("/work/public.txt"));
+    for extra in [
+        vec!["--tool-catalog", "tool-catalog"],
+        vec!["--tool-request", "request.json"],
+        vec!["--tool-containment", "supplied-containment.json"],
+        vec!["--evidence", "absent", "--prepare-receipt", "absent"],
+        vec![
+            "--tool-catalog",
+            "tool-catalog",
+            "--tool-request",
+            "request.json",
+            "--evidence",
+            "absent",
+        ],
+        vec![
+            "--tool-catalog",
+            "runtime",
+            "--tool-request",
+            "request.json",
+        ],
+        vec![
+            "--tool-catalog",
+            "missing",
+            "--tool-request",
+            "request.json",
+        ],
+    ] {
+        assert!(!run(false, &extra).status.success(), "{extra:?}");
+    }
+    fs::write(dir.join("tool"), "replaced").unwrap();
+    assert!(!run(false, &options).status.success());
+    fs::write(dir.join("tool"), "tool").unwrap();
+    f.trust["keys"][0]["revoked"] = json!(true);
+    fs::write(dir.join("trust.json"), bytes(&f.trust)).unwrap();
+    assert!(!run(false, &options).status.success());
+    assert!(!run(false, &with_containment).status.success());
+    assert!(!run(false, &with_reservation).status.success());
+    fs::remove_dir_all(dir).unwrap();
+}
+
+fn containment_catalog(snapshot: &[u8]) -> devlish_audit::tool_catalog::VerifiedToolCatalog {
+    let (mut fixture, catalog) = tool_catalog_fixture();
+    let catalog_bytes = bytes(&catalog);
+    fixture.manifest["artifacts"][3]["sha256"] = json!(sha256(&catalog_bytes));
+    fixture.manifest["artifacts"][5]["sha256"] = json!(sha256(snapshot));
+    let release = verify_release(
+        &bytes(&fixture.manifest),
+        &fixture.signature(),
+        &bytes(&fixture.trust),
+        &bytes(&fixture.requirements),
+        |id| {
+            Ok(match id {
+                "tool-catalog" => catalog_bytes.clone(),
+                "containment" => snapshot.to_vec(),
+                _ => id.as_bytes().to_vec(),
+            })
+        },
+    )
+    .unwrap();
+    assert!(!release.execution_origin_verified && !release.policy_enforcement_verified);
+    release
+        .tool_catalog("tool-catalog", &catalog_bytes)
+        .unwrap()
+}
+fn recognized_containment() -> Value {
+    serde_json::from_str(include_str!(
+        "../../../examples/tool_execution_authority/containment.json"
+    ))
+    .unwrap()
+}
+fn check_containment(
+    signed: &[u8],
+    supplied: &[u8],
+) -> Result<devlish_audit::tool_containment::VerifiedToolContainment, String> {
+    let catalog = containment_catalog(signed);
+    catalog
+        .select(
+            "public-grep",
+            &[
+                "--fixed-strings".into(),
+                "--".into(),
+                "published".into(),
+                "/work/public.txt".into(),
+            ],
+            150,
+        )
+        .unwrap()
+        .verify_containment(supplied)
+}
+
+#[test]
+fn signed_tool_containment_binds_exact_bytes_without_claiming_enforcement() {
+    let original = bytes(&recognized_containment());
+    let checked = check_containment(&original, &original).unwrap();
+    assert_eq!(checked.profile(), devlish_audit::tool_containment::PROFILE);
+    assert_eq!(checked.sha256(), sha256(&original));
+    let mut altered = original.clone();
+    altered.push(b' ');
+    assert!(check_containment(&original, &altered)
+        .unwrap_err()
+        .contains("selected signed artifact"));
+    assert_eq!(
+        check_containment(&altered, &altered).unwrap().sha256(),
+        sha256(&altered)
+    );
+}
+
+#[test]
+fn correctly_signed_weaker_or_unknown_tool_containment_is_rejected() {
+    let original = recognized_containment();
+    for (key, replacement) in [
+        ("format", json!("other")),
+        ("format_version", json!(2)),
+        ("profile", json!("unrestricted")),
+        ("target", json!("aarch64-unknown-linux-gnu")),
+        ("filesystem", json!("read-all")),
+        ("network", json!("allow")),
+        ("process_creation", json!("allow")),
+        ("subsequent_exec", json!("allow")),
+        ("environment", json!("inherit")),
+        ("extra", json!(true)),
+    ] {
+        let mut candidate = original.clone();
+        candidate[key] = replacement;
+        let encoded = bytes(&candidate);
+        assert!(check_containment(&encoded, &encoded).is_err(), "{key}");
+    }
+    for group in ["resources", "io"] {
+        for key in original[group].as_object().unwrap().keys() {
+            for replacement in [
+                json!(0),
+                json!(u64::MAX),
+                json!(-1),
+                json!(1.5),
+                json!("1"),
+                Value::Null,
+            ] {
+                if replacement == original[group][key] {
+                    continue;
+                }
+                let mut candidate = original.clone();
+                candidate[group][key] = replacement;
+                let encoded = bytes(&candidate);
+                assert!(
+                    check_containment(&encoded, &encoded).is_err(),
+                    "{group}.{key}"
+                );
+            }
+        }
+        let mut candidate = original.clone();
+        candidate[group]["extra"] = json!(0);
+        let encoded = bytes(&candidate);
+        assert!(check_containment(&encoded, &encoded).is_err());
+    }
+}
+
+#[test]
+fn signed_tool_containment_rejects_missing_duplicate_and_oversized_metadata() {
+    let original = recognized_containment();
+    for key in original.as_object().unwrap().keys() {
+        let mut candidate = original.clone();
+        candidate.as_object_mut().unwrap().remove(key);
+        let encoded = bytes(&candidate);
+        assert!(
+            check_containment(&encoded, &encoded).is_err(),
+            "missing {key}"
+        );
+    }
+    let encoded = serde_json::to_string(&original).unwrap();
+    let duplicate = encoded
+        .replacen('{', "{\"format_version\":1,", 1)
+        .into_bytes();
+    assert!(check_containment(&duplicate, &duplicate).is_err());
+    let mut oversized = bytes(&original);
+    oversized.resize(devlish_audit::MAX_METADATA_BYTES as usize + 1, b' ');
+    assert!(check_containment(&oversized, &oversized)
+        .unwrap_err()
+        .contains("metadata limit"));
+}
+
+fn launch_reservation_fixture(
+    selection: &devlish_audit::tool_catalog::ToolSelection<'_>,
+    consumed: bool,
+) -> Vec<u8> {
+    let operation = devlish_audit::tool_reservation::operation_id("tenant", "session", 1).unwrap();
+    let record = json!({"format":"devlish-tool-launch-reservation","format_version":1,
+        "state":"reserved","operation_id":operation,"tenant_id":"tenant","session_id":"session","effect_id":1,
+        "binding":{"release_sha256":selection.manifest_sha256(),"catalog_sha256":selection.catalog_sha256(),
+        "tool_id":selection.id(),"tool_sha256":selection.tool_sha256(),
+        "arguments_sha256":sha256(&bytes(&json!(selection.arguments()))),"containment_sha256":selection.containment_sha256()}});
+    let mut result = bytes(&record);
+    result.push(b'\n');
+    if consumed {
+        let marker =
+            json!({"state":"consumed","operation_id":operation,"reserved_sha256":sha256(&result)});
+        result.extend(bytes(&marker));
+        result.push(b'\n');
+    }
+    result
+}
+
+#[test]
+fn anchored_launch_reservations_bind_selection_without_inventing_execution() {
+    let (mut fixture, catalog) = tool_catalog_fixture();
+    let release = verify_with_catalog(&mut fixture, &catalog);
+    let catalog = release
+        .tool_catalog("tool-catalog", &bytes(&catalog))
+        .unwrap();
+    let arguments = vec![
+        "--fixed-strings".into(),
+        "--".into(),
+        "published".into(),
+        "/work/public.txt".into(),
+    ];
+    let selection = catalog.select("public-grep", &arguments, 150).unwrap();
+    for consumed in [false, true] {
+        let evidence = launch_reservation_fixture(&selection, consumed);
+        let report = selection
+            .verify_launch_reservation(&evidence, &sha256(&evidence))
+            .unwrap();
+        assert_eq!(
+            report,
+            selection
+                .verify_launch_reservation(&evidence, &sha256(&evidence))
+                .unwrap()
+        );
+        assert_eq!(report["reservation_recorded_consumed"], consumed);
+        for claim in [
+            "reservation_writer_authenticated",
+            "execution_origin_verified",
+            "policy_enforcement_verified",
+        ] {
+            assert_eq!(report[claim], false);
+        }
+        assert!(!report.to_string().contains("/work/public.txt"));
+        assert!(!report.to_string().contains("--fixed-strings"));
+        let mut changed = evidence.clone();
+        changed.push(b' ');
+        assert!(selection
+            .verify_launch_reservation(&changed, &sha256(&evidence))
+            .is_err());
+        assert!(selection
+            .verify_launch_reservation(&changed, &sha256(&changed))
+            .is_err());
+        assert!(selection
+            .verify_launch_reservation(&evidence, "untrusted-non-digest")
+            .is_err());
+    }
+    // An independently retained earlier prefix establishes that earlier record,
+    // not the absence of a later execution. No success/never-executed claim exists.
+    let earlier = launch_reservation_fixture(&selection, false);
+    assert_eq!(
+        selection
+            .verify_launch_reservation(&earlier, &sha256(&earlier))
+            .unwrap()["reservation_recorded_consumed"],
+        false
+    );
+}
+
+#[test]
+fn launch_reservation_rejects_rebound_identity_bindings_and_unknown_fields() {
+    let (mut fixture, catalog) = tool_catalog_fixture();
+    let release = verify_with_catalog(&mut fixture, &catalog);
+    let catalog = release
+        .tool_catalog("tool-catalog", &bytes(&catalog))
+        .unwrap();
+    let arguments = vec![
+        "--fixed-strings".into(),
+        "--".into(),
+        "published".into(),
+        "/work/public.txt".into(),
+    ];
+    let selection = catalog.select("public-grep", &arguments, 150).unwrap();
+    let original: Value =
+        serde_json::from_slice(&launch_reservation_fixture(&selection, false)).unwrap();
+    for path in [
+        "/format",
+        "/state",
+        "/operation_id",
+        "/tenant_id",
+        "/session_id",
+        "/binding/release_sha256",
+        "/binding/catalog_sha256",
+        "/binding/tool_id",
+        "/binding/tool_sha256",
+        "/binding/arguments_sha256",
+        "/binding/containment_sha256",
+    ] {
+        let mut changed = original.clone();
+        *changed.pointer_mut(path).unwrap() = json!("substituted");
+        let mut evidence = bytes(&changed);
+        evidence.push(b'\n');
+        assert!(
+            selection
+                .verify_launch_reservation(&evidence, &sha256(&evidence))
+                .is_err(),
+            "{path}"
+        );
+    }
+    for (path, value) in [
+        ("/format_version", json!(2)),
+        ("/effect_id", json!(0)),
+        ("/effect_id", json!(-1)),
+    ] {
+        let mut changed = original.clone();
+        *changed.pointer_mut(path).unwrap() = value;
+        let mut evidence = bytes(&changed);
+        evidence.push(b'\n');
+        assert!(selection
+            .verify_launch_reservation(&evidence, &sha256(&evidence))
+            .is_err());
+    }
+    for nested in [false, true] {
+        let mut changed = original.clone();
+        if nested {
+            changed["binding"]["authority"] = json!("forged");
+        } else {
+            changed["execution_verified"] = json!(true);
+        }
+        let mut evidence = bytes(&changed);
+        evidence.push(b'\n');
+        assert!(selection
+            .verify_launch_reservation(&evidence, &sha256(&evidence))
+            .is_err());
+    }
+}
+
+#[test]
+fn launch_reservation_rejects_broken_consumption_links_duplicates_and_partial_records() {
+    let (mut fixture, catalog) = tool_catalog_fixture();
+    let release = verify_with_catalog(&mut fixture, &catalog);
+    let catalog = release
+        .tool_catalog("tool-catalog", &bytes(&catalog))
+        .unwrap();
+    let arguments = vec![
+        "--fixed-strings".into(),
+        "--".into(),
+        "published".into(),
+        "/work/public.txt".into(),
+    ];
+    let selection = catalog.select("public-grep", &arguments, 150).unwrap();
+    let reserved = launch_reservation_fixture(&selection, false);
+    let consumed = launch_reservation_fixture(&selection, true);
+    let marker: Value = serde_json::from_slice(&consumed[reserved.len()..]).unwrap();
+    for key in ["state", "operation_id", "reserved_sha256"] {
+        let mut changed = marker.clone();
+        changed[key] = json!("substituted");
+        let mut evidence = reserved.clone();
+        evidence.extend(bytes(&changed));
+        evidence.push(b'\n');
+        assert!(selection
+            .verify_launch_reservation(&evidence, &sha256(&evidence))
+            .is_err());
+    }
+    let duplicate = String::from_utf8(reserved.clone())
+        .unwrap()
+        .replacen("{", "{\"state\":\"reserved\",", 1)
+        .into_bytes();
+    let mut unknown_marker = marker.clone();
+    unknown_marker["policy_enforced"] = json!(true);
+    let mut unknown = reserved.clone();
+    unknown.extend(bytes(&unknown_marker));
+    unknown.push(b'\n');
+    for evidence in [
+        Vec::new(),
+        consumed[..consumed.len() - 1].to_vec(),
+        [consumed.clone(), b"\n".to_vec()].concat(),
+        [consumed.clone(), reserved.clone()].concat(),
+        duplicate,
+        unknown,
+        vec![b'x'; 8193],
+    ] {
+        assert!(selection
+            .verify_launch_reservation(&evidence, &sha256(&evidence))
+            .is_err());
+    }
+}
+
+#[test]
+fn anchored_terminal_capture_is_a_claim_not_execution_or_disclosure_authority() {
+    let (mut fixture, catalog) = tool_catalog_fixture();
+    let release = verify_with_catalog(&mut fixture, &catalog);
+    let catalog = release.tool_catalog("tool-catalog", &bytes(&catalog)).unwrap();
+    let arguments = vec!["--fixed-strings".into(), "--".into(), "published".into(), "/work/public.txt".into()];
+    let selection = catalog.select("public-grep", &arguments, 150).unwrap();
+    let consumed = launch_reservation_fixture(&selection, true);
+    // Obtain the actual fixture identity, independently of its concrete labels.
+    let reserved: Value = serde_json::from_slice(consumed.split(|b| *b == b'\n').next().unwrap()).unwrap();
+    let marker = json!({"state":"completed","operation_id":reserved["operation_id"],
+        "consumed_sha256":sha256(&consumed),"exit_code":37,
+        "stdout_bytes":b"synthetic NPPI".len(),"stdout_sha256":sha256(b"synthetic NPPI"),
+        "stderr_bytes":0,"stderr_sha256":sha256(b"")});
+    let assemble = |marker: &Value| {
+        let mut evidence = consumed.clone();
+        evidence.extend_from_slice(&serde_json::to_vec(marker).unwrap());
+        evidence.push(b'\n'); evidence
+    };
+    let evidence = assemble(&marker);
+    let report = selection.verify_launch_reservation(&evidence, &sha256(&evidence)).unwrap();
+    assert_eq!(report["reservation_recorded_consumed"], true);
+    assert_eq!(report["reservation_recorded_completed"], true);
+    assert_eq!(report["recorded_completion"]["recorded_exit_code"], 37);
+    for flag in ["reservation_writer_authenticated", "execution_origin_verified", "policy_enforcement_verified", "output_disclosure_authorized"] {
+        assert_eq!(report[flag], false);
+    }
+    assert_eq!(report, selection.verify_launch_reservation(&evidence, &sha256(&evidence)).unwrap());
+    assert!(!serde_json::to_string(&report).unwrap().contains("synthetic NPPI"));
+    assert!(selection.verify_launch_reservation(&consumed, &sha256(&evidence)).is_err());
+    let earlier = selection.verify_launch_reservation(&consumed, &sha256(&consumed)).unwrap();
+    assert_eq!(earlier["reservation_recorded_completed"], false);
+    assert!(earlier["recorded_completion"].is_null());
+
+    for (key, value) in [
+        ("state", json!("success")), ("operation_id", json!("other")),
+        ("consumed_sha256", json!(sha256(b"other"))), ("exit_code", json!(-1)),
+        ("exit_code", json!(256)), ("exit_code", json!(0.5)),
+        ("stdout_bytes", json!(65537)), ("stderr_bytes", json!(-1)),
+        ("stdout_sha256", json!("f".repeat(63))), ("stderr_sha256", json!(sha256(b"nonempty"))),
+        ("stdout_sha256", json!("F".repeat(64))), ("raw_output", json!("must be rejected")),
+    ] {
+        let mut altered = marker.clone(); altered[key] = value;
+        let evidence = assemble(&altered);
+        assert!(selection.verify_launch_reservation(&evidence, &sha256(&evidence)).is_err(), "{key}");
+    }
+    let duplicate = String::from_utf8(serde_json::to_vec(&marker).unwrap()).unwrap().replacen('{', "{\"exit_code\":0,", 1);
+    for malformed in [
+        evidence[..evidence.len()-1].to_vec(),
+        [evidence.clone(), b"{}\n".to_vec()].concat(),
+        [consumed.clone(), duplicate.into_bytes(), b"\n".to_vec()].concat(),
+        [launch_reservation_fixture(&selection, false), serde_json::to_vec(&marker).unwrap(), b"\n".to_vec()].concat(),
+    ] {
+        assert!(selection.verify_launch_reservation(&malformed, &sha256(&malformed)).is_err());
+    }
+}

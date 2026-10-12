@@ -1,0 +1,26 @@
+{
+  "format": "devlish-external-tool-containment",
+  "format_version": 1,
+  "profile": "devlish-linux-static-stdio-v1",
+  "target": "x86_64-unknown-linux-gnu",
+  "filesystem": "deny-new-access",
+  "network": "deny",
+  "process_creation": "deny",
+  "subsequent_exec": "deny",
+  "environment": "empty",
+  "resources": {
+    "cpu_seconds": 1,
+    "address_space_bytes": 536870912,
+    "stack_bytes": 8388608,
+    "max_descriptors": 64,
+    "core_file_bytes": 0,
+    "file_growth_bytes": 0,
+    "locked_memory_bytes": 0
+  },
+  "io": {
+    "stdin_max_bytes": 65536,
+    "stdout_max_bytes": 65536,
+    "stderr_max_bytes": 65536,
+    "wall_timeout_ms": 5000
+  }
+}

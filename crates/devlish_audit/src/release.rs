@@ -1,0 +1,307 @@
+//! Offline release admission against explicitly supplied operator expectations.
+use crate::{sha256, verify, Purpose, Verification, MAX_METADATA_BYTES};
+use serde::{Deserialize, Serialize};
+use std::collections::BTreeSet;
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Manifest {
+    pub format: String,
+    pub format_version: u32,
+    pub release_id: String,
+    pub environment: String,
+    pub target: String,
+    pub sequence: u64,
+    pub valid_from: u64,
+    pub valid_until: u64,
+    pub repository: String,
+    pub commit: String,
+    pub workflow: String,
+    pub policy_id: String,
+    pub policy_version: String,
+    pub artifacts: Vec<Artifact>,
+}
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Artifact {
+    pub id: String,
+    pub role: Role,
+    pub sha256: String,
+}
+#[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq, PartialOrd, Ord)]
+#[serde(rename_all = "kebab-case")]
+pub enum Role {
+    Runtime,
+    Program,
+    Compiler,
+    AuditVerifier,
+    Policy,
+    ToolCatalog,
+    Permissions,
+    Containment,
+    SourceClosure,
+    BuildAttestation,
+    Tool,
+}
+/// This document must come from the operator, never from the candidate release.
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Requirements {
+    #[serde(default)]
+    pub build_requirements: Option<crate::build::BuildRequirements>,
+    #[serde(default)]
+    pub require_audit_verifier: bool,
+    #[serde(default)]
+    pub require_recorded_controls: bool,
+    pub format: String,
+    pub format_version: u32,
+    pub environment: String,
+    pub target: String,
+    pub repository: String,
+    pub commit: String,
+    pub workflow: String,
+    pub policy_id: String,
+    pub policy_version: String,
+    pub minimum_sequence: u64,
+    pub evaluated_at: u64,
+    pub revocations_valid_from: u64,
+    pub revocations_valid_until: u64,
+    pub revoked_manifest_sha256: Vec<String>,
+    pub authorized_release_keys: Vec<String>,
+}
+#[derive(Debug, Serialize)]
+pub struct ReleaseVerification {
+    #[serde(skip)]
+    pub(crate) verified_target: String,
+    #[serde(skip)]
+    pub(crate) verified_evaluated_at: u64,
+    #[serde(rename = "recorded_controls_required")]
+    pub(crate) require_recorded_controls: bool,
+    #[serde(skip)]
+    pub(crate) verified_scope_digest: String,
+    #[serde(skip)]
+    pub(crate) verified_sequence: u64,
+    #[serde(skip)]
+    pub(crate) verified_artifacts: Vec<(String, Role, String, Option<String>)>,
+    #[serde(skip)]
+    pub(crate) verified_permissions: Vec<(String, crate::controls::Permissions)>,
+    #[serde(skip)]
+    pub(crate) verified_manifest_digest: String,
+    pub format: &'static str,
+    pub format_version: u32,
+    pub manifest_signature: Verification,
+    pub requirements_sha256: String,
+    pub release_id: String,
+    pub sequence: u64,
+    pub evaluated_at: u64,
+    pub minimum_sequence: u64,
+    pub artifact_count: usize,
+    pub release_requirements_verified: bool,
+    pub artifact_snapshots_verified: bool,
+    #[serde(rename = "admission_valid_until")]
+    verified_valid_until: u64,
+    pub audit_verifier_required: bool,
+    pub audit_verifier_artifacts_verified: bool,
+    pub builder_statements_required: bool,
+    pub builder_statements_authenticated: bool,
+    pub builder_statements: Vec<Verification>,
+    pub build_provenance_verified: bool,
+    pub execution_origin_verified: bool,
+    pub policy_enforcement_verified: bool,
+    pub explanation: &'static str,
+}
+impl ReleaseVerification {
+    /// Exclusive dispatch deadline of the authenticated admission inputs.
+    pub fn admission_valid_until(&self) -> u64 {
+        self.verified_valid_until
+    }
+}
+
+pub(crate) fn digest(value: &str) -> Result<(), String> {
+    if value.len() != 64
+        || !value
+            .bytes()
+            .all(|c| c.is_ascii_digit() || (b'a'..=b'f').contains(&c))
+    {
+        return Err("artifact and revocation digests must be lowercase SHA-256 hex".into());
+    }
+    Ok(())
+}
+/// Authenticate before requesting artifact bytes. The caller supplies a bounded
+/// snapshot resolver; manifest IDs are identifiers, never filesystem paths.
+pub fn verify_release(
+    bytes: &[u8],
+    signature: &[u8],
+    trust: &[u8],
+    requirements: &[u8],
+    mut resolve: impl FnMut(&str) -> Result<Vec<u8>, String>,
+) -> Result<ReleaseVerification, String> {
+    if bytes.len() as u64 > MAX_METADATA_BYTES || requirements.len() as u64 > MAX_METADATA_BYTES {
+        return Err("release metadata exceeds size limit".into());
+    }
+    let signed = verify(bytes, signature, trust, Purpose::ReleaseManifest)?;
+    let m: Manifest =
+        serde_json::from_slice(bytes).map_err(|e| format!("invalid manifest: {e}"))?;
+    let r: Requirements = serde_json::from_slice(requirements)
+        .map_err(|e| format!("invalid release requirements: {e}"))?;
+    if m.format != "devlish-release-manifest"
+        || m.format_version != 1
+        || r.format != "devlish-release-requirements"
+        || r.format_version != 1
+    {
+        return Err("unsupported release format".into());
+    }
+    if m.release_id.trim().is_empty() || m.sequence == 0 || m.sequence < r.minimum_sequence {
+        return Err("invalid release identity or release rollback".into());
+    }
+    for (actual, expected) in [
+        (&m.environment, &r.environment),
+        (&m.target, &r.target),
+        (&m.repository, &r.repository),
+        (&m.commit, &r.commit),
+        (&m.workflow, &r.workflow),
+        (&m.policy_id, &r.policy_id),
+        (&m.policy_version, &r.policy_version),
+    ] {
+        if expected.trim().is_empty() || actual != expected {
+            return Err("release scope does not match operator requirements".into());
+        }
+    }
+    if r.authorized_release_keys.is_empty()
+        || r.authorized_release_keys
+            .iter()
+            .any(|id| id.trim().is_empty())
+        || r.authorized_release_keys
+            .iter()
+            .collect::<BTreeSet<_>>()
+            .len()
+            != r.authorized_release_keys.len()
+        || !r.authorized_release_keys.contains(&signed.signer_key_id)
+    {
+        return Err("signer is not an authorized release authority".into());
+    }
+    for (start, end) in [
+        (m.valid_from, m.valid_until),
+        (r.revocations_valid_from, r.revocations_valid_until),
+    ] {
+        if start >= end || r.evaluated_at < start || r.evaluated_at >= end {
+            return Err("release or revocation information is not valid at evaluation time".into());
+        }
+    }
+    for revoked in &r.revoked_manifest_sha256 {
+        digest(revoked)?;
+    }
+    if r.revoked_manifest_sha256.contains(&signed.artifact_sha256) {
+        return Err("release manifest is revoked".into());
+    }
+    if let Some(build) = &r.build_requirements {
+        build.validate()?;
+    }
+    let mut ids = BTreeSet::new();
+    let mut roles = BTreeSet::new();
+    for artifact in &m.artifacts {
+        if artifact.id.is_empty()
+            || artifact.id.len() > 128
+            || !artifact
+                .id
+                .bytes()
+                .all(|c| c.is_ascii_alphanumeric() || b"_-".contains(&c))
+            || !ids.insert(&artifact.id)
+        {
+            return Err("invalid or duplicate artifact ID".into());
+        }
+        digest(&artifact.sha256)?;
+        roles.insert(artifact.role);
+    }
+    for required in [
+        Role::Runtime,
+        Role::Compiler,
+        Role::Policy,
+        Role::ToolCatalog,
+        Role::Permissions,
+        Role::Containment,
+        Role::SourceClosure,
+        Role::BuildAttestation,
+    ] {
+        if !roles.contains(&required) {
+            return Err(format!("missing required artifact role: {required:?}"));
+        }
+    }
+    if r.require_audit_verifier && !roles.contains(&Role::AuditVerifier) {
+        return Err("operator requirements demand an audit-verifier artifact".into());
+    }
+    let mut verified_artifacts = Vec::new();
+    let mut verified_permissions = Vec::new();
+    let mut build_bundles = Vec::new();
+    for artifact in &m.artifacts {
+        let snapshot = resolve(&artifact.id)?;
+        if snapshot.len() as u64 > crate::MAX_ARTIFACT_BYTES || sha256(&snapshot) != artifact.sha256
+        {
+            return Err(format!("artifact digest or size mismatch: {}", artifact.id));
+        }
+        if artifact.role == Role::Permissions {
+            if let Some(permissions) = crate::controls::Permissions::parse(&snapshot) {
+                verified_permissions.push((artifact.sha256.clone(), permissions));
+            }
+        }
+        if artifact.role == Role::BuildAttestation && r.build_requirements.is_some() {
+            if snapshot.len() as u64 > MAX_METADATA_BYTES {
+                return Err("build bundle exceeds metadata limit".into());
+            }
+            build_bundles.push(snapshot.clone());
+        }
+        let canonical = if matches!(artifact.role, Role::Policy | Role::Program) {
+            serde_json::from_slice::<serde_json::Value>(&snapshot)
+                .ok()
+                .map(|value| sha256(&serde_json::to_vec_pretty(&value).expect("JSON serializes")))
+        } else {
+            None
+        };
+        verified_artifacts.push((
+            artifact.id.clone(),
+            artifact.role,
+            artifact.sha256.clone(),
+            canonical,
+        ));
+    }
+    let mut verified_valid_until = m.valid_until.min(r.revocations_valid_until);
+    let builder_statements = match &r.build_requirements {
+        Some(build) => {
+            let verified = crate::build::verify_bundles(
+                &build_bundles,
+                build,
+                &m,
+                &signed,
+                trust,
+                r.evaluated_at,
+            )?;
+            verified_valid_until = verified_valid_until.min(verified.valid_until);
+            verified.signatures
+        }
+        None => Vec::new(),
+    };
+    Ok(ReleaseVerification {
+        verified_target: m.target.clone(),
+        verified_evaluated_at: r.evaluated_at,
+        require_recorded_controls: r.require_recorded_controls,
+        verified_scope_digest: crate::admission::scope_digest(&r),
+        verified_sequence: m.sequence,
+        verified_artifacts,
+        verified_permissions,
+        verified_manifest_digest: signed.artifact_sha256.clone(),
+        format: "devlish-release-verification", format_version: 1,
+        manifest_signature: signed, requirements_sha256: sha256(requirements),
+        release_id: m.release_id, sequence: m.sequence, evaluated_at: r.evaluated_at,
+        minimum_sequence: r.minimum_sequence, artifact_count: m.artifacts.len(),
+        release_requirements_verified: true, artifact_snapshots_verified: true,
+        verified_valid_until,
+        audit_verifier_required: r.require_audit_verifier,
+        audit_verifier_artifacts_verified: roles.contains(&Role::AuditVerifier),
+        builder_statements_required: r.build_requirements.is_some(),
+        builder_statements_authenticated: r.build_requirements.is_some(),
+        builder_statements,
+        build_provenance_verified: false, execution_origin_verified: false,
+        policy_enforcement_verified: false,
+        explanation: "Release signature, operator requirements, and supplied artifact snapshots agree at the supplied evaluation time. Builder statements are authenticated only when explicitly required; authenticated claims do not prove actual build execution, complete source discovery or reproducibility. Requirements, clock, revocation freshness and rollback floor require independent protection. This does not advance a persistent rollback floor or prove that these bytes executed or enforced policy.",
+    })
+}

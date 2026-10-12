@@ -1,0 +1,27 @@
+Rule:
+  id: protection.loan_decisions
+  version: 1.0.0
+
+Ask "Which effect is requested?" as effect
+Ask "What are the effect arguments?" as request
+
+# This session contains NPPI. No model or general network destination is allowed.
+If effect equals "respond":
+  If value of request equals "Loan review recorded.":
+    Respond with record with true as allow and "The fixed acknowledgement contains no borrower details." as reason
+
+If effect equals "call_service":
+  If service of request equals "LoanReview":
+    If action of request equals "record_decision":
+      details equals arguments of request
+      shape equals record with "text" as loan_token and "text" as decision
+      If details matches shape shape:
+        fields equals keys of details
+        If count of fields equals 2:
+          token equals loan_token of details
+          If token equals "loan_AB12CD34":
+            decision equals decision of details
+            If decision equals "needs_review" or decision equals "complete":
+              Respond with record with true as allow and "Only a loan token and review status may reach LoanReview.record_decision." as reason
+
+Respond with record with false as allow and "NPPI session: only the minimal internal decision and fixed acknowledgement are permitted." as reason

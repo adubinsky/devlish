@@ -1,0 +1,1 @@
+{"instruction_limit":50000,"effect_budget":{"total":16,"per_effect":{"read_file":1,"write_file":6,"llm_complete":1,"http_request":1,"respond":1}}}

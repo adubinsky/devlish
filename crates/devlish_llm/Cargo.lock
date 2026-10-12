@@ -43,6 +43,7 @@ dependencies = [
 name = "devlish-llm"
 version = "0.1.0"
 dependencies = [
+ "ring",
  "serde",
  "serde_json",
  "toml",
@@ -541,6 +542,8 @@ dependencies = [
  "once_cell",
  "rustls",
  "rustls-pki-types",
+ "serde",
+ "serde_json",
  "url",
  "webpki-roots 0.26.11",
 ]

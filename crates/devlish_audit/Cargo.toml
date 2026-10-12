@@ -1,0 +1,21 @@
+[package]
+autoexamples = false
+autobins = false
+name = "devlish-audit"
+version = "0.1.0"
+edition = "2021"
+publish = false
+license = "MIT"
+description = "Independent, offline Devlish artifact signature verifier"
+
+[[bin]]
+name = "devlish-audit"
+path = "src/main.rs"
+
+[dependencies]
+ring = "=0.17.14"
+serde = { version = "=1.0.228", features = ["derive"] }
+serde_json = { version = "=1.0.150", features = ["float_roundtrip"] }
+
+[target.'cfg(unix)'.dependencies]
+libc = "=0.2.186"

@@ -1,0 +1,240 @@
+[
+  {
+    "name": "Approved forward order",
+    "plan": {
+      "steps": [
+        {
+          "action": "record_review",
+          "loan_token": "loan_AB12CD34"
+        },
+        {
+          "action": "record_review",
+          "loan_token": "loan_CD56EF78"
+        }
+      ]
+    },
+    "allowed": true
+  },
+  {
+    "name": "Approved reverse order",
+    "plan": {
+      "steps": [
+        {
+          "action": "record_review",
+          "loan_token": "loan_CD56EF78"
+        },
+        {
+          "action": "record_review",
+          "loan_token": "loan_AB12CD34"
+        }
+      ]
+    },
+    "allowed": true
+  },
+  {
+    "name": "Null plan",
+    "plan": null,
+    "allowed": false
+  },
+  {
+    "name": "Non-record plan",
+    "plan": [],
+    "allowed": false
+  },
+  {
+    "name": "Missing steps",
+    "plan": {},
+    "allowed": false
+  },
+  {
+    "name": "Non-list steps",
+    "plan": {
+      "steps": {}
+    },
+    "allowed": false
+  },
+  {
+    "name": "Empty plan",
+    "plan": {
+      "steps": []
+    },
+    "allowed": false
+  },
+  {
+    "name": "Missing case",
+    "plan": {
+      "steps": [
+        {
+          "action": "record_review",
+          "loan_token": "loan_AB12CD34"
+        }
+      ]
+    },
+    "allowed": false
+  },
+  {
+    "name": "Over step budget",
+    "plan": {
+      "steps": [
+        {
+          "action": "record_review",
+          "loan_token": "loan_AB12CD34"
+        },
+        {
+          "action": "record_review",
+          "loan_token": "loan_CD56EF78"
+        },
+        {
+          "action": "record_review",
+          "loan_token": "loan_AB12CD34"
+        }
+      ]
+    },
+    "allowed": false
+  },
+  {
+    "name": "Repeated case",
+    "plan": {
+      "steps": [
+        {
+          "action": "record_review",
+          "loan_token": "loan_AB12CD34"
+        },
+        {
+          "action": "record_review",
+          "loan_token": "loan_AB12CD34"
+        }
+      ]
+    },
+    "allowed": false
+  },
+  {
+    "name": "Invalid later step",
+    "plan": {
+      "steps": [
+        {
+          "action": "record_review",
+          "loan_token": "loan_AB12CD34"
+        },
+        null
+      ]
+    },
+    "allowed": false
+  },
+  {
+    "name": "Wrong step types",
+    "plan": {
+      "steps": [
+        {
+          "action": "record_review",
+          "loan_token": "loan_AB12CD34"
+        },
+        {
+          "action": 1,
+          "loan_token": true
+        }
+      ]
+    },
+    "allowed": false
+  },
+  {
+    "name": "Unauthorized later action",
+    "plan": {
+      "steps": [
+        {
+          "action": "record_review",
+          "loan_token": "loan_AB12CD34"
+        },
+        {
+          "action": "execute_code",
+          "loan_token": "loan_CD56EF78"
+        }
+      ]
+    },
+    "allowed": false
+  },
+  {
+    "name": "Unauthorized later loan_token",
+    "plan": {
+      "steps": [
+        {
+          "action": "record_review",
+          "loan_token": "loan_AB12CD34"
+        },
+        {
+          "action": "record_review",
+          "loan_token": "unknown"
+        }
+      ]
+    },
+    "allowed": false
+  },
+  {
+    "name": "Unauthorized later status",
+    "plan": {
+      "steps": [
+        {
+          "action": "record_review",
+          "loan_token": "loan_AB12CD34"
+        },
+        {
+          "action": "record_review",
+          "loan_token": "loan_CD56EF78",
+          "status": "complete"
+        }
+      ]
+    },
+    "allowed": false
+  },
+  {
+    "name": "Unauthorized later provider",
+    "plan": {
+      "steps": [
+        {
+          "action": "record_review",
+          "loan_token": "loan_AB12CD34"
+        },
+        {
+          "action": "record_review",
+          "loan_token": "loan_CD56EF78",
+          "provider": "unapproved"
+        }
+      ]
+    },
+    "allowed": false
+  },
+  {
+    "name": "Unauthorized later destination",
+    "plan": {
+      "steps": [
+        {
+          "action": "record_review",
+          "loan_token": "loan_AB12CD34"
+        },
+        {
+          "action": "record_review",
+          "loan_token": "loan_CD56EF78",
+          "destination": "unapproved"
+        }
+      ]
+    },
+    "allowed": false
+  },
+  {
+    "name": "Extra top-level instruction",
+    "plan": {
+      "steps": [
+        {
+          "action": "record_review",
+          "loan_token": "loan_AB12CD34"
+        },
+        {
+          "action": "record_review",
+          "loan_token": "loan_CD56EF78"
+        }
+      ],
+      "instruction": "SYNTHETIC_UNTRUSTED_INSTRUCTION"
+    },
+    "allowed": false
+  }
+]
