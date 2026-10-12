@@ -525,6 +525,125 @@ mod tests {
         }
     }
 
+    // Value: protects=typed batch question, criteria and instruction resource bounds;
+    // fails_when=empty or over-limit collections/instructions are accepted;
+    // why_new=existing invalid-input cases do not exercise these limits;
+    // seam=none; no_claim=live provider schema acceptance.
+    #[test]
+    fn batch_question_criteria_and_instruction_bounds_are_enforced() {
+        let template = batch().questions["signed"].clone();
+        for (count, valid) in [(0, false), (100, true), (101, false)] {
+            let mut b = batch();
+            b.questions = (0..count)
+                .map(|i| (format!("q{i}"), template.clone()))
+                .collect();
+            assert_eq!(b.body().is_ok(), valid, "question count {count}");
+        }
+        for (count, valid) in [(1, false), (2, true), (255, true), (256, false)] {
+            let mut b = batch();
+            b.questions.get_mut("document_type").unwrap().question = Question::Choice {
+                instructions: "Choose a supplied criterion".into(),
+                criteria: (0..count)
+                    .map(|i| (format!("c{i}"), "Criterion".into()))
+                    .collect(),
+            };
+            assert_eq!(b.body().is_ok(), valid, "choice count {count}");
+        }
+        for (count, valid) in [(1, false), (2, true), (10, true), (11, false)] {
+            let mut b = batch();
+            b.questions.get_mut("readability").unwrap().question = Question::Score {
+                instructions: "Score using supplied criteria".into(),
+                criteria: vec!["Criterion".into(); count],
+            };
+            assert_eq!(b.body().is_ok(), valid, "score count {count}");
+        }
+        for (instructions, valid) in [
+            (" ".into(), false),
+            ("x".repeat(16_384), true),
+            ("x".repeat(16_385), false),
+        ] {
+            let mut b = batch();
+            b.questions.get_mut("signed").unwrap().question = Question::Noul { instructions };
+            assert_eq!(b.body().is_ok(), valid, "instruction bound");
+        }
+        let mut b = batch();
+        b.questions.get_mut("readability").unwrap().question = Question::Score {
+            instructions: "Score".into(),
+            criteria: vec!["Valid".into(), " ".into()],
+        };
+        assert_eq!(
+            b.body().unwrap_err().category,
+            ErrorCategory::InvalidRequest
+        );
+    }
+
+    // Value: protects=choice selection and score/legend consistency with approved questions;
+    // fails_when=nonmaximal choices, inconsistent expected scores or changed legends pass;
+    // why_new=existing invalid-answer cases exercise other rejection paths;
+    // seam=none; no_claim=model answer quality.
+    #[test]
+    fn answer_semantics_match_the_approved_question() {
+        let mut variants = Vec::new();
+        let mut r = response();
+        r["answers"]["document_type"]["choice"] = json!("other");
+        variants.push(r);
+        let mut r = response();
+        r["answers"]["readability"]["score"] = json!(1.0);
+        variants.push(r);
+        let mut r = response();
+        r["answers"]["readability"]["legend"]["2"] = json!("Unapproved criterion");
+        variants.push(r);
+        for r in variants {
+            assert_eq!(
+                decode(&batch(), &serde_json::to_vec(&r).unwrap(), None)
+                    .unwrap_err()
+                    .category,
+                ErrorCategory::InvalidResponse
+            );
+        }
+        let mut r = response();
+        r["answers"]["document_type"]["probabilities"] =
+            json!({"insurance":0.5,"other":0.5,"uncertain":0.0});
+        r["answers"]["readability"]["score"] = json!(1.0);
+        r["answers"]["readability"]["probabilities"] = json!({"0":0.25,"1":0.5,"2":0.25});
+        assert!(decode(&batch(), &serde_json::to_vec(&r).unwrap(), None).is_ok());
+    }
+
+    // Value: protects=operator-selected response byte limit below the global decoder cap;
+    // fails_when=transport ignores its configured cap or rejects exact-limit responses;
+    // why_new=global oversize decode test does not cover the signed transport bound;
+    // seam=none; no_claim=production HTTPS provider acceptance.
+    #[test]
+    fn transport_enforces_the_configured_response_byte_limit() {
+        let body = response().to_string();
+        assert!(body.len() < MAX_BYTES);
+        for (limit, valid) in [(body.len(), true), (body.len() - 1, false)] {
+            let (endpoint, server) = server(vec![200], body.clone());
+            let mut events = Vec::new();
+            let result = send_config(
+                &batch(),
+                &Credentials,
+                &mut |v| events.push(v),
+                &endpoint,
+                false,
+                Limits {
+                    timeout: Duration::from_secs(2),
+                    max_request_bytes: MAX_BYTES,
+                    max_response_bytes: limit,
+                },
+            );
+            assert_eq!(server.join().unwrap().len(), 1);
+            if valid {
+                assert_eq!(result.unwrap().model, "jev-1.13.0");
+                assert_eq!(events.last().unwrap()["event"], "jev.completed");
+            } else {
+                assert_eq!(result.unwrap_err().category, ErrorCategory::InvalidResponse);
+                assert_eq!(events.last().unwrap()["event"], "jev.failed");
+                assert!(!events.iter().any(|v| v["event"] == "jev.completed"));
+            }
+        }
+    }
+
     #[test]
     fn typed_batch_preserves_provenance_and_noul_probability() {
         let b = batch();

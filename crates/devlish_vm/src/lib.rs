@@ -3861,6 +3861,54 @@ fn sha256(input: &[u8]) -> [u8; 32] {
 mod tests {
     use super::*;
 
+    // Value: protects=JEV requires an object batch and JSON output before dispatch;
+    // fails_when=either VM typed-effect guard is removed; why_new=no malformed JEV VM cases;
+    // seam=none; no_claim=provider acceptance or release admission.
+    #[test]
+    fn jev_typed_effect_guards_prevent_host_dispatch() {
+        #[derive(Default)]
+        struct ModelHost(Vec<Value>);
+        impl HostEffects for ModelHost {
+            fn emit_event(&mut self, _: &Value) {}
+            fn write_file(&mut self, _: &Value) -> Result<(), String> {
+                Ok(())
+            }
+            fn llm_complete(&mut self, request: &Value) -> Result<Value, String> {
+                self.0.push(request.clone());
+                Ok(json!({"json":{"accepted":true}}))
+            }
+        }
+        for (batch, expect_json, allowed) in [
+            (json!({"document_id":"synthetic"}), true, true),
+            (json!({"document_id":"synthetic"}), false, false),
+            (json!("not a batch"), true, false),
+            (json!([]), true, false),
+            (Value::Null, true, false),
+        ] {
+            let package = json!({"format":"devlish-bytecode","format_version":0,
+                "constant_pool":[batch.clone()],"instructions":[
+                    {"op":"CONST","dest":"batch","const":0},
+                    {"op":"LLM_COMPLETE","prompt":"batch","dest":"result",
+                     "provider":"jev","expect_json":expect_json}],
+                "manifest":{"permissions":[{"kind":"llm_complete"}]}});
+            let mut host = ModelHost::default();
+            let result = Vm::new(package, json!({})).unwrap().run(&mut host);
+            if allowed {
+                assert!(result.is_ok());
+                assert_eq!(
+                    host.0,
+                    vec![json!({"batch":batch,"provider":"jev","expect_json":true})]
+                );
+            } else {
+                assert!(result
+                    .unwrap_err()
+                    .message
+                    .contains("JEV requires a typed batch and JSON output"));
+                assert!(host.0.is_empty());
+            }
+        }
+    }
+
     #[test]
     fn csv_preserves_quoted_multiline_fields_and_escaped_quotes() {
         for separator in ["\n", "\r\n"] {
