@@ -36,6 +36,8 @@ fn run(source: &str, allow: bool, effects: &[&str], limit: u64) -> GovernedRun {
 #[derive(Default)]
 struct Host {
     responses: Vec<Value>,
+    reads: Vec<Value>,
+    csv: Option<String>,
     events: usize,
     fail: bool,
 }
@@ -45,6 +47,10 @@ impl HostEffects for Host {
     }
     fn write_file(&mut self, _: &Value) -> Result<(), String> {
         panic!("unexpected write")
+    }
+    fn read_file(&mut self, request: &Value) -> Result<Value, String> {
+        self.reads.push(request.clone());
+        Ok(json!(self.csv.as_ref().expect("unexpected read")))
     }
     fn respond(&mut self, value: &Value) -> Result<(), String> {
         self.responses.push(value.clone());
@@ -69,6 +75,47 @@ impl PolicyRecorder for Recorder {
         Ok(())
     }
 }
+
+#[test]
+fn multiline_csv_reads_remain_governed_and_journaled() {
+    let source = "Permissions:\n  Read files from \"/inbox/\"\nRead CSV from \"/inbox/invoices.csv\" as rows\nRespond with rows";
+    let csv = "id,notes\r\n1,\"first\n\nlast \"\"quote\"\"\"\r\n2,\"CRLF\r\npreserved\"";
+    for (allow, effects, admitted) in [
+        (true, vec!["read_file", "respond"], true),
+        (false, vec!["read_file", "respond"], false),
+        (true, vec!["respond"], false),
+    ] {
+        let mut host = Host {
+            csv: Some(csv.into()),
+            ..Host::default()
+        };
+        let mut recorder = Recorder::default();
+        let result = run(source, allow, &effects, 1000).run(&mut host, &mut recorder);
+        assert_eq!(result.is_ok(), admitted);
+        assert_eq!(host.reads.len(), usize::from(admitted));
+        assert_eq!(recorder.values[0]["effect"], "read_file");
+        assert_eq!(recorder.values[0]["allow"], admitted);
+        assert_eq!(recorder.values.last().unwrap()["success"], admitted);
+        if admitted {
+            assert_eq!(
+                host.reads[0],
+                json!({"path":"/inbox/invoices.csv", "format":"csv"})
+            );
+            assert_eq!(
+                host.responses,
+                vec![json!([
+                    {"id":"1", "notes":"first\n\nlast \"quote\""},
+                    {"id":"2", "notes":"CRLF\r\npreserved"}
+                ])]
+            );
+            assert_eq!(recorder.values[1]["outcome"]["status"], "succeeded");
+            assert_eq!(recorder.values[2]["effect"], "respond");
+        } else {
+            assert!(host.responses.is_empty());
+        }
+    }
+}
+
 #[test]
 fn only_approved_responses_leave_private_vm_and_no_debug_events_escape() {
     for source in [

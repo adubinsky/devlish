@@ -2580,14 +2580,12 @@ fn csv_escape(value: &str) -> String {
 }
 
 fn parse_csv(text: &str) -> Result<Value, String> {
-    let mut lines = text.lines().filter(|line| !line.trim().is_empty());
-    let Some(header_line) = lines.next() else {
+    let mut chars = text.chars().peekable();
+    let Some(headers) = parse_csv_record(&mut chars)? else {
         return Ok(Value::Array(Vec::new()));
     };
-    let headers = parse_csv_line(header_line)?;
     let mut rows = Vec::new();
-    for line in lines {
-        let values = parse_csv_line(line)?;
+    while let Some(values) = parse_csv_record(&mut chars)? {
         let mut row = Map::new();
         for (index, header) in headers.iter().enumerate() {
             row.insert(
@@ -2604,13 +2602,16 @@ fn parse_csv(text: &str) -> Result<Value, String> {
     Ok(Value::Array(rows))
 }
 
-fn parse_csv_line(line: &str) -> Result<Vec<String>, String> {
+fn parse_csv_record(
+    chars: &mut std::iter::Peekable<std::str::Chars<'_>>,
+) -> Result<Option<Vec<String>>, String> {
     let mut fields = Vec::new();
     let mut current = String::new();
-    let mut chars = line.chars().peekable();
     let mut in_quotes = false;
+    let mut has_content = false;
 
     while let Some(ch) = chars.next() {
+        has_content |= !ch.is_whitespace();
         match ch {
             '"' if in_quotes && chars.peek() == Some(&'"') => {
                 current.push('"');
@@ -2618,7 +2619,17 @@ fn parse_csv_line(line: &str) -> Result<Vec<String>, String> {
             }
             '"' => in_quotes = !in_quotes,
             ',' if !in_quotes => {
-                fields.push(current.clone());
+                fields.push(std::mem::take(&mut current));
+            }
+            '\n' | '\r' if !in_quotes && (ch == '\n' || chars.peek() == Some(&'\n')) => {
+                if ch == '\r' {
+                    chars.next();
+                }
+                if has_content {
+                    fields.push(current);
+                    return Ok(Some(fields));
+                }
+                // Ignore blank physical lines only outside quoted fields.
                 current.clear();
             }
             other => current.push(other),
@@ -2628,8 +2639,12 @@ fn parse_csv_line(line: &str) -> Result<Vec<String>, String> {
     if in_quotes {
         return Err("unterminated quoted CSV field".to_string());
     }
-    fields.push(current);
-    Ok(fields)
+    if has_content {
+        fields.push(current);
+        Ok(Some(fields))
+    } else {
+        Ok(None)
+    }
 }
 
 fn sanitize_csv_header(value: &str) -> String {
@@ -3838,6 +3853,64 @@ fn sha256(input: &[u8]) -> [u8; 32] {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn csv_preserves_quoted_multiline_fields_and_escaped_quotes() {
+        for separator in ["\n", "\r\n"] {
+            let text = format!(
+                "Invoice ID,Amount,Notes{separator}1,1200.50,\"first, line\n\nlast \"\"quote\"\"\"{separator}2,800,\"CRLF\r\n\r\npreserved\"{separator}3,150.25,\"終わり\n\""
+            );
+            assert_eq!(
+                parse_csv(&text).unwrap(),
+                json!([
+                    {"invoice_id":"1", "amount":"1200.50", "notes":"first, line\n\nlast \"quote\""},
+                    {"invoice_id":"2", "amount":"800", "notes":"CRLF\r\n\r\npreserved"},
+                    {"invoice_id":"3", "amount":"150.25", "notes":"終わり\n"}
+                ])
+            );
+        }
+    }
+
+    #[test]
+    fn csv_export_round_trips_multiline_values() {
+        let rows = json!([
+            {"name":"Ada", "notes":"\n\"quoted\", comma\r\n\r\nend\r"},
+            {"name":"Grace", "notes":""}
+        ]);
+        let text = file_content(&rows, "csv");
+        assert_eq!(parse_csv(&text).unwrap(), rows);
+    }
+
+    #[test]
+    fn csv_retains_blank_record_and_column_mapping_behavior() {
+        for text in ["", " \r\n\t\n", "Name,Amount\n"] {
+            assert_eq!(parse_csv(text).unwrap(), json!([]));
+        }
+        assert_eq!(
+            parse_csv("\n \r\nName,Amount,Notes\r\n\t\nAda,1200\nGrace,800,,ignored\r\n,,\n\"\",\"\",\"\"\n").unwrap(),
+            json!([
+                {"name":"Ada", "amount":"1200", "notes":null},
+                {"name":"Grace", "amount":"800", "notes":""},
+                {"name":"", "amount":"", "notes":""},
+                {"name":"", "amount":"", "notes":""}
+            ])
+        );
+        assert_eq!(
+            parse_csv("\"Display\nName\",Notes\nAda,ok").unwrap(),
+            json!([{"display_name":"Ada", "notes":"ok"}])
+        );
+    }
+
+    #[test]
+    fn csv_rejects_unterminated_quoted_fields_at_end_of_input() {
+        for text in [
+            "\"header\ncontinued",
+            "name,notes\nAda,\"first\r\n\r\nlast",
+            "name,notes\nAda,\"escaped \"\"",
+        ] {
+            assert_eq!(parse_csv(text).unwrap_err(), "unterminated quoted CSV field");
+        }
+    }
 
     struct TestHost {
         events: Vec<Value>,
