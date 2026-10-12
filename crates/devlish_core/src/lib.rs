@@ -4929,6 +4929,8 @@ fn split_trailing_if<'a>(text: &'a str) -> (&'a str, Option<&'a str>) {
     let mut in_quote = false;
     let bytes = text.as_bytes();
     let mut i = 0;
+    // Byte lookahead can end inside a UTF-8 character even before a quote.
+    // Compare bytes; only a matching ASCII delimiter supplies slice boundaries.
     while i < bytes.len() {
         let ch = bytes[i] as char;
         if in_quote {
@@ -4941,7 +4943,7 @@ fn split_trailing_if<'a>(text: &'a str) -> (&'a str, Option<&'a str>) {
             // Only double quotes delimit strings; a `'` is English text
             // (`math's pi if flag` must still find its trailing ` if `).
             in_quote = true;
-        } else if i + 4 <= lower.len() && &lower[i..i + 4] == " if " {
+        } else if i + 4 <= lower.len() && &lower.as_bytes()[i..i + 4] == b" if " {
             last_if = Some(i);
         }
         i += 1;
@@ -10431,6 +10433,66 @@ mod tests {
             result.get("context").and_then(|c| c.get("combined")),
             Some(&json!("x / y")),
         );
+    }
+
+    #[test]
+    fn e2e_unicode_inventory_html_concatenation() {
+        let result = compile_and_run_ok(
+            r#"html equals html plus "</tbody></table><h2>Reorder summary</h2><p>Items: " plus count of rows plus " · Orders: " plus count of orders plus " · Units: " plus total units plus "</p>""#,
+            json!({"html": "<table><tbody>", "rows": [1, 2], "orders": [3], "total_units": 7}),
+        );
+        assert_eq!(
+            result["context"]["html"],
+            json!("<table><tbody></tbody></table><h2>Reorder summary</h2><p>Items: 2 · Orders: 1 · Units: 7</p>"),
+        );
+    }
+
+    #[test]
+    fn e2e_unicode_adjacent_to_delimiters_and_operators() {
+        // Exercise two-, three-, and four-byte characters, combining sequences,
+        // escaped quotes, and syntax-like text that must remain inside literals.
+        for text in [
+            "·",
+            "界",
+            "🙂",
+            "e\u{301}",
+            "· if 界 plus 🙂, and e\u{301}",
+            "·\\\" if 界",
+        ] {
+            let decoded = text.replace("\\\"", "\"");
+            for assignment in ["result equals", "Set result to"] {
+                for operator in ["plus", "+"] {
+                    for (suffix, flag, expected) in [
+                        ("", false, format!("{decoded}·界🙂")),
+                        (" IF flag", true, format!("{decoded}·界🙂")),
+                        (" if flag", false, "unchanged".to_string()),
+                    ] {
+                        let source =
+                            format!("{assignment} \"{text}\" {operator} \"·界🙂\"{suffix}");
+                        let result = compile_and_run_ok(
+                            &source,
+                            json!({"result": "unchanged", "flag": flag}),
+                        );
+                        assert_eq!(result["context"]["result"], json!(expected), "{source}");
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn unicode_before_invalid_bracket_returns_compile_diagnostic() {
+        let error = compile_source(
+            "result equals \"·界🙂\" plus [1]",
+            CompileOptions {
+                source_path: None,
+                search_paths: vec![],
+            },
+        )
+        .expect_err("brackets outside text must remain invalid");
+        assert_eq!(error.diagnostics.len(), 1);
+        assert_eq!(error.diagnostics[0].line, 1);
+        assert!(error.diagnostics[0].message.contains("Unexpected '['"), "{error}");
     }
 
     #[test]

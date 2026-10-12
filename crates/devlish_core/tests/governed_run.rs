@@ -77,6 +77,30 @@ impl PolicyRecorder for Recorder {
 }
 
 #[test]
+fn unicode_concatenation_response_remains_governed_and_recorded() {
+    let source = "html equals \"界🙂\" plus \" · Items: \" plus count of list of 1, 2\nRespond with html";
+    for (allow, effects, approved) in [
+        (true, vec!["respond"], true),
+        (false, vec!["respond"], false),
+        (true, vec![], false),
+    ] {
+        let mut host = Host::default();
+        let mut recorder = Recorder::default();
+        let result = run(source, allow, &effects, 1000).run(&mut host, &mut recorder);
+        assert_eq!(result.is_ok(), approved);
+        assert_eq!(recorder.values[0]["effect"], "respond");
+        assert_eq!(recorder.values[0]["allow"], approved);
+        assert_eq!(recorder.values.last().unwrap()["success"], approved);
+        if approved {
+            assert_eq!(host.responses, vec![json!("界🙂 · Items: 2")]);
+            assert_eq!(recorder.values[1]["outcome"]["status"], "succeeded");
+        } else {
+            assert!(host.responses.is_empty());
+        }
+    }
+}
+
+#[test]
 fn multiline_csv_reads_remain_governed_and_journaled() {
     let source = "Permissions:\n  Read files from \"/inbox/\"\nRead CSV from \"/inbox/invoices.csv\" as rows\nRespond with rows";
     let csv = "id,notes\r\n1,\"first\n\nlast \"\"quote\"\"\"\r\n2,\"CRLF\r\npreserved\"";
