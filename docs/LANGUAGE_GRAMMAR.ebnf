@@ -292,6 +292,10 @@ permission_line     = "Read files" , [ " " , "from" , " " , quoted_string ]
                     | "Clock" | "Current time" | "Randomness" | "Random" ;
 
 
+(* CSV input uses logical records: LF/CRLF inside double-quoted fields are
+ * preserved as field data. This is runtime decoding behavior; typed Read CSV
+ * statement syntax is unchanged. See LANGUAGE_REFERENCE.md. *)
+
 (* Structured output *)
 
 respond_statement   = ( "Respond with" | "respond with" ) , " " , expression ;

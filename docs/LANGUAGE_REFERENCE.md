@@ -94,6 +94,15 @@ Read DOCX text "contract.docx" as contract_text
 JSON and CSV reads use the host file reader at runtime and save structured
 records/lists. PDF, DOCX, and XLSX reads use host-provided typed file effects.
 
+CSV reads use the first nonblank record as headers and return a list of records
+with string field values. Headers are trimmed, lowercased, and sanitized to
+underscore-separated keys. LF and CRLF separate records outside double-quoted
+fields; inside quoted fields, commas and line breaks (including blank lines)
+are preserved exactly, and doubled quotes (`""`) decode to a single quote.
+The final record needs no trailing newline. Blank records are skipped; missing
+columns become `nil`, and extra columns are ignored. An unclosed quoted field
+fails the read.
+
 ### Define terms
 
 ```text
