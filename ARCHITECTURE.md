@@ -1,6 +1,6 @@
 # Devlish Architecture
 
-Last updated: 2026-09-01
+Last updated: 2026-10-19
 
 ## Overview
 
@@ -8,6 +8,12 @@ Devlish is an inspectable execution and verification layer implemented entirely
 in Rust. Users write `.dvl` source in readable English, compile it to bytecode,
 and run it natively or in browsers via WASM. Readable English is a property of
 the language, not the product pitch.
+
+Product direction for a Rails-like **server-first harness** (capability
+packages, verified serve, WASM views without privileged effects) is specified
+in [docs/SERVER_HARNESS_ARCHITECTURE.md](docs/SERVER_HARNESS_ARCHITECTURE.md)
+and [docs/CAPABILITY_PACKAGES.md](docs/CAPABILITY_PACKAGES.md). Those docs are
+architecture specs; they do not change current runtime behavior by themselves.
 
 ```text
 .dvl source

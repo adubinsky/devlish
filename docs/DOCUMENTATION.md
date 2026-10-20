@@ -1,6 +1,6 @@
 # Devlish Documentation
 
-Last updated: 2026-06-25
+Last updated: 2026-10-19
 Status: Current documentation index.
 
 Use these as the current source of truth:
@@ -9,6 +9,10 @@ Use these as the current source of truth:
 - `docs/BYTECODE_WASM_FIRST_DELIVERABLES.md` - WASM integration status
 - `docs/course/README.md` - dedicated beginner lesson tree
 - `docs/BEGINNER_COURSE.md` - beginner-first course plan
+
+Architecture (spec; not all implemented):
+- `docs/SERVER_HARNESS_ARCHITECTURE.md` - server-first harness (Rails-like local/remote, WASM views)
+- `docs/CAPABILITY_PACKAGES.md` - gem/crate-like capability packages and lockfile admission
 
 Reference:
 - `docs/INDEPENDENT_AUDIT_VERIFIER.md` - offline signature and signed-receipt verification, assurance limits

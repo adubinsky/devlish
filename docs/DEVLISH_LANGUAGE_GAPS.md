@@ -334,11 +334,21 @@ Missing or underdeveloped:
 - no clear rule for what third-party gems/packages/modules may extend
 - no formal manifest-based model for dependency resolution in Devlish terms
 
+Architecture direction (specification only; not implemented language behavior):
+- [Capability packages](CAPABILITY_PACKAGES.md) define versioned, admitted
+  wrappers around LLM, HTTP, DB, and similar effects for the
+  [server-first harness](SERVER_HARNESS_ARCHITECTURE.md)
+- packages extend libraries and runtime adapters, not core language semantics
+- lockfile digests and verified admission close open holes that ordinary
+  language gems leave to human review
+
 Why this matters:
 - a complete language needs a way to grow without changing the parser for every
   new capability
 - packages should extend libraries and runtime adapters, not redefine core
   language semantics
+- server-side agent-authored apps need systemic guardrails, not desktop-agent
+  autonomy
 
 ## 9. Implemented And Teachable Now
 
