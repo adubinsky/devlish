@@ -264,6 +264,83 @@ fn server_modes_stay_running_and_answer_health_requests() {
 }
 
 #[test]
+fn server_serves_public_files_and_named_app_routes() {
+    let f = Fixture::new();
+    fs::create_dir(f.0.join("public")).unwrap();
+    fs::write(f.0.join("public/index.html"), "<h1>site</h1>").unwrap();
+    fs::write(
+        f.0.join("ok.dvl"),
+        "Ask \"Label?\" as label\nRespond with record with label as label\n",
+    )
+    .unwrap();
+    fs::write(
+        f.0.join("serve.json"),
+        r#"{"public":"public","routes":[{"method":"POST","path":"/ok","source":"ok.dvl"}]}"#,
+    )
+    .unwrap();
+    let socket = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let address = socket.local_addr().unwrap();
+    drop(socket);
+    let mut child = f
+        .command()
+        .args(["--server", "--bind", &address.to_string()])
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .unwrap();
+    let health = format!("http://{address}/v1/health");
+    let mut healthy = false;
+    for _ in 0..100 {
+        if ureq::get(&health)
+            .timeout(Duration::from_millis(100))
+            .call()
+            .is_ok()
+        {
+            healthy = true;
+            break;
+        }
+        if child.try_wait().unwrap().is_some() {
+            break;
+        }
+        std::thread::sleep(Duration::from_millis(20));
+    }
+    let page = ureq::get(&format!("http://{address}/"))
+        .timeout(Duration::from_secs(2))
+        .call();
+    let traversal = ureq::get(&format!("http://{address}/../Cargo.toml"))
+        .timeout(Duration::from_secs(2))
+        .call();
+    let options = ureq::request("OPTIONS", &format!("http://{address}/ok"))
+        .timeout(Duration::from_secs(2))
+        .call();
+    let routed = ureq::post(&format!("http://{address}/ok"))
+        .timeout(Duration::from_secs(2))
+        .send_json(json!({"label": "hello"}));
+    let _ = child.kill();
+    let _ = child.wait();
+    assert!(healthy, "server should start with serve.json");
+    let page = page.expect("index.html");
+    assert_eq!(page.status(), 200);
+    assert!(page.into_string().unwrap().contains("<h1>site</h1>"));
+    assert!(traversal.is_err(), "parent-path URLs must not be served");
+    let options = options.expect("CORS preflight");
+    assert_eq!(options.status(), 204);
+    let routed = routed.expect("named route");
+    assert_eq!(routed.status(), 200);
+    assert_eq!(
+        routed.header("Access-Control-Allow-Origin").map(str::to_string),
+        Some("*".to_string())
+    );
+    let body: Value = routed.into_json().unwrap();
+    assert_eq!(
+        body["response"]["label"],
+        json!("hello"),
+        "{}",
+        body
+    );
+}
+
+#[test]
 fn installing_produces_a_standalone_devlish_entry_point() {
     let f = Fixture::new();
     let repo = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");

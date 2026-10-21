@@ -73,6 +73,14 @@ Devlish programs admitted into `serve-verified` request effects only through
 capability packages. Host adapters in Rust implement those effects. Policy,
 budgets, and journals wrap every call.
 
+### Host routing and HTML (not ERB)
+
+`devlish --server` is a JSON API: named routes from `serve.json` map HTTP
+paths to `.dvl` controllers that `Respond` JSON. Optional `public/` is a
+host convenience, not the product UI. A separate frontend (Vite or similar)
+POSTs to those routes and renders HTML, the same split as a Rust JSON host
+plus a TypeScript webapp. Devlish does not grow an ERB template language.
+
 ### Views (browser)
 
 View logic ships as constrained WASM (reuse the bytecode-in-WASM runner).

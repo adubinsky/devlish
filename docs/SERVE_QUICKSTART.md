@@ -50,6 +50,8 @@ Flags / env:
 | Flag / env | Meaning |
 |---|---|
 | `--bind HOST:PORT` | Listen address (default `127.0.0.1:7420`) |
+| `--public-dir DIR` | Optional static files for `GET` paths outside `/v1/` (not the product UI) |
+| `--config FILE` | Load named `POST` routes and optional `public` (default `./serve.json` if present) |
 | `--tools-dir DIR` | Optional tools directory (reserved for MCP-style tool discovery) |
 | `--log-level LEVEL` | `error` \| `info` \| `debug` (default `info`) |
 | `DEVLISH_LOG` | Same as `--log-level` when the flag is omitted |
@@ -212,3 +214,5 @@ approved production deployment instructions.
 | POST | `/v1/validate` | `{ source }` |
 | POST | `/v1/harness/sessions` | same as `/v1/run` |
 | POST | `/v1/harness/sessions/:id/resume` | same as `/v1/run` |
+| GET | `/` and other non-`/v1/` paths | static files when `public` is configured |
+| POST | app paths from `serve.json` | JSON body is program `input` |

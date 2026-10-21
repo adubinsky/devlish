@@ -684,6 +684,96 @@ impl HostEffects for ServiceHost {
         let parsed = serde_json::from_str::<Value>(&body_text).unwrap_or(Value::String(body_text));
         Ok(json!({"status": status, "body": parsed}))
     }
+
+    #[cfg(feature = "native")]
+    fn http_download(&mut self, url: &str, path: &str) -> Result<(), String> {
+        let response = ureq::get(url)
+            .call()
+            .map_err(|e| format!("HTTP GET {url}: {e}"))?;
+        let mut bytes = Vec::new();
+        response
+            .into_reader()
+            .read_to_end(&mut bytes)
+            .map_err(|e| format!("Failed to read response body: {e}"))?;
+        if let Some(parent) = Path::new(path).parent() {
+            if !parent.as_os_str().is_empty() {
+                fs::create_dir_all(parent).map_err(|e| format!("create {path}: {e}"))?;
+            }
+        }
+        fs::write(path, &bytes).map_err(|e| format!("Failed to write {path}: {e}"))?;
+        Ok(())
+    }
+
+    #[cfg(feature = "native")]
+    fn read_xlsx_rows(&mut self, path: &str, sheet: Option<&str>) -> Result<Value, String> {
+        use calamine::Reader;
+        let mut workbook: calamine::Xlsx<_> = calamine::open_workbook(path)
+            .map_err(|e| format!("Failed to open XLSX {path}: {e}"))?;
+        let sheet_name = if let Some(name) = sheet {
+            name.to_string()
+        } else {
+            workbook
+                .sheet_names()
+                .first()
+                .cloned()
+                .ok_or_else(|| format!("No sheets found in {path}"))?
+        };
+        let range = workbook
+            .worksheet_range(&sheet_name)
+            .map_err(|e| format!("Failed to read sheet {sheet_name}: {e}"))?;
+        let mut rows_iter = range.rows();
+        let headers: Vec<String> = match rows_iter.next() {
+            Some(row) => row.iter().map(xlsx_cell_to_string).collect(),
+            None => return Ok(Value::Array(Vec::new())),
+        };
+        let mut records = Vec::new();
+        for row in rows_iter {
+            let mut record = Map::new();
+            for (i, cell) in row.iter().enumerate() {
+                let key = headers
+                    .get(i)
+                    .cloned()
+                    .unwrap_or_else(|| format!("column_{i}"));
+                let value = match cell {
+                    calamine::Data::Int(n) => json!(*n),
+                    calamine::Data::Float(f) => json!(*f),
+                    calamine::Data::Bool(b) => json!(*b),
+                    calamine::Data::Empty => Value::Null,
+                    other => Value::String(xlsx_cell_to_string(other)),
+                };
+                record.insert(key, value);
+            }
+            records.push(Value::Object(record));
+        }
+        Ok(Value::Array(records))
+    }
+}
+
+#[cfg(feature = "native")]
+fn xlsx_cell_to_string(cell: &calamine::Data) -> String {
+    match cell {
+        calamine::Data::Int(i) => i.to_string(),
+        calamine::Data::Float(f) => {
+            if *f == (*f as i64) as f64 {
+                (*f as i64).to_string()
+            } else {
+                f.to_string()
+            }
+        }
+        calamine::Data::String(s) => s.clone(),
+        calamine::Data::Bool(b) => {
+            if *b {
+                "true".to_string()
+            } else {
+                "false".to_string()
+            }
+        }
+        calamine::Data::Empty => String::new(),
+        calamine::Data::DateTime(dt) => dt.to_string(),
+        calamine::Data::DateTimeIso(s) => s.clone(),
+        calamine::Data::DurationIso(s) => s.clone(),
+        calamine::Data::Error(e) => format!("{e:?}"),
+    }
 }
 
 /// Wrap a ServiceResult as MCP tool content.
