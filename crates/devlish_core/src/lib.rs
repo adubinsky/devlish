@@ -3215,6 +3215,175 @@ fn parse_block(
     Ok(statements)
 }
 
+fn without_trailing_colon(text: &str) -> &str {
+    text.trim().strip_suffix(':').unwrap_or(text.trim()).trim()
+}
+
+fn parse_indented_body(
+    lines: &[SourceLine],
+    index: &mut usize,
+    parent_indent: usize,
+    header_line: usize,
+    header_text: &str,
+    missing: &str,
+) -> Result<Vec<Statement>, CompileError> {
+    let Some(child) = lines.get(*index) else {
+        return Err(CompileError::single(header_line, missing, header_text));
+    };
+    if child.indent <= parent_indent {
+        return Err(CompileError::single(header_line, missing, header_text));
+    }
+    parse_block(lines, index, child.indent)
+}
+
+/// `Case effect:` chooses the first matching `When` and does not fall through.
+/// `Otherwise` is the default arm. A top-level `When an Order is created:`
+/// stays a trigger; `When` is an arm only inside `Case`.
+fn parse_case_statement(
+    lines: &[SourceLine],
+    index: &mut usize,
+    line_number: usize,
+    source_text: &str,
+    current_indent: usize,
+    rest: &str,
+) -> Result<Statement, CompileError> {
+    let subject_text = without_trailing_colon(rest);
+    if subject_text.is_empty() {
+        return Err(CompileError::single(
+            line_number,
+            "Case requires a value",
+            source_text,
+        ));
+    }
+    let subject = parse_expression(subject_text);
+    *index += 1;
+
+    let Some(first) = lines.get(*index) else {
+        return Err(CompileError::single(
+            line_number,
+            "Case requires a When",
+            source_text,
+        ));
+    };
+    if first.indent <= current_indent {
+        return Err(CompileError::single(
+            line_number,
+            "Case requires a When",
+            source_text,
+        ));
+    }
+    let arm_indent = first.indent;
+    let mut arms: Vec<(usize, String, Expression, Vec<Statement>)> = Vec::new();
+    let mut default_body: Option<Vec<Statement>> = None;
+
+    while let Some(arm_line) = lines.get(*index) {
+        if arm_line.indent < arm_indent {
+            break;
+        }
+        if arm_line.indent > arm_indent {
+            return Err(CompileError::single(
+                arm_line.line_number,
+                "Unexpected indentation",
+                &arm_line.text,
+            ));
+        }
+        let arm_text = arm_line.text.trim();
+        let arm_header = without_trailing_colon(arm_text);
+        if arm_header.eq_ignore_ascii_case("when") {
+            return Err(CompileError::single(
+                arm_line.line_number,
+                "When requires a value",
+                arm_text,
+            ));
+        }
+        if let Some(when_value) = strip_prefix_ci(arm_header, "When ") {
+            if default_body.is_some() {
+                return Err(CompileError::single(
+                    arm_line.line_number,
+                    "When cannot follow Otherwise",
+                    arm_text,
+                ));
+            }
+            let when_value = when_value.trim();
+            if when_value.is_empty() {
+                return Err(CompileError::single(
+                    arm_line.line_number,
+                    "When requires a value",
+                    arm_text,
+                ));
+            }
+            let header_line = arm_line.line_number;
+            let header_text = arm_line.text.clone();
+            *index += 1;
+            let body = parse_indented_body(
+                lines,
+                index,
+                arm_indent,
+                header_line,
+                &header_text,
+                "When requires an indented body",
+            )?;
+            arms.push((
+                header_line,
+                header_text,
+                parse_expression(when_value),
+                body,
+            ));
+        } else if arm_header.eq_ignore_ascii_case("otherwise") {
+            if default_body.is_some() {
+                return Err(CompileError::single(
+                    arm_line.line_number,
+                    "Case allows one Otherwise",
+                    arm_text,
+                ));
+            }
+            let header_line = arm_line.line_number;
+            let header_text = arm_line.text.clone();
+            *index += 1;
+            default_body = Some(parse_indented_body(
+                lines,
+                index,
+                arm_indent,
+                header_line,
+                &header_text,
+                "Otherwise requires an indented body",
+            )?);
+        } else {
+            return Err(CompileError::single(
+                arm_line.line_number,
+                "Case requires When or Otherwise",
+                arm_text,
+            ));
+        }
+    }
+
+    if arms.is_empty() {
+        return Err(CompileError::single(
+            line_number,
+            "Case requires a When",
+            source_text,
+        ));
+    }
+
+    let mut else_statements = default_body.unwrap_or_default();
+    while let Some((arm_line, arm_text, value, body)) = arms.pop() {
+        else_statements = vec![statement(
+            arm_line,
+            &arm_text,
+            StatementKind::Branch {
+                condition: Expression::Comparison {
+                    operator: ComparisonOperator::Equals,
+                    left: Box::new(subject.clone()),
+                    right: Box::new(value),
+                },
+                then_statements: body,
+                else_statements,
+            },
+        )];
+    }
+    Ok(else_statements.pop().expect("case has a When arm"))
+}
+
 fn parse_statement(lines: &[SourceLine], index: &mut usize) -> Result<Statement, CompileError> {
     let line = lines
         .get(*index)
@@ -3222,6 +3391,12 @@ fn parse_statement(lines: &[SourceLine], index: &mut usize) -> Result<Statement,
     let line_number = line.line_number;
     let source_text = line.text.as_str();
     let current_indent = line.indent;
+
+    // Case <value>: When <choice>: ... Otherwise: ...
+    // The first matching When runs. Arms do not fall through.
+    if let Some(rest) = strip_prefix_ci(source_text, "Case ") {
+        return parse_case_statement(lines, index, line_number, source_text, current_indent, rest);
+    }
 
     // If block
     if let Some(rest) = strip_prefix_ci(source_text, "If ") {
@@ -8757,6 +8932,28 @@ fn parse_builtin_call(value: &str) -> Option<Expression> {
     None
 }
 
+/// `is empty` is missing-or-zero-length text. `is blank` is that, or text
+/// whose only characters are whitespace.
+fn text_emptiness(target: &str, blank: bool) -> Expression {
+    let subject = parse_expression(target.trim());
+    let compared = if blank {
+        Expression::BuiltinCall {
+            name: "trim".to_string(),
+            arguments: vec![subject.clone()],
+        }
+    } else {
+        subject.clone()
+    };
+    Expression::LogicalOr {
+        left: Box::new(Expression::IsMissing(Box::new(subject))),
+        right: Box::new(Expression::Comparison {
+            operator: ComparisonOperator::Equals,
+            left: Box::new(compared),
+            right: Box::new(Expression::Literal(json!(""))),
+        }),
+    }
+}
+
 fn parse_condition_expression(raw: &str) -> Expression {
     let value = raw.trim();
 
@@ -8864,6 +9061,28 @@ fn parse_condition_expression(raw: &str) -> Expression {
             left: Box::new(parse_expression(left.trim())),
             right: Box::new(parse_expression(right.trim())),
         };
+    }
+
+    // <X> is [not] empty / blank. Checked before bare "is" and "is not" so
+    // "note is not empty" is a predicate, not a comparison with a name.
+    // empty: missing, or text of length 0. blank: missing, or text that is
+    // empty or only whitespace. Numbers, booleans, lists, and records are
+    // neither.
+    if let Some(target) = strip_suffix_ci(value, " is not blank") {
+        return Expression::LogicalNot {
+            operand: Box::new(text_emptiness(target, true)),
+        };
+    }
+    if let Some(target) = strip_suffix_ci(value, " is not empty") {
+        return Expression::LogicalNot {
+            operand: Box::new(text_emptiness(target, false)),
+        };
+    }
+    if let Some(target) = strip_suffix_ci(value, " is blank") {
+        return text_emptiness(target, true);
+    }
+    if let Some(target) = strip_suffix_ci(value, " is empty") {
+        return text_emptiness(target, false);
     }
 
     // <X> is present  (the negation of "is missing"; mirrors the present/missing
@@ -10112,6 +10331,69 @@ mod tests {
         }
     }
 
+    #[test]
+    fn parses_is_empty_and_is_blank_before_bare_is() {
+        let empty = parse_condition_expression("note is empty");
+        assert!(matches!(empty, Expression::LogicalOr { .. }), "{empty:?}");
+        let negated = parse_condition_expression("note is not blank");
+        assert!(
+            matches!(negated, Expression::LogicalNot { .. }),
+            "{negated:?}"
+        );
+        let field = parse_condition_expression("address_line of extraction is empty");
+        assert!(matches!(field, Expression::LogicalOr { .. }), "{field:?}");
+    }
+
+    #[test]
+    fn is_empty_and_is_blank_distinguish_missing_whitespace_and_values() {
+        let result = compile_and_run_ok(
+            r#"
+empty_note equals ""
+blank_note equals "   "
+missing_note equals nil
+filled_note equals "billing"
+number_note equals 0
+empty_note_empty equals false
+empty_note_empty equals true if empty_note is empty
+blank_note_empty equals false
+blank_note_empty equals true if blank_note is empty
+blank_note_blank equals false
+blank_note_blank equals true if blank_note is blank
+missing_note_empty equals false
+missing_note_empty equals true if missing_note is empty
+missing_note_blank equals false
+missing_note_blank equals true if missing_note is blank
+filled_note_empty equals false
+filled_note_empty equals true if filled_note is empty
+filled_note_blank equals false
+filled_note_blank equals true if filled_note is blank
+filled_not_empty equals false
+filled_not_empty equals true if filled_note is not empty
+number_note_empty equals false
+number_note_empty equals true if number_note is empty
+number_note_blank equals false
+number_note_blank equals true if number_note is blank
+Respond with record with empty_note_empty as empty_note_empty and blank_note_empty as blank_note_empty and blank_note_blank as blank_note_blank and missing_note_empty as missing_note_empty and missing_note_blank as missing_note_blank and filled_note_empty as filled_note_empty and filled_note_blank as filled_note_blank and filled_not_empty as filled_not_empty and number_note_empty as number_note_empty and number_note_blank as number_note_blank
+"#,
+            json!({}),
+        );
+        assert_eq!(
+            result["response"],
+            json!({
+                "empty_note_empty": true,
+                "blank_note_empty": false,
+                "blank_note_blank": true,
+                "missing_note_empty": true,
+                "missing_note_blank": true,
+                "filled_note_empty": false,
+                "filled_note_blank": false,
+                "filled_not_empty": true,
+                "number_note_empty": false,
+                "number_note_blank": false
+            })
+        );
+    }
+
     // --- End-to-end tests: compile AND run through the VM ---
 
     use devlish_vm::{HostEffects, Vm};
@@ -10259,6 +10541,106 @@ mod tests {
                 .and_then(Value::as_str),
             Some("big")
         );
+    }
+
+    #[test]
+    fn e2e_case_runs_the_first_matching_when() {
+        let source = r#"
+effect equals "write_file"
+label equals "none"
+Case effect:
+  When "read_file":
+    label equals "read"
+  When "write_file":
+    label equals "write"
+  Otherwise:
+    label equals "other"
+"#;
+        let result = compile_and_run_ok(source, json!({}));
+        assert_eq!(
+            result
+                .get("context")
+                .and_then(|c| c.get("label"))
+                .and_then(Value::as_str),
+            Some("write")
+        );
+    }
+
+    #[test]
+    fn e2e_case_otherwise_runs_when_nothing_matches() {
+        let source = r#"
+effect equals "delete_file"
+Case effect:
+  When "read_file":
+    label equals "read"
+  Otherwise:
+    label equals "other"
+"#;
+        let result = compile_and_run_ok(source, json!({}));
+        assert_eq!(
+            result
+                .get("context")
+                .and_then(|c| c.get("label"))
+                .and_then(Value::as_str),
+            Some("other")
+        );
+    }
+
+    #[test]
+    fn e2e_case_without_otherwise_leaves_the_previous_value() {
+        let source = r#"
+effect equals "delete_file"
+label equals "none"
+Case effect:
+  When "read_file":
+    label equals "read"
+"#;
+        let result = compile_and_run_ok(source, json!({}));
+        assert_eq!(
+            result
+                .get("context")
+                .and_then(|c| c.get("label"))
+                .and_then(Value::as_str),
+            Some("none")
+        );
+    }
+
+    #[test]
+    fn e2e_case_matches_a_field() {
+        let source = r#"
+report equals record with "policy" as kind
+Case kind of report:
+  When "application":
+    label equals "application"
+  When "policy":
+    label equals "policy"
+"#;
+        let result = compile_and_run_ok(source, json!({}));
+        assert_eq!(
+            result
+                .get("context")
+                .and_then(|c| c.get("label"))
+                .and_then(Value::as_str),
+            Some("policy")
+        );
+    }
+
+    #[test]
+    fn case_rejects_a_missing_when_and_a_when_after_otherwise() {
+        let missing = compile_err("Case effect:\nPrint \"no\"");
+        assert!(
+            missing.contains("Case requires a When"),
+            "got: {missing}"
+        );
+        let late = compile_err(
+            "Case effect:\n  Otherwise:\n    Print \"other\"\n  When \"read_file\":\n    Print \"read\"",
+        );
+        assert!(
+            late.contains("When cannot follow Otherwise"),
+            "got: {late}"
+        );
+        let empty = compile_err("Case effect:\n  When:\n    Print \"read\"");
+        assert!(empty.contains("When requires a value"), "got: {empty}");
     }
 
     #[test]

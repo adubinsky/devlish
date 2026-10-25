@@ -174,6 +174,7 @@ custom_event_trigger = ( "When" | "when" ) , " " , free_text , [ ":" ] ;
 (* Control flow is indentation-sensitive. *)
 
 control_statement   = if_statement
+                    | case_statement
                     | otherwise_statement
                     | for_each_statement
                     | try_statement
@@ -183,6 +184,10 @@ control_statement   = if_statement
                     | continue_statement ;
 
 if_statement        = ( "If" | "if" ) , " " , condition_text , [ ":" ] ;
+(* Case chooses the first matching When. Arms do not fall through.
+   Otherwise is the default. A top-level When line remains a trigger. *)
+case_statement      = ( "Case" | "case" ) , " " , value_term , [ ":" ] ;
+when_arm            = ( "When" | "when" ) , " " , value_term , [ ":" ] ;
 otherwise_statement = "Otherwise" , [ ":" ]
                     | "otherwise" , [ ":" ] ;
 for_each_statement  = ( "For each" | "for each" ) , " " ,
@@ -523,6 +528,7 @@ arithmetic_op       = "+" | "-" | "*" | "/"
                     | "to the power of" | "**" | "^" ;
 
 condition_text      = missing_condition
+                    | emptiness_condition
                     | membership_condition
                     | field_requirement_condition
                     | shape_match_condition
@@ -531,6 +537,8 @@ condition_text      = missing_condition
                     | condition_expression_text ;
 
 missing_condition   = value_term , " " , "is missing" ;
+emptiness_condition = value_term , " " , "is" , [ " " , "not" ] , " " ,
+                      ( "empty" | "blank" ) ;
 membership_condition = value_term , " " , "is in" , " " , collection_text ;
 field_requirement_condition =
                     value_term , " " , "has" , " " ,

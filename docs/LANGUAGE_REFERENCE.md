@@ -145,6 +145,23 @@ status must be one of list of "approved", "pending"
 Verify contract_value is at least 10000
 ```
 
+Empty text:
+
+```text
+If note is empty:
+  Fail with "A support note is required."
+If notes is blank:
+  Fail with "Notes are required."
+If note is not empty:
+  Print note
+```
+
+`is empty` is true when the value is missing, or when it is text of length 0.
+`is blank` is true when the value is missing, or when the text is empty or
+only whitespace, so `"   "` is blank and is not empty. A number, boolean,
+list, or record is neither empty nor blank. `equals ""` still compares with
+an empty string.
+
 Validation statements record structured validation results and fail the run when
 the rule does not pass. Use `Require` for arbitrary conditions, `Expect` for
 test assertions, and `must` / `should` validation phrases for business-rule
@@ -162,7 +179,8 @@ Supported math words/operators:
 - `+`, `-`, `*`, `/`
 
 Supported condition words:
-- comparisons: `> < >= <= equals`
+- comparisons: `> < >= <= equals`, and `is` for the same comparison
+- emptiness: `is empty`, `is blank`, `is not empty`, `is not blank`
 - boolean: `and`, `or`
 
 ### Lists, records, and helpers
@@ -370,6 +388,26 @@ Until status is "complete":
 Use `Continue` inside a loop to skip the rest of the current pass. In `For each`,
 it advances to the next item; in `While` and `Until`, it rechecks the condition.
 Use `Break` to stop the loop. Both affect the nearest enclosing loop.
+
+### Choosing one value
+
+```text
+Case effect:
+  When "read_file":
+    Respond with "read"
+  When "write_file":
+    Respond with "write"
+  Otherwise:
+    Respond with "other"
+```
+
+`Case` compares its value with each `When` value, in order. The first match
+runs, and later `When` arms do not run. `Otherwise` runs when nothing matches.
+A `Case` without `Otherwise` continues after the `Case` when nothing matches.
+A `When` after `Otherwise` is a compile error.
+
+A line such as `When an Order is created:` outside `Case` is still a trigger.
+It does not choose a branch.
 
 ### Failure, requirements, and recovery
 

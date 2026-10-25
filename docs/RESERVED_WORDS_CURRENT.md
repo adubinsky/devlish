@@ -166,6 +166,8 @@ These tables describe `Devlish::Parser::ReservedWords.all_terms` and
 | `present` | Present or exists-state marker. |
 | `absent` | Absent-state marker. |
 | `missing` | Missing-state marker. |
+| `empty` | Empty-text marker: missing, or text of length 0. |
+| `blank` | Blank-text marker: missing, or text that is empty or only whitespace. |
 | `required` | Mandatory-state marker. |
 | `optional` | Optional-state marker. |
 | `forbidden` | Prohibited-state marker. |
