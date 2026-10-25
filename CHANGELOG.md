@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Choose one value with Case, When, and Otherwise. The first matching When runs, later arms do not, and Otherwise is the default. A top-level When line is still a trigger.
+- Say is empty or is blank. Empty means missing or zero-length text. Blank also includes whitespace-only text. Numbers, booleans, lists, and records are neither. The same words work in a where clause.
+
 ### Independent audit verification
 - Share verified admission as a single-use native session retaining signed snapshots and the rollback lock through execution; CLI uses the same API, checks startup freshness and rejects log reuse before effects.
 - Require signed catalog routes for verified model effects; fixed OpenRouter destination/model, no mutable provider-config fallback, redirect/proxy suppression, bounded transport and redacted errors. Reissue existing model-enabled catalogs with `llm_route`.
