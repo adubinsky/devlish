@@ -8130,6 +8130,16 @@ fn parse_field_predicate(text: &str) -> Option<(String, String, Expression)> {
     {
         return None;
     }
+    // `item is empty` is the emptiness predicate, not field equality with a
+    // name called empty. The longer negatives have to be tried first.
+    let predicate = text.trim();
+    if strip_suffix_ci(predicate, " is not blank").is_some()
+        || strip_suffix_ci(predicate, " is not empty").is_some()
+        || strip_suffix_ci(predicate, " is blank").is_some()
+        || strip_suffix_ci(predicate, " is empty").is_some()
+    {
+        return None;
+    }
     for (needle, operator) in [
         (" is greater than or equal to ", "gte"),
         (" is less than or equal to ", "lte"),
@@ -10344,6 +10354,7 @@ mod tests {
         assert!(matches!(field, Expression::LogicalOr { .. }), "{field:?}");
     }
 
+    // Value: protects=booleans, empty lists, and empty records are neither empty nor blank, empty text is not "not empty", and whitespace is not "not blank"; fails_when=false, [], or {} counts as empty or blank, or "is not empty" / "is not blank" is swapped or parsed as bare "is not"; why_new=existing assertions cover text, missing, and the number 0, and only the true side of "is not empty"; seam=none; no_claim=does not re-prove the text and number cases already asserted in this test
     #[test]
     fn is_empty_and_is_blank_distinguish_missing_whitespace_and_values() {
         let result = compile_and_run_ok(
@@ -10373,9 +10384,36 @@ number_note_empty equals false
 number_note_empty equals true if number_note is empty
 number_note_blank equals false
 number_note_blank equals true if number_note is blank
-Respond with record with empty_note_empty as empty_note_empty and blank_note_empty as blank_note_empty and blank_note_blank as blank_note_blank and missing_note_empty as missing_note_empty and missing_note_blank as missing_note_blank and filled_note_empty as filled_note_empty and filled_note_blank as filled_note_blank and filled_not_empty as filled_not_empty and number_note_empty as number_note_empty and number_note_blank as number_note_blank
+false_flag equals false
+true_flag equals true
+false_flag_empty equals false
+false_flag_empty equals true if false_flag is empty
+false_flag_blank equals false
+false_flag_blank equals true if false_flag is blank
+true_flag_empty equals false
+true_flag_empty equals true if true_flag is empty
+true_flag_blank equals false
+true_flag_blank equals true if true_flag is blank
+empty_list_empty equals false
+empty_list_empty equals true if empty_list is empty
+empty_list_blank equals false
+empty_list_blank equals true if empty_list is blank
+empty_record_empty equals false
+empty_record_empty equals true if empty_record is empty
+empty_record_blank equals false
+empty_record_blank equals true if empty_record is blank
+empty_not_empty equals false
+empty_not_empty equals true if empty_note is not empty
+blank_not_blank equals false
+blank_not_blank equals true if blank_note is not blank
+blank_not_empty equals false
+blank_not_empty equals true if blank_note is not empty
+Respond with record with empty_note_empty as empty_note_empty and blank_note_empty as blank_note_empty and blank_note_blank as blank_note_blank and missing_note_empty as missing_note_empty and missing_note_blank as missing_note_blank and filled_note_empty as filled_note_empty and filled_note_blank as filled_note_blank and filled_not_empty as filled_not_empty and number_note_empty as number_note_empty and number_note_blank as number_note_blank and false_flag_empty as false_flag_empty and false_flag_blank as false_flag_blank and true_flag_empty as true_flag_empty and true_flag_blank as true_flag_blank and empty_list_empty as empty_list_empty and empty_list_blank as empty_list_blank and empty_record_empty as empty_record_empty and empty_record_blank as empty_record_blank and empty_not_empty as empty_not_empty and blank_not_blank as blank_not_blank and blank_not_empty as blank_not_empty
 "#,
-            json!({}),
+            json!({
+                "empty_list": [],
+                "empty_record": {}
+            }),
         );
         assert_eq!(
             result["response"],
@@ -10389,7 +10427,18 @@ Respond with record with empty_note_empty as empty_note_empty and blank_note_emp
                 "filled_note_blank": false,
                 "filled_not_empty": true,
                 "number_note_empty": false,
-                "number_note_blank": false
+                "number_note_blank": false,
+                "false_flag_empty": false,
+                "false_flag_blank": false,
+                "true_flag_empty": false,
+                "true_flag_blank": false,
+                "empty_list_empty": false,
+                "empty_list_blank": false,
+                "empty_record_empty": false,
+                "empty_record_blank": false,
+                "empty_not_empty": false,
+                "blank_not_blank": false,
+                "blank_not_empty": true
             })
         );
     }
@@ -10543,27 +10592,33 @@ Respond with record with empty_note_empty as empty_note_empty and blank_note_emp
         );
     }
 
+    // Value: protects=the first matching When runs its whole body, a later equal When does not, nested lowercase Case is accepted, and the next statement still runs; fails_when=arms fall through, a nested or lowercase Case is rejected, or the statement after Case is swallowed; why_new=the previous program used mutually exclusive top-level Case arms and one statement per arm; seam=none; no_claim=does not cover Case compile errors
     #[test]
     fn e2e_case_runs_the_first_matching_when() {
         let source = r#"
+ready equals true
 effect equals "write_file"
 label equals "none"
-Case effect:
-  When "read_file":
-    label equals "read"
-  When "write_file":
-    label equals "write"
-  Otherwise:
-    label equals "other"
+seen equals "none"
+If ready:
+  case effect:
+    when "read_file":
+      label equals "read"
+    when "write_file":
+      label equals "write"
+      seen equals "write"
+    when "write_file":
+      label equals "later"
+      seen equals "later"
+    otherwise:
+      label equals "other"
+tail equals "after"
 "#;
         let result = compile_and_run_ok(source, json!({}));
-        assert_eq!(
-            result
-                .get("context")
-                .and_then(|c| c.get("label"))
-                .and_then(Value::as_str),
-            Some("write")
-        );
+        let context = result.get("context").expect("context");
+        assert_eq!(context.get("label").and_then(Value::as_str), Some("write"));
+        assert_eq!(context.get("seen").and_then(Value::as_str), Some("write"));
+        assert_eq!(context.get("tail").and_then(Value::as_str), Some("after"));
     }
 
     #[test]
@@ -10625,12 +10680,18 @@ Case kind of report:
         );
     }
 
+    // Value: protects=Case rejects a missing subject, an Otherwise-only body, a second Otherwise, a When or Otherwise with no body, a non-arm line, and an over-indented arm line; fails_when=those programs compile or report a different diagnostic; why_new=the previous assertions only cover a missing When, a When after Otherwise, and a bare When; seam=none; no_claim=does not cover which arm runs
     #[test]
     fn case_rejects_a_missing_when_and_a_when_after_otherwise() {
         let missing = compile_err("Case effect:\nPrint \"no\"");
         assert!(
             missing.contains("Case requires a When"),
             "got: {missing}"
+        );
+        let missing_end = compile_err("Case effect:");
+        assert!(
+            missing_end.contains("Case requires a When"),
+            "got: {missing_end}"
         );
         let late = compile_err(
             "Case effect:\n  Otherwise:\n    Print \"other\"\n  When \"read_file\":\n    Print \"read\"",
@@ -10641,6 +10702,52 @@ Case kind of report:
         );
         let empty = compile_err("Case effect:\n  When:\n    Print \"read\"");
         assert!(empty.contains("When requires a value"), "got: {empty}");
+        let missing_value = compile_err("Case :");
+        assert!(
+            missing_value.contains("Case requires a value"),
+            "got: {missing_value}"
+        );
+        let only_otherwise = compile_err("Case effect:\n  Otherwise:\n    Print \"other\"");
+        assert!(
+            only_otherwise.contains("Case requires a When"),
+            "got: {only_otherwise}"
+        );
+        let two_otherwise = compile_err(
+            "Case effect:\n  When \"read\":\n    Print \"read\"\n  Otherwise:\n    Print \"one\"\n  Otherwise:\n    Print \"two\"",
+        );
+        assert!(
+            two_otherwise.contains("Case allows one Otherwise"),
+            "got: {two_otherwise}"
+        );
+        let when_body = compile_err("Case effect:\n  When \"read\":\nPrint \"after\"");
+        assert!(
+            when_body.contains("When requires an indented body"),
+            "got: {when_body}"
+        );
+        let when_body_end = compile_err("Case effect:\n  When \"read\":");
+        assert!(
+            when_body_end.contains("When requires an indented body"),
+            "got: {when_body_end}"
+        );
+        let otherwise_body = compile_err(
+            "Case effect:\n  When \"read\":\n    Print \"read\"\n  Otherwise:\nPrint \"after\"",
+        );
+        assert!(
+            otherwise_body.contains("Otherwise requires an indented body"),
+            "got: {otherwise_body}"
+        );
+        let foreign = compile_err("Case effect:\n  Print \"no\"");
+        assert!(
+            foreign.contains("Case requires When or Otherwise"),
+            "got: {foreign}"
+        );
+        let indented = compile_err(
+            "Case effect:\n  When \"read\":\n    Print \"read\"\n   Print \"stray\"",
+        );
+        assert!(
+            indented.contains("Unexpected indentation"),
+            "got: {indented}"
+        );
     }
 
     #[test]
@@ -11389,6 +11496,42 @@ Case kind of report:
             },
         )
         .expect("equals inside a where predicate is valid");
+    }
+
+    #[test]
+    fn filter_where_is_empty_keeps_only_empty_text() {
+        // Value: protects=where-clauses use is empty and is blank as predicates; fails_when=those phrases compare against a field named empty or blank; why_new=the field fast path matched bare " is " before emptiness existed; seam=none; no_claim=does not cover is not empty inside and/or chains
+        let result = compile_and_run_ok(
+            r#"
+notes equals list of "billing", ""
+blank equals list of "billing", "   "
+empty_notes equals filter notes where item is empty
+blank_notes equals filter blank where item is blank
+"#,
+            json!({}),
+        );
+        let context = result.get("context").expect("context");
+        assert_eq!(
+            context
+                .get("empty_notes")
+                .and_then(Value::as_array)
+                .map(|items| items.len()),
+            Some(1)
+        );
+        assert_eq!(
+            context
+                .get("empty_notes")
+                .and_then(|value| value.get(0))
+                .and_then(Value::as_str),
+            Some("")
+        );
+        assert_eq!(
+            context
+                .get("blank_notes")
+                .and_then(Value::as_array)
+                .map(|items| items.len()),
+            Some(1)
+        );
     }
 
     #[test]
