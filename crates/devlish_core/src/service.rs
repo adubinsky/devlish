@@ -498,6 +498,26 @@ impl ServiceHost {
     }
 }
 
+#[cfg(feature = "native")]
+fn bridge_http(method: &str, url: &str, body: &Value) -> Result<Value, String> {
+    let token = crate::bridge::shared_token()?;
+    let request = ureq::request(method, url)
+        .timeout(std::time::Duration::from_secs(90))
+        .set("X-Bridge-Token", &token);
+    let response = if matches!(method, "POST" | "PUT" | "PATCH") {
+        request
+            .set("Content-Type", "application/json")
+            .send_json(body)
+    } else {
+        request.call()
+    }
+    .map_err(|error| format!("HTTP {method} {url}: {error}"))?;
+    let status = response.status();
+    let body_text = response.into_string().unwrap_or_default();
+    let parsed = serde_json::from_str::<Value>(&body_text).unwrap_or(Value::String(body_text));
+    Ok(json!({"status": status, "body": parsed}))
+}
+
 struct HostCreds<'a>(&'a ServiceHost);
 
 impl CredentialResolver for HostCreds<'_> {
@@ -671,6 +691,9 @@ impl HostEffects for ServiceHost {
         _headers: &Value,
     ) -> Result<Value, String> {
         let upper = method.to_ascii_uppercase();
+        if crate::bridge::is_local_bridge_url(url) {
+            return bridge_http(&upper, url, body);
+        }
         let response = match upper.as_str() {
             "GET" => ureq::get(url).call(),
             "POST" => self.google_validation_request(&upper, url).send_json(body),

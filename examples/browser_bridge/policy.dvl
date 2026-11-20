@@ -1,0 +1,22 @@
+# Phase 1 browser bridge allowlist. Deny every other verb.
+# Send, submit, and click verbs are rejected by the server before this policy runs.
+
+Rule:
+  id: aside.bridge.phase1
+  version: 1.0.0
+
+Ask "Which effect?" as effect
+Ask "What arguments?" as request
+
+If effect equals "tabs.open_group":
+  Respond with record with true as allow and "Opening a named tab group is permitted." as reason
+If effect equals "tabs.list":
+  Respond with record with true as allow and "Listing tabs is permitted." as reason
+If effect equals "tabs.focus":
+  Respond with record with true as allow and "Focusing a tab is permitted." as reason
+If effect equals "tabs.close":
+  Respond with record with true as allow and "Closing a tab is permitted." as reason
+If effect equals "tabs.move":
+  Respond with record with true as allow and "Moving a tab is permitted." as reason
+
+Respond with record with false as allow and "This verb is not on the bridge allowlist." as reason

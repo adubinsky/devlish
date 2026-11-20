@@ -1,0 +1,45 @@
+# Queue tabs.open_group on the local bridge and wait for the host result.
+#
+# Input keys: name (text), urls (list of text), bridge_url (origin, no trailing slash).
+# Example bridge_url: "http://127.0.0.1:7420"
+# The devlish process attaches X-Bridge-Token from the bridge token file.
+
+Permissions:
+  HTTP requests to "http://127.0.0.1"
+
+inputs:
+  name
+  urls
+  bridge_url
+
+Ask "Group name?" as name
+Ask "Which urls?" as urls
+Ask "Bridge url?" as bridge_url
+
+Require length of name > 0
+Require length of urls > 0
+
+args equals record with name as name and urls as urls
+payload equals record with "tabs.open_group" as verb and args as args
+create_url equals bridge_url plus "/bridge/jobs"
+Post to create_url with payload as created
+Require status of created equals 201
+created_body equals body of created
+Require status of created_body equals "queued"
+job_id equals id of created_body
+Require job_id is not blank
+
+attempts equals 0
+While attempts is less than 3:
+  status_url equals bridge_url plus "/bridge/jobs/" plus job_id plus "?wait=20"
+  Get the url at status_url as job
+  Require status of job equals 200
+  job_body equals body of job
+  job_status equals status of job_body
+  If job_status equals "done":
+    Respond with record with true as ok and job_id as id and result of job_body as result
+  If job_status equals "failed":
+    Respond with record with false as ok and job_id as id and error of job_body as error
+  attempts equals attempts plus 1
+
+Respond with record with false as ok and job_id as id and "browser bridge timed out" as error
