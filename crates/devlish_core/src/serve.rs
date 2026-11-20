@@ -1,11 +1,13 @@
 //! `devlish serve` — long-lived HTTP daemon wrapping the shared service layer.
 
 use crate::devlish_search_paths_for;
+use devlish_core::bridge::{Bridge, BridgeOverrides};
 use devlish_core::logutil;
 use devlish_core::service::{service_compile, service_lint, service_run, RunRequest, ServiceResult};
 use serde_json::{json, Value};
 use std::fs;
-use std::io::Cursor;
+use std::io::{Cursor, Read};
+use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -19,13 +21,13 @@ struct ServeRoute {
     policy: Option<String>,
 }
 
-#[derive(Clone)]
 struct ServeState {
     token: Option<String>,
     #[allow(dead_code)]
     tools_dirs: Vec<PathBuf>,
     public_dir: Option<PathBuf>,
     routes: Vec<ServeRoute>,
+    bridge: Bridge,
 }
 
 pub fn run_serve(args: Vec<String>) -> Result<(), String> {
@@ -33,6 +35,14 @@ pub fn run_serve(args: Vec<String>) -> Result<(), String> {
     let mut tools_dirs: Vec<PathBuf> = Vec::new();
     let mut public_dir: Option<PathBuf> = None;
     let mut config_path: Option<PathBuf> = None;
+    let mut bridge_overrides = BridgeOverrides {
+        token_file: None,
+        policy_file: None,
+        log_file: None,
+        rate_limit: None,
+        rate_window_secs: None,
+        in_progress_timeout_secs: None,
+    };
     let mut index = 1usize;
     while index < args.len() {
         match args[index].as_str() {
@@ -64,6 +74,54 @@ pub fn run_serve(args: Vec<String>) -> Result<(), String> {
                         .ok_or_else(|| "--config requires a path".to_string())?,
                 ));
             }
+            "--bridge-token-file" => {
+                index += 1;
+                bridge_overrides.token_file = Some(PathBuf::from(
+                    args.get(index)
+                        .ok_or_else(|| "--bridge-token-file requires a path".to_string())?,
+                ));
+            }
+            "--bridge-policy" => {
+                index += 1;
+                bridge_overrides.policy_file = Some(PathBuf::from(
+                    args.get(index)
+                        .ok_or_else(|| "--bridge-policy requires a path".to_string())?,
+                ));
+            }
+            "--bridge-log" => {
+                index += 1;
+                bridge_overrides.log_file = Some(PathBuf::from(
+                    args.get(index)
+                        .ok_or_else(|| "--bridge-log requires a path".to_string())?,
+                ));
+            }
+            "--bridge-rate-limit" => {
+                index += 1;
+                bridge_overrides.rate_limit = Some(parse_bridge_u64(
+                    "--bridge-rate-limit",
+                    args.get(index).ok_or_else(|| {
+                        "--bridge-rate-limit requires an integer".to_string()
+                    })?,
+                )?);
+            }
+            "--bridge-rate-window-secs" => {
+                index += 1;
+                bridge_overrides.rate_window_secs = Some(parse_bridge_u64(
+                    "--bridge-rate-window-secs",
+                    args.get(index).ok_or_else(|| {
+                        "--bridge-rate-window-secs requires an integer".to_string()
+                    })?,
+                )?);
+            }
+            "--bridge-in-progress-timeout-secs" => {
+                index += 1;
+                bridge_overrides.in_progress_timeout_secs = Some(parse_bridge_u64(
+                    "--bridge-in-progress-timeout-secs",
+                    args.get(index).ok_or_else(|| {
+                        "--bridge-in-progress-timeout-secs requires an integer".to_string()
+                    })?,
+                )?);
+            }
             "--log-level" => {
                 // Consumed earlier by logutil::init_from_env_and_args; skip value.
                 index += 1;
@@ -71,7 +129,9 @@ pub fn run_serve(args: Vec<String>) -> Result<(), String> {
             value if value.starts_with("--log-level=") => {}
             "--help" | "-h" => {
                 println!(
-                    "Usage: devlish --server [--bind HOST:PORT] [--public-dir DIR] [--config serve.json] [--tools-dir DIR] [--log-level LEVEL]\n\n\
+                    "Usage: devlish --server [--bind 127.0.0.1:PORT] [--public-dir DIR] [--config serve.json] [--tools-dir DIR] [--log-level LEVEL]\n\
+                     [--bridge-token-file PATH] [--bridge-policy PATH] [--bridge-log PATH]\n\
+                     [--bridge-rate-limit N] [--bridge-rate-window-secs N] [--bridge-in-progress-timeout-secs N]\n\n\
                      Endpoints:\n\
                        GET  /v1/health\n\
                        POST /v1/compile\n\
@@ -80,9 +140,15 @@ pub fn run_serve(args: Vec<String>) -> Result<(), String> {
                        POST /v1/lint\n\
                        POST /v1/harness/sessions\n\
                        POST /v1/harness/sessions/:id/resume\n\
+                       POST /bridge/jobs\n\
+                       GET  /bridge/jobs/next?wait=SECONDS\n\
+                       GET  /bridge/jobs/:id\n\
+                       POST /bridge/jobs/:id/result\n\
                        GET  /*            static files from --public-dir or serve.json public\n\
                        POST <route>       named app routes from serve.json\n\n\
                      Auth: set DEVLISH_SERVE_TOKEN and send Authorization: Bearer <token>\n\
+                     Bridge auth: X-Bridge-Token must match the bridge token file (default ~/.config/aside-bridge/token)\n\
+                     Bind: 127.0.0.1 only\n\
                      Logging: --log-level error|info|debug (or DEVLISH_LOG)"
                 );
                 return Ok(());
@@ -111,12 +177,15 @@ pub fn run_serve(args: Vec<String>) -> Result<(), String> {
         ));
     }
 
+    require_loopback_bind(&bind)?;
+    let bridge = Bridge::open(bridge_overrides)?;
     let token = std::env::var("DEVLISH_SERVE_TOKEN").ok();
     let state = Arc::new(ServeState {
         token,
         tools_dirs,
         public_dir,
         routes,
+        bridge,
     });
     let server = Server::http(&bind).map_err(|e| format!("failed to bind {bind}: {e}"))?;
     logutil::info(&format!("devlish serve listening on http://{bind}"));
@@ -132,18 +201,41 @@ pub fn run_serve(args: Vec<String>) -> Result<(), String> {
 
     for request in server.incoming_requests() {
         let state = Arc::clone(&state);
-        if let Err(error) = handle_request(request, &state) {
-            logutil::error(&format!("serve error: {error}"));
-        }
+        std::thread::spawn(move || {
+            if let Err(error) = handle_request(request, &state) {
+                logutil::error(&format!("serve error: {error}"));
+            }
+        });
     }
     Ok(())
+}
+
+fn require_loopback_bind(bind: &str) -> Result<(), String> {
+    let addr: SocketAddr = bind
+        .parse()
+        .map_err(|_| format!("--bind must be 127.0.0.1:PORT, got {bind}"))?;
+    if addr.ip() != IpAddr::V4(Ipv4Addr::LOCALHOST) {
+        return Err(format!(
+            "devlish --server only listens on 127.0.0.1, got {bind}"
+        ));
+    }
+    Ok(())
+}
+
+fn parse_bridge_u64(flag: &str, value: &str) -> Result<u64, String> {
+    value
+        .parse::<u64>()
+        .map_err(|_| format!("{flag} requires an integer"))
 }
 
 fn handle_request(mut request: Request, state: &ServeState) -> Result<(), String> {
     let method = request.method().clone();
     let method_for_error = method.clone();
     let url = request.url().to_string();
-    let path = url.split('?').next().unwrap_or(&url).to_string();
+    let (path, query) = match url.split_once('?') {
+        Some((path, query)) => (path.to_string(), query.to_string()),
+        None => (url.clone(), String::new()),
+    };
     logutil::info(&format!("serve {method_for_error} {path}"));
 
     if method == Method::Options {
@@ -153,6 +245,10 @@ fn handle_request(mut request: Request, state: &ServeState) -> Result<(), String
         }
         request.respond(response).map_err(|e| e.to_string())?;
         return Ok(());
+    }
+
+    if path == "/bridge/jobs" || path.starts_with("/bridge/jobs/") {
+        return handle_bridge(request, state, &method_for_error, &path, &query);
     }
 
     let is_health = method == Method::Get && path == "/v1/health";
@@ -255,12 +351,80 @@ fn handle_request(mut request: Request, state: &ServeState) -> Result<(), String
     Ok(())
 }
 
+fn handle_bridge(
+    mut request: Request,
+    state: &ServeState,
+    method: &Method,
+    path: &str,
+    query: &str,
+) -> Result<(), String> {
+    let method_name = method_name(method);
+    let token = request
+        .headers()
+        .iter()
+        .find(|header| header.field.equiv("X-Bridge-Token"))
+        .map(|header| header.value.as_str().trim().to_string());
+    let mut body = String::new();
+    request
+        .as_reader()
+        .take(1_048_577)
+        .read_to_string(&mut body)
+        .map_err(|error| error.to_string())?;
+    if body.len() > 1_048_576 {
+        return respond_recorded(
+            request,
+            &method_name,
+            path,
+            400,
+            Some(json!({"error": "request body exceeds 1 MiB"}).to_string()),
+        );
+    }
+    let response = state.bridge.handle(
+        &method_name,
+        path,
+        query,
+        token.as_deref(),
+        &body,
+    );
+    let payload = response
+        .body
+        .as_ref()
+        .map(|value| serde_json::to_string_pretty(value).unwrap_or_default());
+    respond_recorded(request, &method_name, path, response.status, payload)
+}
+
+fn respond_recorded(
+    request: Request,
+    method: &str,
+    path: &str,
+    status: u16,
+    body: Option<String>,
+) -> Result<(), String> {
+    logutil::info(&format!("serve {method} {path} -> {status}"));
+    if let Some(body) = body {
+        let response = Response::new(
+            StatusCode(status),
+            json_headers(),
+            Cursor::new(body.clone()),
+            Some(body.len()),
+            None,
+        );
+        request.respond(response).map_err(|error| error.to_string())
+    } else {
+        let mut response = Response::empty(StatusCode(status));
+        for header in cors_headers() {
+            response = response.with_header(header);
+        }
+        request.respond(response).map_err(|error| error.to_string())
+    }
+}
+
 fn cors_headers() -> Vec<Header> {
     vec![
         Header::from_bytes(&b"Access-Control-Allow-Origin"[..], &b"*"[..]).unwrap(),
         Header::from_bytes(
             &b"Access-Control-Allow-Headers"[..],
-            &b"Content-Type, Authorization"[..],
+            &b"Content-Type, Authorization, X-Bridge-Token"[..],
         )
         .unwrap(),
         Header::from_bytes(

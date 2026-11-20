@@ -1,6 +1,6 @@
 # Devlish Serve Quick Start
 
-Last updated: 2026-09-20
+Last updated: 2026-11-20
 
 `devlish --server` is a long-lived HTTP daemon around the same compile/run/lint
 service used by the CLI and MCP. Callers build applications by talking JSON
@@ -17,7 +17,8 @@ over HTTP — no Devlish embedding required.
 5. Stop the process (SIGINT / kill). There is no separate shutdown protocol.
 
 Auth is optional. If `DEVLISH_SERVE_TOKEN` is set, every route except
-`/v1/health` requires `Authorization: Bearer <token>`.
+`/v1/health` and `/bridge/` requires `Authorization: Bearer <token>`.
+`/bridge/` routes use `X-Bridge-Token` instead. See Browser bridge below.
 
 Outbound LLM calls (`Ask the model` in source) use the server process
 environment for credentials (`OPENAI_API_KEY`, `OPENROUTER_API_KEY`,
@@ -49,14 +50,20 @@ Flags / env:
 
 | Flag / env | Meaning |
 |---|---|
-| `--bind HOST:PORT` | Listen address (default `127.0.0.1:7420`) |
+| `--bind 127.0.0.1:PORT` | Listen port (default `127.0.0.1:7420`). The host must be `127.0.0.1`. |
+| `--bridge-token-file PATH` | Bridge token file (default `~/.config/aside-bridge/token`, or `ASIDE_BRIDGE_TOKEN_FILE`) |
+| `--bridge-policy PATH` | Devlish policy for bridge verbs (default is the phase 1 allowlist, or `ASIDE_BRIDGE_POLICY`) |
+| `--bridge-log PATH` | JSONL job log (default `jobs.jsonl` beside the token file, or `ASIDE_BRIDGE_LOG`) |
+| `--bridge-rate-limit N` | Accepted jobs per window (default `30`, or `ASIDE_BRIDGE_RATE_LIMIT`) |
+| `--bridge-rate-window-secs N` | Rate window in seconds (default `3600`, or `ASIDE_BRIDGE_RATE_WINDOW_SECS`) |
+| `--bridge-in-progress-timeout-secs N` | Seconds an `in_progress` job may run before it is marked `failed` (default `120`, or `ASIDE_BRIDGE_IN_PROGRESS_TIMEOUT_SECS`) |
 | `--public-dir DIR` | Optional static files for `GET` paths outside `/v1/` (not the product UI) |
 | `--config FILE` | Load named `POST` routes and optional `public` (default `./serve.json` if present) |
 | `--tools-dir DIR` | Optional tools directory (reserved for MCP-style tool discovery) |
 | `--log-level LEVEL` | `error` \| `info` \| `debug` (default `info`) |
 | `DEVLISH_LOG` | Same as `--log-level` when the flag is omitted |
 | `--quiet` / `-q` | Forces log level `error` |
-| `DEVLISH_SERVE_TOKEN` | Bearer token for non-health routes |
+| `DEVLISH_SERVE_TOKEN` | Bearer token for routes other than `/v1/health` and `/bridge/` |
 
 Debug logging prints request/response previews and LLM prompt sizes on stderr.
 Info logging prints listen address and each `METHOD path -> status`.
@@ -146,6 +153,66 @@ curl -s -X POST http://127.0.0.1:7420/v1/harness/sessions/<id>/resume \
   -H 'Content-Type: application/json' \
   -d '{ "source_path": "...", "input": { "...": "..." } }'
 ```
+
+## Browser bridge
+
+`devlish --server` keeps a job queue for the Aside Bridge native host. The
+process listens on `127.0.0.1` only. Bridge routes do not accept
+`DEVLISH_SERVE_TOKEN`. Send `X-Bridge-Token` with the contents of the token
+file. One trailing newline in the file is ignored. A missing file, an empty
+file, a missing header, or a different token returns 401
+`{"error":"X-Bridge-Token is missing or does not match"}`.
+
+| Request | Body | Success |
+|---|---|---|
+| `POST /bridge/jobs` | `{"verb","args"}` | 201 `{"id","status":"queued"}` |
+| `GET /bridge/jobs/next?wait=25` | none | 200 `{"id","verb","args"}`, and the job becomes `in_progress` |
+| `POST /bridge/jobs/:id/result` | `{"ok":true,"result"}` or `{"ok":false,"error"}` | 200 job record |
+| `GET /bridge/jobs/:id` | none | 200 job record |
+
+`args` is a JSON object. `GET /bridge/jobs/:id` returns `id`, `verb`, `args`,
+`status`, `created_at`, `updated_at`, and `result` or `error` when those are
+set. Status values are `queued`, `in_progress`, `done`, and `failed`.
+Timestamps are UTC `YYYY-MM-DDTHH:MM:SSZ`.
+
+`wait` is required on `/bridge/jobs/next` and optional on `/bridge/jobs/:id`.
+It is an integer from 0 through 60. `/next` returns 204 with no body when no
+job arrives in that many seconds. `GET /bridge/jobs/:id?wait=SECONDS` returns
+the job when it is `done` or `failed`, or when `wait` seconds pass.
+
+Verbs are allowed only by the bridge policy. The posture is
+deny-unless-allowed. The built-in policy allows `tabs.open_group`,
+`tabs.list`, `tabs.focus`, `tabs.close`, and `tabs.move`.
+`--bridge-policy` replaces that policy. A verb is still rejected with 403
+when any part of its name, split on characters that are not letters or
+digits, starts with `send`, `submit`, or `click`. Case does not matter. The
+policy is not consulted for those verbs.
+
+Each accepted job is appended to the bridge log. A line has the verb, an args
+summary, the outcome, and timestamps. In the summary, a list is its length
+and a string is cut at 80 characters. Rejected verbs and rate-limit rejections
+are logged too. The file is created on the first job.
+
+Intake accepts 30 jobs per 3600 seconds by default. The next accepted job in
+that window returns 429. A job left `in_progress` for 120 seconds becomes
+`failed` with error `in_progress timed out`.
+
+Bots queue a named tab group with:
+
+```bash
+devlish --run examples/browser_bridge/workflow.dvl --input '{
+  "name": "Lender follow-ups",
+  "urls": ["https://www.linkedin.com/in/example"],
+  "bridge_url": "http://127.0.0.1:7420"
+}'
+```
+
+`bridge_url` is the server origin with no trailing slash. The workflow posts
+`tabs.open_group` and waits for `done` or `failed`. It tries three times and
+waits up to 20 seconds on each try. The devlish process attaches
+`X-Bridge-Token` when that call goes to `http://127.0.0.1:<port>/bridge/`.
+Set `ASIDE_BRIDGE_TOKEN_FILE` when the token file is not the default path.
+The server must already be running.
 
 ## Minimal client sketch (caller app)
 

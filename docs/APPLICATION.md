@@ -115,8 +115,10 @@ and real program execution.
 `devlish -s` starts the existing long-lived HTTP service at `127.0.0.1:7420`.
 It runs in the foreground until interrupted. A service manager can supervise
 this same command as a background daemon; this mode does not detach or create
-an operating-system service automatically. Optional `--bind HOST:PORT` changes
-the address. `DEVLISH_SERVE_TOKEN` enables bearer authentication.
+an operating-system service automatically. Optional `--bind 127.0.0.1:PORT`
+changes the port. The host must stay `127.0.0.1`. `DEVLISH_SERVE_TOKEN`
+enables bearer authentication on the `/v1/` routes. `/bridge/` routes use
+`X-Bridge-Token`; see the endpoint guide.
 
 The HTTP service currently uses its existing shared service host, with a smaller
 set of effects than the prompt/file host. Session persistence, governed local

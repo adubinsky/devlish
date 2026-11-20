@@ -11,6 +11,8 @@ pub mod logutil;
 pub mod policy_log;
 
 #[cfg(feature = "native")]
+pub mod bridge;
+#[cfg(feature = "native")]
 pub mod service;
 #[cfg(feature = "native")]
 pub mod verified_session;

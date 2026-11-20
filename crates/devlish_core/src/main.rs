@@ -189,7 +189,8 @@ Optional file settings:
   --quiet                     Suppress execution events
 
 Optional server setting:
-  --bind HOST:PORT              Listening address
+  --bind 127.0.0.1:PORT         Listening port (host stays 127.0.0.1)
+  Bridge routes under /bridge/ use X-Bridge-Token. See devlish --server --help.
 
   -h, --help                   Show help
   -v, --version                Show version
@@ -3135,6 +3136,13 @@ impl HostEffects for NativeHost {
             request = ureq::AgentBuilder::new().redirects(0).build().request(method, url);
         }
         request = authorize_http_request(&self.credentials, method, url, request);
+        if devlish_core::bridge::is_local_bridge_url(url) {
+            let token = devlish_core::bridge::shared_token()
+                .map_err(|error| format!("HTTP {method} {url}: {error}"))?;
+            request = request
+                .timeout(std::time::Duration::from_secs(90))
+                .set("X-Bridge-Token", &token);
+        }
 
         // Apply custom headers from the headers parameter
         if let Some(obj) = headers.as_object() {
